@@ -1,4 +1,4 @@
-import type { LogLevel, Runtime, Schedule } from "./runtime.ts";
+import { requireSecret, type LogLevel, type Runtime, type Schedule } from "./runtime.ts";
 
 export interface FakeRuntime extends Runtime {
   readonly logs: { level: LogLevel; message: string }[];
@@ -31,13 +31,7 @@ export function fakeRuntime(options: FakeRuntimeOptions = {}): FakeRuntime {
       requests.push({ input, init });
       return respond(input, init);
     },
-    secret: async (name) => {
-      const value = options.secrets?.[name];
-      if (value === undefined || value === "") {
-        throw new Error(`Secret ${name} is not set`);
-      }
-      return value;
-    },
+    secret: async (name) => requireSecret(name, options.secrets?.[name]),
     now: () => current,
     log: (level, message) => {
       logs.push({ level, message });

@@ -18,3 +18,11 @@ export interface Runtime {
   /** Registers a task for a schedule. */
   schedule(schedule: Schedule, task: () => Promise<void>): void;
 }
+
+/** Returns the secret value. Throws if the value is missing or empty. */
+export function requireSecret(name: string, value: string | undefined): string {
+  if (value === undefined || value === "") {
+    throw new Error(`Secret ${name} is not set`);
+  }
+  return value;
+}

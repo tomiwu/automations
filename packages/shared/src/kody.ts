@@ -1,5 +1,5 @@
 import * as host from "kody:runtime";
-import type { LogLevel, Runtime, Schedule } from "./runtime.ts";
+import { requireSecret, type LogLevel, type Runtime, type Schedule } from "./runtime.ts";
 
 /** The part of `kody:runtime` that the Kody Runtime uses. */
 export interface KodyHost {
@@ -12,13 +12,7 @@ export interface KodyHost {
 export function createKodyRuntime(kody: KodyHost, now: () => Date = () => new Date()): Runtime {
   return {
     fetch: (input, init) => kody.fetch(input, init),
-    secret: async (name) => {
-      const value = await kody.getSecret(name);
-      if (value === undefined || value === "") {
-        throw new Error(`Secret ${name} is not set`);
-      }
-      return value;
-    },
+    secret: async (name) => requireSecret(name, await kody.getSecret(name)),
     now,
     log: (level, message) => kody.log(level, message),
     schedule: (schedule, task) => kody.schedule(schedule, task),

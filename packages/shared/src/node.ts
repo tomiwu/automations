@@ -1,4 +1,4 @@
-import type { LogLevel, Runtime } from "./runtime.ts";
+import { requireSecret, type LogLevel, type Runtime } from "./runtime.ts";
 
 type Env = Readonly<Record<string, string | undefined>>;
 type Sink = (line: string) => void;
@@ -14,13 +14,7 @@ export function nodeRuntime(options: NodeRuntimeOptions = {}): Runtime {
   const sink = options.sink ?? ((line: string) => console.error(line));
   return {
     fetch: (input, init) => fetch(input, init),
-    secret: async (name) => {
-      const value = env[name];
-      if (value === undefined || value === "") {
-        throw new Error(`Secret ${name} is not set`);
-      }
-      return value;
-    },
+    secret: async (name) => requireSecret(name, env[name]),
     now: () => new Date(),
     log: (level: LogLevel, message: string) => sink(`[${level}] ${message}`),
     schedule: (_schedule, task) => {
