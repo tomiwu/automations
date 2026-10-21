@@ -5,7 +5,7 @@ import type { Row } from "./rest.ts";
 
 const seed = JSON.parse(
   readFileSync(new URL("../../../examples/seed.example.json", import.meta.url), "utf8"),
-) as Record<string, Row[]>;
+) as Record<"accounts" | "activities" | "children" | "families" | "recipients", Row[]>;
 
 describe("examples/seed.example.json", () => {
   it("has only the five seed tables", () => {
