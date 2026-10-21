@@ -1,2 +1,5 @@
-/** The name of this package. Later issues add the Runtime, config types and i18n. */
-export const PACKAGE_NAME = "@automations/shared";
+export type { FetchFn, LogLevel, Runtime, Schedule } from "./runtime.ts";
+export { nodeRuntime } from "./node.ts";
+export type { NodeRuntimeOptions } from "./node.ts";
+export { fakeRuntime } from "./fake.ts";
+export type { FakeRuntime, FakeRuntimeOptions } from "./fake.ts";

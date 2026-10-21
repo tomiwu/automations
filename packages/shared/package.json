@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Runtime interface, config types, i18n and common helpers.",
   "license": "MIT",
-  "exports": { ".": "./src/index.ts" },
+  "exports": { ".": "./src/index.ts", "./kody": "./src/kody.ts" },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
