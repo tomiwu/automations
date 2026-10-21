@@ -1,0 +1,3 @@
+export type { NewNotification, OutboxEntry, StorageAdapter, StoredItem } from "./storage.ts";
+export { createMemoryStorage } from "./memory.ts";
+export type { MemoryStorage, MemoryStorageOptions } from "./memory.ts";
