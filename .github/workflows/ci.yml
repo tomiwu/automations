@@ -45,7 +45,7 @@ jobs:
             cut -d: -f1,2 /tmp/hits.txt
             exit 1
           fi
-          if git log --all -p | grep -q -i -F -f /tmp/denylist.txt; then
+          if git log --all -p --format= | grep -q -i -F -f /tmp/denylist.txt; then
             echo "Personal strings found in the git history."
             exit 1
           fi
