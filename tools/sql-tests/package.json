@@ -1,0 +1,14 @@
+{
+  "name": "@automations/sql-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tests for the SQL migrations. They run against a Postgres database.",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "crap": "crap4ts --exclude .test --fail-on-crap 6"
+  }
+}
