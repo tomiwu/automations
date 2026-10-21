@@ -1,0 +1,14 @@
+{
+  "name": "@automations/migrate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Applies the SQL migrations to a Postgres database.",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "crap": "crap4ts --exclude .test --fail-on-crap 6"
+  }
+}
