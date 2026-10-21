@@ -108,3 +108,14 @@ export async function lessonsExport(deps: ExportDeps, input: unknown = {}): Prom
   const result = await readLessons(source, target.child);
   return { childId: target.child.id, child: target.child.name, timezone, ...result };
 }
+
+export interface ChildrenExport {
+  children: { id: string; name: string; calendar_id: string | null }[];
+}
+
+/** Read-only export: every Child of the Family, so a calendar agent finds the calendars. */
+export async function childrenExport(deps: ExportDeps, input: unknown = {}): Promise<ChildrenExport> {
+  checkKeys(inputObject(input), []);
+  const config = await deps.storage.loadConfig(deps.familyId);
+  return { children: config.children.map(({ id, name, calendar_id }) => ({ id, name, calendar_id })) };
+}
