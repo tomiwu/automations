@@ -38,3 +38,6 @@ Implement issue #{{ISSUE}} on branch `{{BRANCH}}`. Do only this issue.
 When you are done, output:
 
 <promise>COMPLETE</promise>
+
+## Running tests
+Always run tests as `npx vitest run --testTimeout=30000` (never watch mode). Tests must not make real network calls; use fakes.

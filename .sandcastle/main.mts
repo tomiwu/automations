@@ -40,7 +40,7 @@ type RunOptions = Omit<Parameters<sandcastle.Sandbox["run"]>[0], "agent">;
 // Run one agent phase. Change from Cursor to Claude if Cursor has no credits.
 async function runPhase(sandbox: sandcastle.Sandbox, options: RunOptions) {
   try {
-    const result = await sandbox.run({ ...options, agent: agent() });
+    const result = await sandbox.run({ idleTimeoutSeconds: 1800, ...options, agent: agent() });
     if (agentName === "cursor" && !result.commits.length && logHasLimitError(options.name)) throw new Error("cursor limit");
     return result;
   } catch (error) {
@@ -48,7 +48,7 @@ async function runPhase(sandbox: sandcastle.Sandbox, options: RunOptions) {
     if (agentName === "cursor" && (LIMIT_ERROR.test(text) || logHasLimitError(options.name))) {
       console.log(`Cursor failed (${text.slice(0, 200)}). Change to Claude Code and run again.`);
       agentName = "claude";
-      return sandbox.run({ ...options, agent: agent() });
+      return sandbox.run({ idleTimeoutSeconds: 1800, ...options, agent: agent() });
     }
     throw error;
   }
