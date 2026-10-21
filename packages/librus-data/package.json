@@ -1,0 +1,16 @@
+{
+  "name": "@automations/librus-data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "StorageAdapter for Items, the Outbox and config reads, with an in-memory fake.",
+  "license": "MIT",
+  "exports": { ".": "./src/index.ts", "./contract": "./src/contract.ts" },
+  "dependencies": { "@automations/shared": "*" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "crap": "crap4ts --exclude .test --fail-on-crap 6"
+  }
+}
