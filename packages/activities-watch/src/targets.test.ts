@@ -27,9 +27,14 @@ describe("activityTargets", () => {
   it("skips other Services and disabled Accounts", () => {
     const config = testConfig();
     config.accounts.push({ ...config.accounts[0]!, id: "a3", service: "librus" });
-    config.accounts.push({ ...config.accounts[0]!, id: "a4", service: "mondo" });
     config.accounts.push({ ...config.accounts[0]!, id: "a5", enabled: false });
     expect(activityTargets(config).targets).toHaveLength(2);
+  });
+
+  it("keeps Mondo Accounts", () => {
+    const config = testConfig();
+    config.accounts.push({ ...config.accounts[0]!, id: "a4", service: "mondo" });
+    expect(activityTargets(config).targets.map((t) => t.account.service)).toEqual(["activenow", "edusky", "mondo"]);
   });
 
   it("skips disabled Activities", () => {
