@@ -73,7 +73,7 @@ export function createMondoSource(runtime: Runtime, target: ActivityTarget, time
   return {
     async sessions(): Promise<Session[]> {
       const { account, child } = target;
-      firstActivity(target);
+      firstActivity(target); // Fails before any request when the Account has no enabled Activity.
       const secrets = {
         login: await runtime.secret(account.login_secret),
         password: await runtime.secret(account.password_secret),
@@ -82,8 +82,7 @@ export function createMondoSource(runtime: Runtime, target: ActivityTarget, time
       const today = localDate(runtime.now(), timezone);
       return parseMondoEvents(html)
         .map((event) => toSession(event, target))
-        .filter((session) => inWindow(session, today))
-        .sort((a, b) => a.start.localeCompare(b.start));
+        .filter((session) => inWindow(session, today));
     },
   };
 }
