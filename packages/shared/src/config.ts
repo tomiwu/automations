@@ -119,7 +119,8 @@ function isHttpOrigin(value: unknown): boolean {
 }
 
 function accountError(account: Raw<Account>, code: ConfigErrorCode, message: string): ConfigError {
-  return { subject: "account", id: String(account.id ?? ""), code, message: `Account ${String(account.id ?? "")}: ${message}` };
+  const id = String(account.id ?? "");
+  return { subject: "account", id, code, message: `Account ${id}: ${message}` };
 }
 
 function secretError(account: Raw<Account>): ConfigError | undefined {

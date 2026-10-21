@@ -9,10 +9,6 @@ export interface HttpSession {
   cookieHeader(url: string): string;
 }
 
-function readSetCookies(response: Response): string[] {
-  return response.headers.getSetCookie();
-}
-
 function applyCookie(cookies: Map<string, string>, line: string): void {
   const pair = (line.split(";")[0] ?? "").trim();
   const index = pair.indexOf("=");
@@ -25,7 +21,7 @@ function applyCookie(cookies: Map<string, string>, line: string): void {
 
 function storeCookies(jar: Map<string, Map<string, string>>, url: URL, response: Response): void {
   const cookies = jar.get(url.host) ?? new Map<string, string>();
-  for (const line of readSetCookies(response)) applyCookie(cookies, line);
+  for (const line of response.headers.getSetCookie()) applyCookie(cookies, line);
   jar.set(url.host, cookies);
 }
 
