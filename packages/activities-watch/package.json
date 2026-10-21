@@ -1,0 +1,36 @@
+{
+  "name": "@tomiwu/activities-watch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Watches the apps of the after-school Activities and reports cancelled and moved classes to the Recipients on Telegram.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./scheduled": "./src/entry/scheduled.ts",
+    "./sessions": "./src/entry/sessions.ts",
+    "./after-school": "./src/entry/after-school.ts"
+  },
+  "dependencies": {
+    "@automations/librus-data": "*",
+    "@automations/shared": "*",
+    "@tomiwu/librus-watch": "*",
+    "cheerio": "1.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "crap": "crap4ts --exclude .test --exclude entry --exclude test-fixtures --fail-on-crap 6"
+  },
+  "kody": {
+    "id": "activities-watch",
+    "description": "Reports cancelled and moved after-school classes to the Recipients on Telegram.",
+    "jobs": {
+      "scheduled-check": {
+        "entry": "./src/entry/scheduled.ts",
+        "schedule": { "type": "cron", "expression": "0 7,18 * * *" }
+      }
+    }
+  }
+}
