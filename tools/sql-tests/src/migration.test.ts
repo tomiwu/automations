@@ -6,8 +6,8 @@ const url = process.env.TEST_DATABASE_URL;
 const migration = readFileSync(new URL("../../../supabase/migrations/0001_init.sql", import.meta.url), "utf8");
 const family = "00000000-0000-0000-0000-000000000001";
 
-function count(sql: string): number {
-  const lines = asWatcher(url ?? "", sql).output.split("\n");
+function count(db: string, sql: string): number {
+  const lines = asWatcher(db, sql).output.split("\n");
   return Number(lines.find((line) => /^\d+$/.test(line)));
 }
 
@@ -33,7 +33,7 @@ describe.skipIf(!url)("0001_init.sql", () => {
     for (const table of ["families", "children", "accounts", "activities", "recipients"]) {
       expect(asWatcher(db, `select count(*) from ${table}`).ok).toBe(true);
     }
-    expect(count("select count(*) from children")).toBe(1);
+    expect(count(db, "select count(*) from children")).toBe(1);
   });
 
   it("does not let the watcher write the config tables", () => {
@@ -55,14 +55,20 @@ describe.skipIf(!url)("0001_init.sql", () => {
 
   it("lets the watcher update only delivered_at in the outbox", () => {
     expect(asWatcher(db, `update outbox set delivered_at = now() where key = 'pending'`).ok).toBe(true);
-    for (const column of ["text", "chat_id", "key", "queued_at", "family_id"]) {
-      const value = column === "family_id" ? `'${family}'` : column === "queued_at" ? "now()" : "'x'";
+    const forbidden = {
+      text: "'x'",
+      chat_id: "'x'",
+      key: "'x'",
+      queued_at: "now()",
+      family_id: `'${family}'`,
+    };
+    for (const [column, value] of Object.entries(forbidden)) {
       expect(asWatcher(db, `update outbox set ${column} = ${value}`).ok).toBe(false);
     }
   });
 
   it("lets the watcher delete only outbox entries delivered more than 30 days ago", () => {
-    expect(count("with d as (delete from outbox returning key) select count(*) from d")).toBe(1);
-    expect(count("with d as (delete from outbox where key = 'new' returning key) select count(*) from d")).toBe(0);
+    expect(count(db, "with d as (delete from outbox returning key) select count(*) from d")).toBe(1);
+    expect(count(db, "with d as (delete from outbox where key = 'new' returning key) select count(*) from d")).toBe(0);
   });
 });
