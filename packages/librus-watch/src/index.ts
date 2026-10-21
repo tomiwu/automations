@@ -6,6 +6,7 @@ export { deliverPending, splitForTelegram } from "./deliver.ts";
 export type { Messenger } from "./deliver.ts";
 export { upcoming } from "./upcoming.ts";
 export type { ChildRef, Upcoming, UpcomingEntry } from "./upcoming.ts";
+export { childrenExport } from "./exports.ts";
 export { readLessons } from "./lessons.ts";
 export type { LessonRecord, LessonsResult } from "./lessons.ts";
 export { formatMorningReport, runMorningReport } from "./morning-report.ts";

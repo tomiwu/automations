@@ -1,8 +1,8 @@
 import { createMemoryStorage } from "@automations/librus-data";
 import { fakeRuntime } from "@automations/shared";
 import { describe, expect, it } from "vitest";
-import { lessonsExport, parseExportInput, pickTarget, upcomingExport, type ExportDeps } from "./exports.ts";
-import { CHILD1, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
+import { childrenExport, lessonsExport, parseExportInput, pickTarget, upcomingExport, type ExportDeps } from "./exports.ts";
+import { CHILD1, CHILD2, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
 import { librusTargets } from "./run.ts";
 
 function setup() {
@@ -20,6 +20,24 @@ function setup() {
 }
 
 describe("exports", () => {
+  it("children lists id, name and calendar_id of every Child", async () => {
+    const { config, deps } = setup();
+    config.children[0]!.calendar_id = "calendar-1";
+    const result = await childrenExport({ ...deps, storage: createMemoryStorage({ configs: [config] }) }, {});
+    expect(result).toEqual({
+      children: [
+        { id: CHILD1, name: "Child One", calendar_id: "calendar-1" },
+        { id: CHILD2, name: "Child Two", calendar_id: null },
+      ],
+    });
+  });
+
+  it("children takes no input", async () => {
+    const { deps } = setup();
+    await expect(childrenExport(deps, { x: 1 })).rejects.toThrow("Unknown input key(s): x.");
+    await expect(childrenExport(deps, [])).rejects.toThrow("Input must be an object.");
+  });
+
   it("upcoming includes childId and the name of the Child", async () => {
     const { deps } = setup();
     const result = await upcomingExport(deps, { days: 5 });

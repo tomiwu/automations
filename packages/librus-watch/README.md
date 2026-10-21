@@ -24,6 +24,7 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./scheduled` | One scheduled pass. It takes no input. It rejects when something failed. |
 | `./upcoming` | `{ childId?, days? }`. Homework and tests with the Lesson they fall on. |
 | `./lessons` | `{ childId? }`. The Lessons of the next 14 days. |
+| `./children` | No input. `{ children }`: `id`, `name` and `calendar_id` of every Child. |
 
 Both exports include `childId` and the name of the Child. Without `childId` the Family must have one Child with Librus.
 The secret `FAMILY_ID` holds the ID of the Family. `SUPABASE_URL` and `SUPABASE_KEY` give access to the storage.
