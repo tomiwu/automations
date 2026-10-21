@@ -12,7 +12,7 @@ import {
 import type { Session } from "./sessions.ts";
 
 /** The Services that this package reads. */
-export const WATCHED_SERVICES: readonly Service[] = ["activenow", "edusky"];
+export const WATCHED_SERVICES: readonly Service[] = ["activenow", "edusky", "mondo"];
 
 /** One Account with its Child, its Activities and the Recipients of the Child. */
 export interface ActivityTarget {
@@ -28,7 +28,7 @@ function isRelevant(service: unknown): boolean {
 }
 
 /**
- * Returns the enabled ActiveNow and Edusky Accounts of the config with their Children, Activities and
+ * Returns the enabled ActiveNow, Edusky and Mondo Accounts of the config with their Children, Activities and
  * Recipients. A bad Account gives one error. The other Accounts still run.
  */
 export function activityTargets(config: Config): { targets: ActivityTarget[]; errors: string[] } {
