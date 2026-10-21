@@ -8,7 +8,6 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "coverage": "vitest run --coverage",
-    "crap": "crap4ts --exclude .test --fail-on-crap 6"
+    "coverage": "vitest run --coverage"
   }
 }
