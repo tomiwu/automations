@@ -34,4 +34,3 @@ export function createAfterSchool(deps: CollectDeps): AfterSchool {
     return formatAfterSchool(language, child.id, day, sessions, errors);
   };
 }
-
