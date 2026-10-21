@@ -42,7 +42,7 @@ ENV PATH="/home/agent/.local/bin:$PATH"
 # Permission fix: Podman runs with --userns=keep-id, so the runtime UID can differ
 # from the build UID. Make the home directory writable for that UID (git config, npm cache).
 USER root
-RUN chmod -R a+rwX /home/agent
+RUN chmod -R a+rwX /home/agent && chmod 1777 /tmp
 USER ${AGENT_UID}:${AGENT_GID}
 
 WORKDIR /home/agent
