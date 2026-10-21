@@ -14,7 +14,7 @@ The code runs on the [Kody](https://kody.codes) platform first. A runtime interf
 | `packages/activities-watch` | ActiveNow, Edusky and Mondo watchers |
 | `tools/admin` | Admin CLI to add families, children, accounts and recipients |
 
-Some packages do not exist yet. See `docs/PRD.md` for the plan.
+Docs: `docs/architecture.md`, `docs/supabase-setup.md`, `docs/kody-deploy.md`, `docs/adding-a-child.md`, `docs/running-on-node.md`. See `docs/PRD.md` for the plan.
 
 ## Configuration
 

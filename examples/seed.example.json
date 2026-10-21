@@ -1,0 +1,22 @@
+{
+  "families": [
+    { "id": "00000000-0000-4000-8000-000000000001", "name": "Example Family", "timezone": "Europe/Warsaw", "default_language": "en" }
+  ],
+  "children": [
+    { "id": "00000000-0000-4000-8000-000000000011", "family_id": "00000000-0000-4000-8000-000000000001", "name": "Child One", "has_librus": true, "calendar_id": "child-one-calendar" },
+    { "id": "00000000-0000-4000-8000-000000000012", "family_id": "00000000-0000-4000-8000-000000000001", "name": "Child Two", "has_librus": false, "calendar_id": null }
+  ],
+  "accounts": [
+    { "id": "00000000-0000-4000-8000-000000000021", "family_id": "00000000-0000-4000-8000-000000000001", "child_id": "00000000-0000-4000-8000-000000000011", "service": "librus", "origin": null, "group": null, "login_secret": "CHILD1_LIBRUS_LOGIN", "password_secret": "CHILD1_LIBRUS_PASSWORD", "enabled": true },
+    { "id": "00000000-0000-4000-8000-000000000022", "family_id": "00000000-0000-4000-8000-000000000001", "child_id": "00000000-0000-4000-8000-000000000011", "service": "activenow", "origin": "https://activenow.example.com", "group": "Child One", "login_secret": "CHILD1_ACTIVENOW_LOGIN", "password_secret": "CHILD1_ACTIVENOW_PASSWORD", "enabled": true },
+    { "id": "00000000-0000-4000-8000-000000000023", "family_id": "00000000-0000-4000-8000-000000000001", "child_id": "00000000-0000-4000-8000-000000000012", "service": "mondo", "origin": "https://mondo.example.com", "group": "Child Two", "login_secret": "CHILD2_MONDO_LOGIN", "password_secret": "CHILD2_MONDO_PASSWORD", "enabled": true }
+  ],
+  "activities": [
+    { "id": "00000000-0000-4000-8000-000000000031", "family_id": "00000000-0000-4000-8000-000000000001", "child_id": "00000000-0000-4000-8000-000000000011", "account_id": "00000000-0000-4000-8000-000000000022", "name": "Example Chess Club", "weekday": 2, "start_time": "15:00", "end_time": "16:00", "place": "Example School", "enabled": true },
+    { "id": "00000000-0000-4000-8000-000000000032", "family_id": "00000000-0000-4000-8000-000000000001", "child_id": "00000000-0000-4000-8000-000000000012", "account_id": "00000000-0000-4000-8000-000000000023", "name": "Example Swimming", "weekday": 4, "start_time": "16:30", "end_time": "17:30", "place": "Example Pool", "enabled": true }
+  ],
+  "recipients": [
+    { "id": "00000000-0000-4000-8000-000000000041", "family_id": "00000000-0000-4000-8000-000000000001", "telegram_chat_id": "1000001", "language": "pl", "child_ids": ["00000000-0000-4000-8000-000000000011", "00000000-0000-4000-8000-000000000012"] },
+    { "id": "00000000-0000-4000-8000-000000000042", "family_id": "00000000-0000-4000-8000-000000000001", "telegram_chat_id": "1000002", "language": "en", "child_ids": ["00000000-0000-4000-8000-000000000011"] }
+  ]
+}
