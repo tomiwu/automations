@@ -27,3 +27,21 @@ The adapter runs the contract suite against `createFakePostgrest`, an in-memory 
 `src/postgrest.test.ts` runs the same suite against a real PostgREST server on a Postgres database. It runs only if
 `POSTGREST_TEST_URL`, `POSTGREST_TEST_KEY` (a JWT for the role `automations_watcher`) and
 `TEST_DATABASE_URL` (a superuser connection string, the migration applied) are set. The `psql` program must be in the `PATH`.
+
+## Migration from Kody
+
+`exportKodyData(storage, watchers)` is the core of the one-time Kody export job.
+It reads `items:<watcher>` for each Watcher and `outbox` from Kody package storage.
+It skips old Outbox entries that have no chat ID. Run it in a Kody job and save the result as JSON.
+
+`importKodyData(storage, familyId, data)` writes the Items and Outbox entries to a `StorageAdapter`.
+Then it compares the counts per Watcher and for pending Outbox entries. It throws `CountCheckError` on a difference.
+The import is safe to run again. The `first_seen` time of an imported Item is the time of the import.
+
+To run the import on the owner's computer:
+
+```
+SUPABASE_URL=... SUPABASE_KEY=... FAMILY_ID=... npx tsx packages/librus-data/src/import-cli.ts export.json
+```
+
+The command exits with code 1 if a count differs. The target must have no other Items for the Watchers and no other pending Outbox entries.
