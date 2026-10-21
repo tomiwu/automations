@@ -8,11 +8,19 @@ Follow these steps one time for each deployment.
 2. Select the region Frankfurt (`eu-central-1`).
 3. Save the database password in your password manager. Do not put it in the repository.
 
-## 2. Run the SQL
+## 2. Apply the migrations
 
-1. Open the SQL editor of the project.
-2. Paste the content of `supabase/migrations/0001_init.sql` and run it.
-3. You can run the file again. It is idempotent.
+GitHub Actions applies the files in `supabase/migrations` when they change on `main`. The workflow `migrate.yml` runs after the CI checks pass. It records each applied file in `public.schema_migrations` and skips the files that are already applied.
+
+1. Open Project settings, Database. Copy the session pooler URI.
+2. Set the Actions secret. Run `gh secret set SUPABASE_DB_URL -R <owner>/<repo>`. Paste the value at the prompt.
+3. Run the workflow `migrate` with `workflow_dispatch`, or merge a change to `supabase/migrations`.
+
+If the secret is empty, the workflow prints a message and does nothing. Do not put the `service_role` key or the JWT secret in Actions.
+
+To apply the files from your own computer, set `SUPABASE_DB_URL` in the environment and run `tools/migrate/apply.sh`. See `tools/migrate/README.md`.
+
+Fallback: open the SQL editor of the project, paste the content of `supabase/migrations/0001_init.sql` and run it. The file is idempotent.
 
 The migration makes the tables, the RLS policies and the role `automations_watcher`. The role can:
 
@@ -56,4 +64,4 @@ A scheduled job calls `purgeDelivered(30)` each day. It uses the role `automatio
 
 ## Tests
 
-CI applies the migration to a Postgres service container and tests the RLS policies. See `tools/sql-tests/README.md`.
+CI applies the migration to a Postgres service container and tests the RLS policies. See `tools/sql-tests/README.md`. The test in `tools/migrate` runs `apply.sh` twice and checks that the second run does nothing.
