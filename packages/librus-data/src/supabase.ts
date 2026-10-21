@@ -121,7 +121,7 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
         toEntry,
       ),
     markDelivered: async (key) => {
-      const init = { headers: headers({ ...JSON_HEADERS }), body: JSON.stringify({ delivered_at: now().toISOString() }) };
+      const init = { headers: headers(JSON_HEADERS), body: JSON.stringify({ delivered_at: now().toISOString() }) };
       await request("PATCH", "outbox", `${filter("key", "eq", key)}&delivered_at=is.null`, init);
     },
     purgeDelivered: async (olderThanDays) => {
