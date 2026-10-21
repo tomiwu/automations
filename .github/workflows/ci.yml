@@ -1,0 +1,52 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    name: typecheck, tests and CRAP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install the dependencies
+        run: npm ci
+      - name: Check the types
+        run: npm run typecheck
+      - name: Run the tests
+        run: npm test
+      - name: Check the CRAP score (fails if a function has CRAP >= 6)
+        run: npm run crap
+  secrets:
+    name: gitleaks and deny-list
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Scan the full history with gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git --redact --verbose --exit-code 1 .
+      - name: Check for personal strings (deny-list from the DENYLIST secret)
+        env:
+          DENYLIST: ${{ secrets.DENYLIST }}
+        run: |
+          if [ -z "$DENYLIST" ]; then echo "DENYLIST is empty. Skip this step."; exit 0; fi
+          printf '%s\n' "$DENYLIST" | sed '/^[[:space:]]*$/d' > /tmp/denylist.txt
+          if git grep -n -i -F -f /tmp/denylist.txt -- . ':!package-lock.json' > /tmp/hits.txt; then
+            echo "Personal strings found in these files (values hidden):"
+            cut -d: -f1,2 /tmp/hits.txt
+            exit 1
+          fi
+          if git log --all -p | grep -q -i -F -f /tmp/denylist.txt; then
+            echo "Personal strings found in the git history."
+            exit 1
+          fi
+          echo "No personal strings found."

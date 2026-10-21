@@ -1,0 +1,10 @@
+node_modules/
+coverage/
+.env
+.env.*
+!.sandcastle/.env.example
+.sandcastle/.env
+.sandcastle/logs/
+.sandcastle/worktrees/
+seed.json
+*.seed.json
