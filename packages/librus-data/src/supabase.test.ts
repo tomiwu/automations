@@ -88,6 +88,16 @@ describe("createSupabaseStorage", () => {
   });
 });
 
+describe("loadConfig as keepalive", () => {
+  it("starts with a read of the families table, so each Watcher run is a keepalive read", async () => {
+    const { server, storage } = setup();
+    server.seedConfig(exampleConfig());
+    await storage.loadConfig(FAMILY_ID);
+    expect(server.requests[0]?.method).toBe("GET");
+    expect(server.requests[0]?.url).toContain("/families?");
+  });
+});
+
 describe("supabaseStorageFromRuntime", () => {
   it("reads SUPABASE_URL and SUPABASE_KEY from the secrets", async () => {
     const server = createFakePostgrest(START, KEY);

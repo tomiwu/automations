@@ -10,7 +10,8 @@
     "./scheduled": "./src/entry/scheduled.ts",
     "./upcoming": "./src/entry/upcoming.ts",
     "./lessons": "./src/entry/lessons.ts",
-    "./children": "./src/entry/children.ts"
+    "./children": "./src/entry/children.ts",
+    "./purge": "./src/entry/purge.ts"
   },
   "dependencies": {
     "@automations/librus-data": "*",
@@ -30,6 +31,10 @@
       "scheduled-check": {
         "entry": "./src/entry/scheduled.ts",
         "schedule": { "type": "cron", "expression": "0 7,18 * * *" }
+      },
+      "daily-purge": {
+        "entry": "./src/entry/purge.ts",
+        "schedule": { "type": "cron", "expression": "30 3 * * *" }
       }
     }
   }

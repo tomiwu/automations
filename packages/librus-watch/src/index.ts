@@ -4,6 +4,8 @@ export { createLibrusSource } from "./source.ts";
 export type { LibrusSourceOptions } from "./source.ts";
 export { deliverPending, splitForTelegram } from "./deliver.ts";
 export type { Messenger } from "./deliver.ts";
+export { PURGE_AFTER_DAYS, runPurge } from "./purge.ts";
+export type { PurgeDeps } from "./purge.ts";
 export { upcoming } from "./upcoming.ts";
 export type { ChildRef, Upcoming, UpcomingEntry } from "./upcoming.ts";
 export { childrenExport } from "./exports.ts";
