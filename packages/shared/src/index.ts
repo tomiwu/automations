@@ -25,3 +25,5 @@ export type { ZonedParts } from "./time.ts";
 export { activitiesOn, nextOccurrence, parseTime, runsOn } from "./schedule.ts";
 export { createHttpSession } from "./session.ts";
 export type { HttpSession } from "./session.ts";
+export { CATALOGS, t } from "./i18n.ts";
+export type { Catalog, MessageKey, MessageParams } from "./i18n.ts";
