@@ -1,0 +1,108 @@
+name: Deploy to Kody
+# Deploys the Kody packages after CI is green on main.
+# Real deploys run only when the repository variable KODY_DEPLOY_ENABLED is "true".
+# Otherwise (and for a manual run with dry_run) the job only stages the
+# packages and runs the Kody publish checks (packageCheck), which save nothing.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only stage and check, do not push or publish"
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: deploy-kody
+  cancel-in-progress: false
+env:
+  KODY_CLI: "@kodycodes/cli@1.31.4"
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    environment: kody
+    strategy:
+      max-parallel: 1
+      matrix:
+        package: [librus-watch, activities-watch]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Deploy exactly the commit that CI tested.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Decide the mode
+        id: mode
+        env:
+          ENABLED: ${{ vars.KODY_DEPLOY_ENABLED }}
+          DRY_INPUT: ${{ github.event.inputs.dry_run }}
+        run: |
+          if [ "$ENABLED" = "true" ] && [ "$DRY_INPUT" != "true" ]; then
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"; echo "Mode: deploy"
+          else
+            echo "dry_run=true" >> "$GITHUB_OUTPUT"; echo "Mode: dry run (checks only)"
+          fi
+      - name: Stage the package
+        run: node tools/kody-stage/stage.mjs packages/${{ matrix.package }} "$RUNNER_TEMP/stage"
+      - name: Check that the token is set
+        env:
+          KODY_API_TOKEN: ${{ secrets.KODY_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$KODY_API_TOKEN" ]; then
+            echo "::error::The secret KODY_DEPLOY_TOKEN is not set."; exit 1
+          fi
+      - name: Run the Kody publish checks (saves nothing)
+        env:
+          KODY_API_TOKEN: ${{ secrets.KODY_DEPLOY_TOKEN }}
+        run: |
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const root = process.argv[1], files = {};
+            const walk = (d) => { for (const n of fs.readdirSync(d)) { const p = path.join(d, n);
+              fs.statSync(p).isDirectory() ? walk(p) : (files[path.relative(root, p)] = fs.readFileSync(p, "utf8")); } };
+            walk(root); fs.writeFileSync(process.argv[2], JSON.stringify({ files }));
+          ' "$RUNNER_TEMP/stage" "$RUNNER_TEMP/check.json"
+          curl -sS --fail-with-body -X POST https://api.kody.codes/v1/packages/check \
+            -H "Authorization: Bearer $KODY_API_TOKEN" -H "Content-Type: application/json" \
+            --data @"$RUNNER_TEMP/check.json" -o "$RUNNER_TEMP/check-result.json"
+          jq '{ok, package_name, checks: [.checks[] | {kind, ok, message}]}' "$RUNNER_TEMP/check-result.json"
+          jq -e '.ok == true' "$RUNNER_TEMP/check-result.json" > /dev/null
+      - name: Push the staged tree to the Kody package repo
+        if: steps.mode.outputs.dry_run == 'false'
+        env:
+          KODY_API_TOKEN: ${{ secrets.KODY_DEPLOY_TOKEN }}
+          PKG: "@tomiwu/${{ matrix.package }}"
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          npx -y "$KODY_CLI" api packageGetGitRemote \
+            --params "{\"kody_id\":\"$PKG\",\"scope\":\"write\",\"ttl_seconds\":900}" > "$RUNNER_TEMP/remote.json"
+          REMOTE=$(jq -r .authenticated_remote "$RUNNER_TEMP/remote.json")
+          echo "::add-mask::$REMOTE"
+          NAME=$(jq -r .git_author.name "$RUNNER_TEMP/remote.json")
+          EMAIL=$(jq -r .git_author.email "$RUNNER_TEMP/remote.json")
+          echo "::add-mask::$EMAIL"
+          rm "$RUNNER_TEMP/remote.json"
+          git clone -q "$REMOTE" "$RUNNER_TEMP/kody-repo" 2>/dev/null
+          cd "$RUNNER_TEMP/kody-repo"
+          # Replace the tree with the staged package and keep the history (fast-forward push).
+          git rm -rq --ignore-unmatch . && rsync -a "$RUNNER_TEMP/stage/" ./
+          git add -A
+          if git diff --cached --quiet; then echo "No changes for $PKG"; exit 0; fi
+          git -c user.name="$NAME" -c user.email="$EMAIL" commit -qm "Deploy from tomiwu/automations ${SHA}"
+          git push -q origin HEAD 2>/dev/null
+      - name: Publish on Kody
+        if: steps.mode.outputs.dry_run == 'false'
+        env:
+          KODY_API_TOKEN: ${{ secrets.KODY_DEPLOY_TOKEN }}
+        run: npx -y "$KODY_CLI" package publish "@tomiwu/${{ matrix.package }}" | jq '{status, published_commit, previous_commit, message, pending_secret_package_approvals}'
