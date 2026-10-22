@@ -1,4 +1,4 @@
-import type { Language } from "./config.ts";
+import { LANGUAGES, type Language } from "./config.ts";
 
 const en = {
   "morning.title": "Morning report",
@@ -70,6 +70,11 @@ const en = {
   "weekday.5": "Friday",
   "weekday.6": "Saturday",
   "weekday.7": "Sunday",
+  "chat.ack": "One moment.",
+  "chat.voice_later": "Voice messages are not available yet. Send text or a photo.",
+  "chat.unsupported": "Send text or a photo.",
+  "chat.hub_missing": "The hub agent is not in the registry.",
+  "chat.forward_failed": "The agent did not accept the message. Try again later.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -145,6 +150,11 @@ const pl: Catalog = {
   "weekday.5": "piątek",
   "weekday.6": "sobota",
   "weekday.7": "niedziela",
+  "chat.ack": "Chwileczkę.",
+  "chat.voice_later": "Wiadomości głosowe nie są jeszcze dostępne. Wyślij tekst lub zdjęcie.",
+  "chat.unsupported": "Wyślij tekst lub zdjęcie.",
+  "chat.hub_missing": "Agenta głównego nie ma w rejestrze.",
+  "chat.forward_failed": "Agent nie przyjął wiadomości. Spróbuj później.",
 };
 
 export const CATALOGS: Record<Language, Catalog> = { pl, en };
@@ -155,4 +165,10 @@ export function t(language: Language, key: MessageKey, params: MessageParams = {
   return CATALOGS[language][key].replace(/\{(\w+)\}/g, (placeholder, name: string) =>
     name in params ? String(params[name]) : placeholder,
   );
+}
+
+/** Picks the catalog language from a Telegram language code such as "pl" or "en-GB". Falls back to en. */
+export function languageFor(code: string | null | undefined): Language {
+  const base = (code ?? "").toLowerCase().split("-")[0];
+  return LANGUAGES.find((language) => language === base) ?? "en";
 }

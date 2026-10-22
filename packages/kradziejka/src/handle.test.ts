@@ -1,3 +1,4 @@
+import { t } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import { handleTelegramUpdate, type HandlerDeps, type TelegramPort } from "./handle.ts";
 import type { BotRecord, BotRegistry } from "./registry.ts";
@@ -164,6 +165,15 @@ describe("telegram update handling", () => {
     await handleTelegramUpdate(harness, raw);
     expect(harness.forwarded[0]?.payload).toMatchObject({ photo: { file_id: "large" }, text: "" });
     expect(JSON.stringify(harness.forwarded[0]?.payload)).not.toContain("file_path");
+  });
+
+  it("answers in the language of the sender and falls back to en", async () => {
+    const pl = deps();
+    await handleTelegramUpdate(pl, update("Hello", { from: { id: 1000001, language_code: "pl" } }));
+    expect(pl.sent).toContain(t("pl", "chat.ack"));
+    const other = deps();
+    await handleTelegramUpdate(other, update("Hello", { from: { id: 1000001, language_code: "de" } }));
+    expect(other.sent).toContain(t("en", "chat.ack"));
   });
 
   it("tells the person that voice is not available yet", async () => {
