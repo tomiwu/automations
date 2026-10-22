@@ -118,8 +118,8 @@ async function save(request: Request, deps: AdminDeps, base: string): Promise<Re
   const existing = await findBot(deps, fields.slug ?? "");
   try {
     await saveBotEdit(deps, formToDraft(fields), existing);
-  } catch (error) {
-    return html(page(base, "Bot", formHtml(base, draftBot(fields), messageOf(error))));
+  } catch {
+    return html(page(base, "Bot", formHtml(base, draftBot(fields), REQUEST_FAILED)));
   }
   return redirect(base, "/", {});
 }
@@ -128,9 +128,9 @@ async function saveList(request: Request, deps: AdminDeps, base: string): Promis
   const fields = await formFields(request);
   try {
     await deps.saveAllowlist(fields.allowlist ?? "");
-  } catch (error) {
+  } catch {
     const bots = await deps.registry.list(deps.familyId);
-    return html(page(base, "Bots", listHtml(base, bots, deps.allowlist, messageOf(error))));
+    return html(page(base, "Bots", listHtml(base, bots, deps.allowlist, REQUEST_FAILED)));
   }
   return redirect(base, "/", {});
 }
@@ -174,9 +174,8 @@ function draftBot(fields: Record<string, string>): BotRecord {
   };
 }
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : "The request failed.";
-}
+export const REQUEST_FAILED = "The request failed. Check the input and try again. Error code: request_failed.";
+export const APP_FAILED = "The app failed. Error code: app_failed.";
 
 export function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");

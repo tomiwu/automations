@@ -1,5 +1,5 @@
 import { packageContext } from "kody:runtime";
-import { handleAdmin } from "../admin.ts";
+import { APP_FAILED, handleAdmin } from "../admin.ts";
 import { adminDeps } from "./common.ts";
 
 /**
@@ -17,8 +17,7 @@ export default async function app(request: Request): Promise<Response> {
   const base = packageContext?.appBasePath ?? "";
   try {
     return await handleAdmin(request, await adminDeps(), base);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "The app failed.";
-    return new Response(message, { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
+  } catch {
+    return new Response(APP_FAILED, { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
   }
 }
