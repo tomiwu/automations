@@ -31,9 +31,8 @@ export async function saveBotEdit(deps: RegisterDeps, raw: unknown, existing: Bo
 }
 
 async function ciphertextFor(deps: RegisterDeps, slug: string, webhookKey: string, existing: BotRecord | null): Promise<string> {
-  if (webhookKey !== "") return deps.seal(slug, webhookKey);
-  if (existing) return existing.webhookKeyCiphertext;
-  throw new Error("webhookKey is required.");
+  if (existing && webhookKey === "") return existing.webhookKeyCiphertext;
+  return deps.seal(slug, webhookKey);
 }
 
 function toRecord(draft: { slug: string; name: string; description: string; activeHours: string; webhookUrl: string; active: boolean }, ciphertext: string): BotRecord {

@@ -61,6 +61,38 @@ describe("admin page", () => {
     expect(routePath("https://example.test/login", "")).toBe("/login");
   });
 
+  it("shows the empty form and rejects a cookie that does not match", async () => {
+    const deps = harness();
+    const cookie = await signIn(deps);
+    const form = await handleAdmin(new Request("https://example.test/new", { headers: { cookie } }), deps, "");
+    expect(await form.text()).toContain("Webhook URL");
+    for (const other of ["theme=dark; other", "kradziejka_admin=short"]) {
+      const page = await handleAdmin(new Request("https://example.test/new", { headers: { cookie: other } }), deps, "");
+      expect(await page.text()).toContain("Admin token");
+    }
+  });
+
+  it("handles missing form fields, an inactive bot and a mount path", async () => {
+    const deps = harness();
+    const none = await handleAdmin(form("/login", {}), deps, "/app");
+    expect(await none.text()).toContain("not correct");
+    const login = await handleAdmin(form("/app/login", { token }), deps, "/app");
+    expect(login.headers.get("set-cookie")).toContain("Path=/app;");
+    const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+    const noSlug = await handleAdmin(new Request("https://example.test/app/edit", { headers: { cookie } }), deps, "/app");
+    expect(noSlug.status).toBe(404);
+    const empty = await handleAdmin(form("/app/save", {}, cookie), deps, "/app");
+    expect(await empty.text()).toContain(REQUEST_FAILED);
+    deps.saveAllowlist = async () => {
+      throw new Error("x");
+    };
+    const list = await handleAdmin(form("/app/allowlist", {}, cookie), deps, "/app");
+    expect(await list.text()).toContain(REQUEST_FAILED);
+    deps.rows.push({ slug: "off", name: "Off", description: "d", activeHours: "always", webhookUrl: url, webhookKeyCiphertext: "c", active: false });
+    const edit = await handleAdmin(new Request("https://example.test/app/edit?slug=off", { headers: { cookie } }), deps, "/app");
+    expect(await edit.text()).not.toContain("checked");
+  });
+
   it("hides the registry until the admin token is correct", async () => {
     const deps = harness();
     const anonymous = await handleAdmin(new Request("https://example.test/"), deps, "");
