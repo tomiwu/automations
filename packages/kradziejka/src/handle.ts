@@ -1,10 +1,10 @@
+import { languageFor, t, type MessageKey } from "@automations/shared";
 import { senderAllowed } from "./allowlist.ts";
 import { buildForwardPayload, type PhotoInfo } from "./payload.ts";
 import { buildDecisionRequest, mapRoute, readChoice, routeCriteria, type ChoiceAnswer, type RouteChoice } from "./routing.ts";
 import { isRoutable, type BotRecord, type BotRegistry } from "./registry.ts";
 import type { SpeechToText, VoiceNote } from "./speech.ts";
 import { appendTurn, loadChat, rememberRoute, saveChat, type ChatState, type KeyValue } from "./state.ts";
-import { text } from "./text.ts";
 import { claimUpdate, releaseUpdate } from "./updates.ts";
 import { parseInbound, type Inbound } from "./inbound.ts";
 
@@ -34,7 +34,7 @@ export interface HandleResult {
   slug?: string;
 }
 
-type Content = { kind: "reject"; notice: string } | { kind: "text"; text: string; photo: PhotoInfo | null };
+type Content = { kind: "reject"; notice: MessageKey } | { kind: "text"; text: string; photo: PhotoInfo | null };
 
 /** Handles one Telegram update. A non-allowlisted sender gets no reply. */
 export async function handleTelegramUpdate(deps: HandlerDeps, raw: unknown): Promise<HandleResult> {
@@ -52,13 +52,13 @@ export async function handleTelegramUpdate(deps: HandlerDeps, raw: unknown): Pro
 async function acceptOrDrop(deps: HandlerDeps, inbound: Inbound): Promise<HandleResult> {
   if (!senderAllowed(deps.allowlist, inbound)) return { ok: true, status: "dropped" };
   await deps.telegram.typing(inbound.chatId);
-  await deps.telegram.send(inbound.chatId, text.ack);
+  await reply(deps, inbound, "chat.ack");
   return routeAndForward(deps, inbound);
 }
 
 async function routeAndForward(deps: HandlerDeps, inbound: Inbound): Promise<HandleResult> {
   const content = await contentFrom(deps.speech, inbound);
-  if (content.kind === "reject") return rejectContent(deps, inbound.chatId, content.notice);
+  if (content.kind === "reject") return rejectContent(deps, inbound, content.notice);
   const state = await loadChat(deps.kv, inbound.chatId);
   const chosen = await chooseRoute(deps, content, state);
   const sent = await forwardChoice(deps, inbound, content, state, chosen);
@@ -73,8 +73,8 @@ function memoryText(content: { text: string }): string {
   return "[photo]";
 }
 
-async function rejectContent(deps: HandlerDeps, chatId: string, notice: string): Promise<HandleResult> {
-  await deps.telegram.send(chatId, notice);
+async function rejectContent(deps: HandlerDeps, inbound: Inbound, notice: MessageKey): Promise<HandleResult> {
+  await reply(deps, inbound, notice);
   return { ok: true, status: "rejected" };
 }
 
@@ -84,13 +84,13 @@ function isVoiceOnly(inbound: Inbound): boolean {
 
 async function contentFrom(speech: SpeechToText, inbound: Inbound): Promise<Content> {
   if (isVoiceOnly(inbound)) return voiceContent(speech, inbound.voice as VoiceNote);
-  if (inbound.text === "" && !inbound.photo) return { kind: "reject", notice: text.unsupported };
+  if (inbound.text === "" && !inbound.photo) return { kind: "reject", notice: "chat.unsupported" };
   return { kind: "text", text: inbound.text, photo: inbound.photo };
 }
 
 async function voiceContent(speech: SpeechToText, voice: VoiceNote): Promise<Content> {
   const transcript = await speech.transcribe(voice);
-  if (!transcript) return { kind: "reject", notice: text.voiceLater };
+  if (!transcript) return { kind: "reject", notice: "chat.voice_later" };
   return { kind: "text", text: transcript, photo: null };
 }
 
@@ -146,18 +146,18 @@ async function forwardChoice(
   chosen: { choice: RouteChoice; bots: BotRecord[] },
 ): Promise<HandleResult> {
   const bot = chosen.bots.find((item) => item.slug === chosen.choice.slug);
-  if (!bot) return missingHub(deps, inbound.chatId);
+  if (!bot) return missingHub(deps, inbound);
   try {
     await sendPayload(deps, inbound, content, state, chosen.choice, bot);
     return { ok: true, status: "forwarded", slug: chosen.choice.slug };
   } catch {
-    await deps.telegram.send(inbound.chatId, text.forwardFailed);
+    await reply(deps, inbound, "chat.forward_failed");
     return { ok: true, status: "forward-failed" };
   }
 }
 
-async function missingHub(deps: HandlerDeps, chatId: string): Promise<HandleResult> {
-  await deps.telegram.send(chatId, text.hubMissing);
+async function missingHub(deps: HandlerDeps, inbound: Inbound): Promise<HandleResult> {
+  await reply(deps, inbound, "chat.hub_missing");
   return { ok: true, status: "hub-missing" };
 }
 
@@ -187,4 +187,8 @@ async function sendPayload(
 export async function rememberReply(kv: KeyValue, chatId: string, replyText: string, at: string): Promise<void> {
   const state = await loadChat(kv, chatId);
   await saveChat(kv, chatId, appendTurn(state, "bot", replyText, at));
+}
+
+async function reply(deps: HandlerDeps, inbound: Inbound, key: MessageKey): Promise<void> {
+  await deps.telegram.send(inbound.chatId, t(languageFor(inbound.languageCode), key));
 }

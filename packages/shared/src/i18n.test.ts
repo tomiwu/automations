@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGS, t } from "./i18n.ts";
+import { CATALOGS, languageFor, t } from "./i18n.ts";
 
 describe("catalogs", () => {
   it("have the same keys in pl and en", () => {
@@ -39,5 +39,20 @@ describe("t", () => {
 
   it("keeps unknown placeholders visible", () => {
     expect(t("en", "morning.heading", { child: "Child One" })).toBe("Morning report for Child One, {date}");
+  });
+});
+
+describe("languageFor", () => {
+  it("maps supported codes, with or without a region", () => {
+    expect(languageFor("pl")).toBe("pl");
+    expect(languageFor("PL-pl")).toBe("pl");
+    expect(languageFor("en-GB")).toBe("en");
+  });
+
+  it("falls back to en", () => {
+    expect(languageFor("de")).toBe("en");
+    expect(languageFor("")).toBe("en");
+    expect(languageFor(null)).toBe("en");
+    expect(languageFor(undefined)).toBe("en");
   });
 });
