@@ -8,7 +8,6 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
-const WORKSPACE_SCOPE = "@automations/";
 const root = resolve(dirname(new URL(import.meta.url).pathname), "../..");
 
 function readJson(path) {
@@ -43,23 +42,36 @@ function walk(dir, out = []) {
 function collectDeps(pkgDir, all, seen = new Map()) {
   const deps = readJson(join(pkgDir, "package.json")).dependencies ?? {};
   for (const name of Object.keys(deps)) {
-    if (!name.startsWith(WORKSPACE_SCOPE) || seen.has(name)) continue;
     const dir = all.get(name);
-    if (!dir) throw new Error(`Unknown workspace package ${name}`);
+    if (!dir || seen.has(name)) continue;
     seen.set(name, dir);
     collectDeps(dir, all, seen);
   }
   return seen;
 }
 
-function rewriteImports(file, outDir, specifiers) {
+function rewriteImports(file, outDir, specifiers, srcOf, workspaceNames) {
   let src = readFileSync(file, "utf8");
-  src = src.replace(/(from\s+|import\s*\(\s*|import\s+)(["'])(@automations\/[^"']+)\2/g, (m, pre, q, spec) => {
+  src = src.replace(/(from\s+|import\s*\(\s*|import\s+)(["'])([^"']+)\2/g, (m, pre, q, spec) => {
+    const pkgName = spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0];
+    if (!workspaceNames.has(pkgName)) return m;
     const target = specifiers.get(spec);
     if (!target) throw new Error(`${relative(outDir, file)}: no export for ${spec}`);
     let rel = relative(dirname(file), join(outDir, target)).split(sep).join("/");
     if (!rel.startsWith(".")) rel = "./" + rel;
     return `${pre}${q}${rel}${q}`;
+  });
+  // Triple-slash references point into other workspace packages; point them at the vendored copy.
+  src = src.replace(/(\/\/\/\s*<reference\s+path=)(["'])([^"']+)\2/g, (m, pre, q, ref) => {
+    const original = resolve(dirname(srcOf.get(file)), ref);
+    for (const [fromDir, toDir] of srcOf.dirs) {
+      if (original.startsWith(fromDir + sep)) {
+        let rel = relative(dirname(file), join(toDir, relative(fromDir, original))).split(sep).join("/");
+        if (!rel.startsWith(".")) rel = "./" + rel;
+        return `${pre}${q}${rel}${q}`;
+      }
+    }
+    return m;
   });
   writeFileSync(file, src);
 }
@@ -71,15 +83,21 @@ function stage(pkgArg, outArg) {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
+  const srcOf = new Map();
+  srcOf.dirs = [];
   const copy = (from, to) => {
+    srcOf.dirs.push([resolve(from, ".."), resolve(to, "..")]);
     for (const f of walk(from)) {
       const dest = join(to, relative(from, f));
+      srcOf.set(dest, f);
       mkdirSync(dirname(dest), { recursive: true });
       cpSync(f, dest);
     }
   };
   copy(join(pkgDir, "src"), join(outDir, "src"));
-  if (existsSync(join(pkgDir, "README.md"))) cpSync(join(pkgDir, "README.md"), join(outDir, "README.md"));
+  for (const doc of ["README.md", "AGENTS.md"]) {
+    if (existsSync(join(pkgDir, doc))) cpSync(join(pkgDir, doc), join(outDir, doc));
+  }
   // The staged tree stands alone, so the base tsconfig is inlined.
   const base = readJson(join(root, "tsconfig.base.json"));
   writeFileSync(
@@ -91,7 +109,7 @@ function stage(pkgArg, outArg) {
   const deps = collectDeps(pkgDir, all);
   const npmDeps = { ...(readJson(join(pkgDir, "package.json")).dependencies ?? {}) };
   for (const [name, dir] of deps) {
-    const leaf = name.slice(WORKSPACE_SCOPE.length);
+    const leaf = name.split("/").pop();
     copy(join(dir, "src"), join(outDir, "vendor", leaf, "src"));
     const manifest = readJson(join(dir, "package.json"));
     const exportsMap = typeof manifest.exports === "string" ? { ".": manifest.exports } : manifest.exports;
@@ -100,12 +118,12 @@ function stage(pkgArg, outArg) {
       specifiers.set(spec, join("vendor", leaf, target.replace(/^\.\//, "")));
     }
     for (const [dep, range] of Object.entries(manifest.dependencies ?? {})) {
-      if (!dep.startsWith(WORKSPACE_SCOPE)) npmDeps[dep] ??= range;
+      if (!all.has(dep)) npmDeps[dep] ??= range;
     }
   }
-  for (const name of Object.keys(npmDeps)) if (name.startsWith(WORKSPACE_SCOPE)) delete npmDeps[name];
+  for (const name of Object.keys(npmDeps)) if (all.has(name)) delete npmDeps[name];
 
-  for (const f of walk(outDir)) if (f.endsWith(".ts")) rewriteImports(f, outDir, specifiers);
+  for (const f of walk(outDir)) if (f.endsWith(".ts")) rewriteImports(f, outDir, specifiers, srcOf, new Set(all.keys()));
 
   const manifest = readJson(join(pkgDir, "package.json"));
   manifest.dependencies = npmDeps;
@@ -115,7 +133,8 @@ function stage(pkgArg, outArg) {
 
   // Leftover workspace imports would fail on Kody; stop here instead.
   for (const f of walk(outDir)) {
-    if (f.endsWith(".ts") && /["']@automations\//.test(readFileSync(f, "utf8"))) {
+    const text = f.endsWith(".ts") ? readFileSync(f, "utf8") : "";
+    if ([...all.keys()].some((n) => text.includes(`"${n}"`) || text.includes(`"${n}/`))) {
       throw new Error(`${relative(outDir, f)} still imports a workspace package`);
     }
   }
