@@ -92,7 +92,7 @@ const perItem =
   };
 
 const sync =
-  <I>(render: (context: FormatContext, item: I, change: ItemChange) => string) =>
+  <I,>(render: (context: FormatContext, item: I, change: ItemChange) => string) =>
   async (item: I, change: ItemChange): Promise<Announcement["text"]> =>
   (context) =>
     render(context, item, change);
@@ -114,7 +114,7 @@ const lessonChanges = (changes: Changed<ItemsByWatcher["lessons"][number]>[]) =>
   changes.filter(({ item, change }) => change === "updated" && item.status !== "normal");
 
 type AnyAnnounce = Announce<never>;
-const asAny = <I>(announce: Announce<I>): AnyAnnounce => announce as unknown as AnyAnnounce;
+const asAny = <I,>(announce: Announce<I>): AnyAnnounce => announce as unknown as AnyAnnounce;
 
 const ANNOUNCERS: Record<WatcherName, AnyAnnounce> = {
   grades: asAny(perItem(sync(formatGrade))),
