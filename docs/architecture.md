@@ -8,6 +8,7 @@
 | Storage | `packages/librus-data` | `StorageAdapter`, the Supabase adapter, the in-memory fake, the migration import |
 | Librus | `packages/librus-watch` | Librus Watchers, Morning report, delivery of the Outbox, exports |
 | Activities | `packages/activities-watch` | ActiveNow, Edusky and Mondo Watchers, `sessions` export, mail comparison |
+| Kradziejka | `packages/kradziejka` | Telegram router to Grok bot routines. The registry is the table `kradziejka_bots`. |
 | Admin | `tools/admin` | CLI that edits the config in Supabase |
 | SQL | `supabase/migrations` | Schema, RLS and the role `automations_watcher` |
 

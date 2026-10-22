@@ -26,7 +26,8 @@ The migration makes the tables, the RLS policies and the role `automations_watch
 
 - read the config tables (`families`, `children`, `accounts`, `activities`, `recipients`);
 - read and insert `items`;
-- read and insert `outbox` entries, update only `outbox.delivered_at`, and delete `outbox` entries that were delivered more than 30 days ago.
+- read and insert `outbox` entries, update only `outbox.delivered_at`, and delete `outbox` entries that were delivered more than 30 days ago;
+- read, insert, and update `kradziejka_bots` (the Grok bot registry). The role cannot delete those rows. Webhook keys in that table are ciphertext.
 
 ## 3. Make the role key
 

@@ -12,6 +12,7 @@ The code runs on the [Kody](https://kody.codes) platform first. A runtime interf
 | `packages/librus-data` | `StorageAdapter` and the Supabase implementation |
 | `packages/librus-watch` | Librus watcher, exports and morning report |
 | `packages/activities-watch` | ActiveNow, Edusky and Mondo watchers |
+| `packages/kradziejka` | Telegram router to Grok bot routines |
 | `tools/admin` | Admin CLI to add families, children, accounts and recipients |
 
 Docs: `docs/architecture.md`, `docs/supabase-setup.md`, `docs/kody-deploy.md`, `docs/adding-a-child.md`, `docs/running-on-node.md`. See `docs/PRD.md` for the plan.
