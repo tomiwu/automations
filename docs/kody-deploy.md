@@ -4,25 +4,29 @@ Do the steps in `docs/supabase-setup.md` first.
 
 ## Packages
 
-Two packages run as Kody packages. Both are private.
+Three packages run as Kody packages. All are private.
 
 | Package | Jobs (in `package.json`, `kody.jobs`) |
 | --- | --- |
 | `@tomiwu/librus-watch` | `scheduled-check` (07:00 and 18:00), `daily-purge` (03:30) |
 | `@tomiwu/activities-watch` | The scheduled pass and the exports. See its README. |
+| `@tomiwu/kradziejka` | No jobs. Two inbound webhooks and one register webhook. See its README. |
 
 The time zone of a schedule must be the time zone of the Family.
-Each package exports entry files (`./scheduled`, `./purge` and the exports). Only the entry files import the Kody runtime.
+Each watcher package exports entry files (`./scheduled`, `./purge` and the exports). `@tomiwu/kradziejka` exports webhooks instead of jobs. Only the entry files import the Kody runtime.
 
 ## Secrets and credentials
 
-- Kody secret `SUPABASE_KEY` (the watcher key). It is the only Kody secret of the packages, sent as the literal `{{secret:SUPABASE_KEY}}`. Allowed host: `<ref>.supabase.co`, header placement.
-- Kody secret `TELEGRAM_BOT_TOKEN`, used by `@tomiwu/telegram`.
+- Kody secret `SUPABASE_KEY` (the watcher key). It is sent as the literal `{{secret:SUPABASE_KEY}}`. Allowed host: `<ref>.supabase.co`, header placement.
+- Kody secret `JEV_API_KEY`, used by `@tomiwu/kradziejka`. It is sent as the literal `{{secret:JEV_API_KEY}}`. Allowed host: `api.getjevai.com`, header placement.
+- Kody secret `TELEGRAM_BOT_TOKEN`, used by `@tomiwu/telegram` for the Librus polling bot (`librus-watch` and `activities-watch`).
+- Kody secret `telegramBotToken-kradziejka`, used by `@tomiwu/kradziejka` through `@tomiwu/telegram` (`secretName: "telegramBotToken-kradziejka"`). This is a separate BotFather bot. Host: `api.telegram.org`.
+- Bot webhook keys are not Kody secrets. `@tomiwu/kradziejka` stores them as AES-256-GCM ciphertext in `kradziejka_bots`. Kody accepts only literal secret names, so one secret cannot hold one key per bot.
 - The service logins (Librus, ActiveNow, Edusky, Mondo, and `EDUSKY_CLIENT_SECRET`) are rows in the Supabase table `credentials`, encrypted with AES-256-GCM. Add or change one with `admin set-credential --family <id> --name <NAME>` on your own computer (it asks for the value without echo and needs `CREDENTIAL_KEY`). New Accounts need no code change and no Kody secret.
 
 ## Deployment config
 
-After the first deploy, call `./configure` of each package yourself with `{ supabaseUrl, familyId, credentialKey }`. The key comes from `admin new-credential-key`; keep it in a password manager. Do not pass it through an agent. Rotate with `admin rotate-credential-key` (needs `CREDENTIAL_KEY` and `NEW_CREDENTIAL_KEY`), then call `./configure` again.
+After the first deploy, call `./configure` of each package yourself with `{ supabaseUrl, familyId, credentialKey }`. `@tomiwu/kradziejka` also needs `allowlist` and `adminToken`. The key comes from `admin new-credential-key`; keep it in a password manager. Do not pass it through an agent. Rotate with `admin rotate-credential-key` (needs `CREDENTIAL_KEY` and `NEW_CREDENTIAL_KEY`), then call `./configure` again.
 
 Security: a leak of the database alone gives only ciphertext; a leak of the package storage alone gives a key without data. Anyone who can change and publish these Kody packages can read the decrypted values, as with any code that logs in.
 

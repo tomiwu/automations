@@ -12,5 +12,8 @@
 - **Recipient**: One Telegram chat with a language and a list of Children.
 - **StorageAdapter**: The interface for Items, the Outbox and config reads.
 - **Runtime**: The interface for fetch, secrets, time, logs and schedules.
+- **Registry**: The Supabase table `kradziejka_bots`. One row is one Grok bot.
+- **Hub**: The registry row with slug `hub`. Unclear messages go to the hub.
+- **Allowlist**: The Telegram user IDs that `kradziejka` accepts. An empty list accepts no one.
 
 Avoid: "user" for Recipient, "event" for Item, "queue" for Outbox.
