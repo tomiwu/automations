@@ -211,7 +211,7 @@ describe("telegram update handling", () => {
       },
     });
     expect(await handleTelegramUpdate(failing, update("Hello"))).toMatchObject({ status: "forward-failed" });
-    expect(failing.sent).toContain("The agent did not accept the message. Try again later.");
+    expect(failing.sent).toContain("The bot did not accept the message. Try again later.");
   });
 
   it("releases the update id when the attempt throws", async () => {

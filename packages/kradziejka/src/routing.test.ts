@@ -32,7 +32,7 @@ describe("routing decision mapping", () => {
   });
 
   it("adds a hub criterion when the registry has no hub row", () => {
-    expect(routeCriteria([{ slug: "grades", description: "Grades" }]).hub).toContain("hub");
+    expect(routeCriteria([{ slug: "grades", description: "Grades" }]).hub).toContain("Hub");
     expect(routeCriteria([{ slug: "create_new_bot", description: "skip" }]).create_new_bot).toContain("new bot");
   });
 
