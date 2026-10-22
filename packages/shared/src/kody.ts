@@ -1,4 +1,4 @@
-import { packageStorage } from "kody:runtime";
+import { packageContext, packageStorage } from "kody:runtime";
 import type { FetchFn, LogLevel, Runtime } from "./runtime.ts";
 
 /**
@@ -136,3 +136,6 @@ export const kodyHost: KodyHost = {
 };
 
 export const kodyStorage = (): KodyStorage => packageStorage();
+
+/** The mount path of the package app (`packageContext.appBasePath` of `kody:runtime`). It is empty outside the app. */
+export const kodyAppBasePath = (): string => packageContext?.appBasePath ?? "";

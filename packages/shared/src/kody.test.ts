@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const store = new Map<string, string>();
 vi.mock("kody:runtime", () => ({
+  packageContext: { appBasePath: "/apps/example" },
   packageStorage: () => ({
     get: async (key: string) => store.get(key),
     set: async (key: string, value: string) => void store.set(key, value),
@@ -14,6 +15,7 @@ import {
   KODY_RUNTIME_EXPORTS,
   SUPABASE_KEY_PLACEHOLDER,
   createKodyRuntime,
+  kodyAppBasePath,
   kodyStorage,
   loadDeploymentConfig,
   parseDeploymentConfig,
@@ -72,6 +74,12 @@ describe("deployment config", () => {
     expect(() => parseDeploymentConfig({ ...config, familyId: "a b" })).toThrow("familyId");
     expect(() => parseDeploymentConfig({ supabaseUrl: config.supabaseUrl })).toThrow("familyId");
     expect(() => parseDeploymentConfig({ ...config, credentialKey: "short" })).toThrow("credentialKey");
+  });
+});
+
+describe("kodyAppBasePath", () => {
+  it("gives the mount path of the package app", () => {
+    expect(kodyAppBasePath()).toBe("/apps/example");
   });
 });
 

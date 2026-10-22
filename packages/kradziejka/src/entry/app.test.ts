@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const fakeSecret = "fake-secret-decrypt-detail";
 
-vi.mock("kody:runtime", () => ({ packageContext: { appBasePath: "" } }));
+vi.mock("@automations/shared/kody", () => ({ kodyAppBasePath: () => "" }));
 vi.mock("./common.ts", () => ({
   adminDeps: async () => {
     throw new Error(fakeSecret);
