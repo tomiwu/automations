@@ -43,7 +43,4 @@ export function createHttp(runtime: Runtime, timeoutMs: number = REQUEST_TIMEOUT
   };
 }
 
-/** Encodes the fields of a form body. Secret values are encoded too. */
-export function formBody(fields: Record<string, string>): string {
-  return new URLSearchParams(fields).toString();
-}
+export { formBody } from "@automations/shared";

@@ -1,4 +1,5 @@
 import type { Account, FetchFn, Runtime } from "@automations/shared";
+import { formBody } from "@automations/shared";
 
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -144,7 +145,7 @@ export class LibrusSession {
   private async loginBody(): Promise<string> {
     const login = await this.runtime.secret(this.account.login_secret);
     const pass = await this.runtime.secret(this.account.password_secret);
-    return new URLSearchParams({ action: "login", login, pass }).toString();
+    return formBody({ action: "login", login, pass });
   }
 
   private async submitLogin(formUrl: string): Promise<string> {

@@ -20,12 +20,16 @@ Enter these secrets in Kody and approve them for the host:
 
 | Secret | Use |
 | --- | --- |
-| `SUPABASE_URL` | Project URL |
 | `SUPABASE_KEY` | Key of the role `automations_watcher` |
-| `FAMILY_ID` | ID of the Family from `admin add-family` |
 | `TELEGRAM_BOT_TOKEN` | Token of the Telegram bot |
 | `EDUSKY_CLIENT_SECRET` | Client secret of the Edusky web app (only for Edusky) |
 | Account secrets | The NAMES in `accounts.login_secret` and `accounts.password_secret`, for example `CHILD1_LIBRUS_LOGIN` |
+
+Kody never gives a secret value to code. The code sends `{{secret:NAME}}` and Kody fills it in for the allowed hosts of the secret, so each secret needs its host: `SUPABASE_KEY` → `<ref>.supabase.co`, the Librus secrets → the Librus hosts, the Activity secrets → the host of their app. Secrets in a form body need body placement.
+
+## Deployment config (not secret)
+
+The Supabase project URL and the Family ID are plain config in the storage of each package. After the first deploy, call `./configure` of `@tomiwu/librus-watch` and of `@tomiwu/activities-watch` with `{ supabaseUrl, familyId }`. They are not in the repository.
 
 Do not put a secret value in the repository, in a file or in a chat with an agent.
 

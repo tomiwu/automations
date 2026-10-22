@@ -1,4 +1,4 @@
-import { kodyRuntime } from "@automations/shared/kody";
+import { kodyRuntime, kodyStorage, loadDeploymentConfig } from "@automations/shared/kody";
 import { supabaseStorageFromRuntime } from "@automations/librus-data";
 import { splitForTelegram, type Messenger } from "@tomiwu/librus-watch";
 import sendMessage from "kody:@tomiwu/telegram/send-message";
@@ -12,8 +12,12 @@ export const telegramMessenger: Messenger = {
   },
 };
 
-/** The deployment serves one Family. Its ID is in the secret `FAMILY_ID`. */
+/**
+ * The deployment serves one Family. The Supabase URL and the Family ID are plain config in the package storage
+ * (set with `./configure`). Only `SUPABASE_KEY` is a secret.
+ */
 export async function entryDeps() {
   const runtime = kodyRuntime;
-  return { runtime, storage: await supabaseStorageFromRuntime(runtime), familyId: await runtime.secret("FAMILY_ID") };
+  const { supabaseUrl, familyId } = await loadDeploymentConfig(kodyStorage());
+  return { runtime, storage: await supabaseStorageFromRuntime(runtime, supabaseUrl), familyId };
 }

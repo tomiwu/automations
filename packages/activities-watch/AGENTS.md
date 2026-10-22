@@ -17,9 +17,13 @@ import afterSchool from "kody:@tomiwu/activities-watch/after-school";
 
 `./scheduled` is the job in `package.json` (`kody.jobs`). Do not call it as a test: it can send real messages.
 
+## Config
+
+`./configure` with `{ supabaseUrl, familyId }` saves the plain deployment config in the package storage. Without it every export rejects with a message that names `./configure`.
+
 ## Secrets
 
-`SUPABASE_URL`, `SUPABASE_KEY`, `FAMILY_ID`, `TELEGRAM_BOT_TOKEN`, `EDUSKY_CLIENT_SECRET` (Edusky only), and the account secrets named in the `accounts` table. Never read, print or change their values.
+Secrets are `{{secret:NAME}}` placeholders that Kody fills in at fetch time; code never sees a value. `SUPABASE_KEY`, `TELEGRAM_BOT_TOKEN`, `EDUSKY_CLIENT_SECRET` (Edusky only), and the account secrets named in the `accounts` table. Never read, print or change their values.
 
 ## Smoke tests
 

@@ -19,7 +19,7 @@
 Import it from `@automations/librus-data/contract` and give it a harness factory.
 
 `createSupabaseStorage` is the adapter for the PostgREST API of Supabase. It uses plain `fetch`.
-`supabaseStorageFromRuntime` reads the secrets `SUPABASE_URL` and `SUPABASE_KEY` from the `Runtime`.
+`supabaseStorageFromRuntime(runtime, url?)` uses the secret `SUPABASE_KEY`. On Kody the URL comes from the deployment config; locally it falls back to the secret `SUPABASE_URL`.
 `keepalive()` reads one row, so the free project does not pause.
 
 The adapter runs the contract suite against `createFakePostgrest`, an in-memory fake of the PostgREST API.

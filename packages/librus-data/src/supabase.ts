@@ -134,10 +134,13 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
   };
 }
 
-/** Creates the storage with the secrets `SUPABASE_URL` and `SUPABASE_KEY`. */
-export async function supabaseStorageFromRuntime(runtime: Runtime): Promise<SupabaseStorage> {
+/**
+ * Creates the storage with the secret `SUPABASE_KEY`. The project URL is plain config: pass it, or it is read from
+ * the secret `SUPABASE_URL` (local runs only; on Kody a secret cannot be part of a URL).
+ */
+export async function supabaseStorageFromRuntime(runtime: Runtime, url?: string): Promise<SupabaseStorage> {
   return createSupabaseStorage({
-    url: await runtime.secret("SUPABASE_URL"),
+    url: url ?? (await runtime.secret("SUPABASE_URL")),
     key: await runtime.secret("SUPABASE_KEY"),
     fetch: runtime.fetch,
     now: () => runtime.now(),
