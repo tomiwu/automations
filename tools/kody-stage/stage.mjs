@@ -8,6 +8,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
+const CHEERIO_PINS = { entities: "4.5.0", htmlparser2: "9.1.0", parse5: "7.1.2" };
 const root = resolve(dirname(new URL(import.meta.url).pathname), "../..");
 
 function readJson(path) {
@@ -102,7 +103,7 @@ function stage(pkgArg, outArg) {
   const base = readJson(join(root, "tsconfig.base.json"));
   writeFileSync(
     join(outDir, "tsconfig.json"),
-    JSON.stringify({ compilerOptions: base.compilerOptions ?? {}, include: ["src", "vendor"] }, null, 2) + "\n",
+    JSON.stringify({ compilerOptions: { ...(base.compilerOptions ?? {}), types: [] }, include: ["src", "vendor"] }, null, 2) + "\n",
   );
 
   const specifiers = new Map();
@@ -126,7 +127,19 @@ function stage(pkgArg, outArg) {
   for (const f of walk(outDir)) if (f.endsWith(".ts")) rewriteImports(f, outDir, specifiers, srcOf, new Set(all.keys()));
 
   const manifest = readJson(join(pkgDir, "package.json"));
+  // Kody's bundler picks incompatible versions of cheerio's parser stack unless they are pinned.
+  if (npmDeps.cheerio) {
+    Object.assign(npmDeps, CHEERIO_PINS);
+    manifest.overrides = { ...(manifest.overrides ?? {}), ...CHEERIO_PINS };
+  }
   manifest.dependencies = npmDeps;
+  // kody.dependencies must list every static `kody:@owner/name` import.
+  const kodyDeps = {};
+  for (const f of walk(outDir)) {
+    if (!f.endsWith(".ts") || f.endsWith(".d.ts")) continue;
+    for (const m of readFileSync(f, "utf8").matchAll(/["']kody:(@[^/"']+\/[^/"']+)/g)) kodyDeps[m[1]] = "*";
+  }
+  manifest.kody = { ...manifest.kody, dependencies: { ...(manifest.kody?.dependencies ?? {}), ...kodyDeps } };
   delete manifest.scripts;
   delete manifest.devDependencies;
   writeFileSync(join(outDir, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
