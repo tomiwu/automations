@@ -1,4 +1,4 @@
-import { packageContext } from "kody:runtime";
+import { kodyAppBasePath } from "@automations/shared/kody";
 import { APP_FAILED, handleAdmin } from "../admin.ts";
 import { adminDeps } from "./common.ts";
 
@@ -14,7 +14,7 @@ import { adminDeps } from "./common.ts";
  * const page = await app(new Request("https://example.test/login"));
  */
 export default async function app(request: Request): Promise<Response> {
-  const base = packageContext?.appBasePath ?? "";
+  const base = kodyAppBasePath();
   try {
     return await handleAdmin(request, await adminDeps(), base);
   } catch {
