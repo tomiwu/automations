@@ -86,8 +86,12 @@ jobs:
           PKG: "@tomiwu/${{ matrix.package }}"
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
+          # The HTTP API needs the package UUID in the path, so look it up by name first.
+          PKG_ID=$(npx -y "$KODY_CLI" api packageList --params '{}' \
+            | jq -r --arg n "$PKG" '.packages[] | select(.name == $n) | .package_id' | head -1)
+          if [ -z "$PKG_ID" ]; then echo "::error::Package $PKG not found in Kody"; exit 1; fi
           npx -y "$KODY_CLI" api packageGetGitRemote \
-            --params "{\"kody_id\":\"$PKG\",\"scope\":\"write\",\"ttl_seconds\":900}" > "$RUNNER_TEMP/remote.json"
+            --params "{\"package_id\":\"$PKG_ID\",\"scope\":\"write\",\"ttl_seconds\":900}" > "$RUNNER_TEMP/remote.json"
           REMOTE=$(jq -r .authenticated_remote "$RUNNER_TEMP/remote.json")
           echo "::add-mask::$REMOTE"
           NAME=$(jq -r .git_author.name "$RUNNER_TEMP/remote.json")
