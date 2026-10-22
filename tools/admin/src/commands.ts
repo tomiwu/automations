@@ -11,6 +11,8 @@ export interface AdminDeps {
   print: (line: string) => void;
   /** Reads one value from the terminal without echo. */
   readSecret: (prompt: string) => Promise<string>;
+  /** Reads all of standard input (for `set-credential --stdin`). */
+  readStdin: () => Promise<string>;
 }
 
 type Flags = Record<string, string>;
@@ -155,7 +157,10 @@ const setCredential: Command = async (flags, _positional, deps) => {
   const familyId = required(flags, "family");
   const name = secretName(required(flags, "name"), "name");
   const key = await credentialKey(deps);
-  const value = await deps.readSecret(`Value of ${name} (not shown): `);
+  const value =
+    flags.stdin === "true"
+      ? (await deps.readStdin()).replace(/\r?\n$/, "")
+      : await deps.readSecret(`Value of ${name} (not shown): `);
   if (value === "") throw new Error("The value is empty");
   const ciphertext = await encryptCredential(key, familyId, name, value);
   await deps.rest().upsert("credentials", [{ family_id: familyId, name, ciphertext, updated_at: new Date(deps.now()).toISOString() }]);

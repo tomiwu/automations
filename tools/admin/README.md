@@ -28,6 +28,10 @@ The CLI never takes a secret value as an argument. `--login-secret` and `--passw
 | `list` | `--family` (optional) |
 | `disable-account` | `--id` |
 | `import-seed <file>` | A JSON file with the keys `families`, `children`, `accounts`, `activities`, `recipients`. Each value is a list of table rows. |
+| `new-credential-key` | None. Prints a new credential key (base64). |
+| `set-credential` | `--family`, `--name`, `--stdin` (read the value from standard input instead of a prompt). Needs `CREDENTIAL_KEY`. |
+| `list-credentials` | `--family`. Names only. |
+| `rotate-credential-key` | `--family`. Needs `CREDENTIAL_KEY` and `NEW_CREDENTIAL_KEY`. |
 | `make-watcher-key` | None. Prints a JWT for the role `automations_watcher`. |
 
 Each `add-*` command prints the ID of the new row. `add-account` also prints the Kody secrets that you must enter.
