@@ -40,6 +40,7 @@ function setup(files: Record<string, string> = {}, env: Record<string, string> =
     now: () => 1_700_000_000_000,
     print: (line) => out.push(line),
     readSecret: async () => typed,
+    readStdin: async () => `${typed}-from-stdin\n`,
   };
   return { deps, calls, out, store };
 }
@@ -249,6 +250,13 @@ describe("credentials", () => {
     expect(String(row?.ciphertext)).not.toContain("typed value");
     await expect(decryptCredential(await importCredentialKey(key), "f1", "CHILD1_LIBRUS_LOGIN", String(row?.ciphertext))).resolves.toBe("typed value");
     expect(out.join("\n")).not.toContain("typed value");
+  });
+
+  it("reads the value from stdin with --stdin and drops one trailing newline", async () => {
+    const { deps, store } = setup({}, { CREDENTIAL_KEY: key });
+    await runAdmin(["set-credential", "--family", "f1", "--name", "X", "--stdin"], deps);
+    const sealed = String(store.credentials?.[0]?.ciphertext);
+    await expect(decryptCredential(await importCredentialKey(key), "f1", "X", sealed)).resolves.toBe("typed value-from-stdin");
   });
 
   it("needs the key, a valid name and a value", async () => {

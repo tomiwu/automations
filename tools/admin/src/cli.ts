@@ -27,6 +27,12 @@ function readSecret(prompt: string): Promise<string> {
   });
 }
 
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   runAdmin(process.argv.slice(2), {
     rest: restFromEnv,
@@ -35,6 +41,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     now: () => Date.now(),
     print: (line) => console.log(line),
     readSecret,
+    readStdin,
   }).catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
