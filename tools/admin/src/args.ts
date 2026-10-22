@@ -45,6 +45,6 @@ export function secretName(value: string, name: string): string {
 
 export function weekday(value: string): number {
   const day = Number(value);
-  if (!Number.isInteger(day) || day < 0 || day > 6) throw new Error("Option --weekday must be 0 to 6");
+  if (!Number.isInteger(day) || day < 1 || day > 7) throw new Error("Option --weekday must be 1 (Monday) to 7 (Sunday)");
   return day;
 }

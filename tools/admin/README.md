@@ -23,7 +23,7 @@ The CLI never takes a secret value as an argument. `--login-secret` and `--passw
 | `add-family` | `--name`, `--timezone` (default `UTC`), `--language` (`pl` or `en`, default `en`) |
 | `add-child` | `--family`, `--name`, `--has-librus`, `--calendar-id` |
 | `add-account` | `--family`, `--child`, `--service`, `--login-secret`, `--password-secret`, `--origin`, `--group` |
-| `add-activity` | `--family`, `--child`, `--name`, `--weekday` (0 to 6), `--start`, `--end`, `--account`, `--place` |
+| `add-activity` | `--family`, `--child`, `--name`, `--weekday` (1 = Monday to 7 = Sunday), `--start`, `--end`, `--account`, `--place` |
 | `add-recipient` | `--family`, `--chat-id`, `--language`, `--children` (comma-separated Child IDs) |
 | `list` | `--family` (optional) |
 | `disable-account` | `--id` |

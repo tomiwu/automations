@@ -105,6 +105,14 @@ describe("commands", () => {
     expect(store.activities?.[0]).toMatchObject({ name: "Chess", weekday: 2, account_id: null, place: null });
   });
 
+  it("stores Sunday as weekday 7 and refuses weekday 0", async () => {
+    const base = ["add-activity", "--family", "f", "--child", "c", "--name", "Chess", "--start", "15:00", "--end", "16:00"];
+    const { deps, store } = setup();
+    await runAdmin([...base, "--weekday", "7"], deps);
+    expect(store.activities?.[0]).toMatchObject({ weekday: 7 });
+    await expect(runAdmin([...base, "--weekday", "0"], setup().deps)).rejects.toThrow("--weekday");
+  });
+
   it("refuses a bad weekday", async () => {
     const args = ["add-activity", "--family", "f", "--child", "c", "--name", "Chess", "--weekday", "9", "--start", "15:00", "--end", "16:00"];
     await expect(runAdmin(args, setup().deps)).rejects.toThrow("--weekday");
