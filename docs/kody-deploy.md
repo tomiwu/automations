@@ -41,3 +41,18 @@ The delivery uses the external `telegram` package (`@tomiwu/telegram`, an unchan
 4. Keep the previous version. To roll back, deploy it again. Only one version runs at a time.
 
 The first run of each scope is a silent Baseline, so the first deploy sends no old Items.
+
+## Deploy from CI
+
+The workflow `.github/workflows/deploy-kody.yml` runs after CI is green on `main` and can be started by hand.
+
+1. `tools/kody-stage/stage.mjs` builds a self-contained tree for each package. Kody gets dependencies from the public npm registry, so the private `@automations/*` packages are copied into `vendor/` and their imports are rewritten. Test files are left out.
+2. The job sends the tree to the Kody publish checks (`packageCheck`). This saves nothing.
+3. Only when the repository variable `KODY_DEPLOY_ENABLED` is `true` (and a manual run is not a dry run): the job pushes the tree to the Kody package repo (`packageGetGitRemote`, a fast-forward push) and runs `kody package publish`.
+
+Setup (the owner does this, never an agent):
+
+- Create a Kody API token (`tokenCreate`, lifetime `long`) with the scopes `package:read`, `package:write`, `package:publish`, `org:read`. Add it in GitHub as the environment secret `KODY_DEPLOY_TOKEN` (environment `kody`). A long token lasts at most 90 days and expires after 14 days without use, so renew it.
+- Set the repository variable `KODY_DEPLOY_ENABLED` to `true` when you want real deploys.
+
+Roll back by deploying the previous version again (see Deploy steps). The workflow never changes Kody secrets and never changes the visibility of a package.
