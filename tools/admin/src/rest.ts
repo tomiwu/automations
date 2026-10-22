@@ -4,6 +4,8 @@ export interface RestClient {
   insert(table: string, rows: readonly Row[]): Promise<Row[]>;
   select(table: string, query?: string): Promise<Row[]>;
   update(table: string, query: string, patch: Row): Promise<Row[]>;
+  /** Inserts or replaces rows on the primary key. */
+  upsert(table: string, rows: readonly Row[]): Promise<Row[]>;
 }
 
 export interface RestOptions {
@@ -22,13 +24,13 @@ export function createRestClient(options: RestOptions): RestClient {
     prefer: "return=representation",
   };
 
-  async function call(method: string, path: string, body?: unknown): Promise<Row[]> {
+  async function call(method: string, path: string, body?: unknown, prefer = headers.prefer): Promise<Row[]> {
     const response = await options.fetch(`${base}/${path}`, {
       method,
-      headers,
+      headers: { ...headers, prefer },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(`${method} ${path.split("?")[0]} failed: ${response.status} ${await response.text()}`);
+    if (!response.ok) throw new Error(`${method} ${path.split("?")[0]} failed: ${response.status} ${(await response.text()).slice(0, 300)}`);
     return (await response.json()) as Row[];
   }
 
@@ -36,5 +38,6 @@ export function createRestClient(options: RestOptions): RestClient {
     insert: (table, rows) => call("POST", table, rows),
     select: (table, query = "select=*") => call("GET", `${table}?${query}`),
     update: (table, query, patch) => call("PATCH", `${table}?${query}`, patch),
+    upsert: (table, rows) => call("POST", table, rows, "resolution=merge-duplicates,return=representation"),
   };
 }

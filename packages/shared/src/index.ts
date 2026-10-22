@@ -28,3 +28,4 @@ export { createHttpSession } from "./session.ts";
 export type { HttpSession } from "./session.ts";
 export { CATALOGS, t } from "./i18n.ts";
 export type { Catalog, MessageKey, MessageParams } from "./i18n.ts";
+export { decryptCredential, encryptCredential, importCredentialKey, newCredentialKey } from "./credentials.ts";

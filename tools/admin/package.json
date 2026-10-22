@@ -3,13 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Admin CLI for the owner. It edits the Supabase config and makes the watcher key.",
+  "description": "Admin CLI for the owner. It edits the Supabase config, encrypts the service credentials and makes the watcher key.",
   "license": "MIT",
-  "bin": { "admin": "./src/cli.ts" },
+  "bin": {
+    "admin": "./src/cli.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "crap": "crap4ts --exclude .test --fail-on-crap 6"
+  },
+  "dependencies": {
+    "@automations/shared": "*"
   }
 }

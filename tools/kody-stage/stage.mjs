@@ -138,7 +138,7 @@ function stage(pkgArg, outArg) {
   const kodyDeps = {};
   for (const f of walk(outDir)) {
     if (!f.endsWith(".ts") || f.endsWith(".d.ts")) continue;
-    for (const m of readFileSync(f, "utf8").matchAll(/["']kody:(@[^/"']+\/[^/"']+)/g)) kodyDeps[m[1]] = "*";
+    for (const m of readFileSync(f, "utf8").matchAll(/^\s*(?:import|export)\b[^\n]*?from\s+["']kody:(@[^/"']+\/[^/"']+)|\bimport\(\s*["']kody:(@[^/"']+\/[^/"']+)/gm)) kodyDeps[m[1] ?? m[2]] = "*";
   }
   manifest.kody = { ...manifest.kody, dependencies: { ...(manifest.kody?.dependencies ?? {}), ...kodyDeps } };
   delete manifest.scripts;

@@ -12,17 +12,18 @@ vi.mock("kody:runtime", () => ({
 
 import {
   KODY_RUNTIME_EXPORTS,
+  SUPABASE_KEY_PLACEHOLDER,
   createKodyRuntime,
-  kodyRuntime,
   kodyStorage,
   loadDeploymentConfig,
   parseDeploymentConfig,
   saveDeploymentConfig,
-  secretPlaceholder,
   type KodyHost,
 } from "./kody.ts";
 
-const config = { supabaseUrl: "https://example.supabase.co", familyId: "00000000-0000-0000-0000-000000000001" };
+const credentialKey = btoa(String.fromCharCode(...new Uint8Array(32)));
+const config = { supabaseUrl: "https://example.supabase.co", familyId: "00000000-0000-0000-0000-000000000001", credentialKey };
+const saved = { ...config, credentialKey: "set" };
 
 function host(): KodyHost & { logs: unknown[][] } {
   const logs: unknown[][] = [];
@@ -30,28 +31,23 @@ function host(): KodyHost & { logs: unknown[][] } {
 }
 
 describe("createKodyRuntime", () => {
-  it("maps fetch and log to the host and gives secrets as placeholders", async () => {
+  it("maps fetch and log to the host and resolves credentials by name", async () => {
     const kody = host();
-    const runtime = createKodyRuntime(kody, () => new Date("2025-01-02T00:00:00Z"));
+    const runtime = createKodyRuntime(kody, async (name) => `value of ${name}`, () => new Date("2025-01-02T00:00:00Z"));
     await expect((await runtime.fetch("abc")).text()).resolves.toBe("abc");
-    await expect(runtime.secret("SUPABASE_KEY")).resolves.toBe("{{secret:SUPABASE_KEY}}");
+    await expect(runtime.secret("LOGIN")).resolves.toBe("value of LOGIN");
     expect(runtime.now().toISOString()).toBe("2025-01-02T00:00:00.000Z");
     runtime.log("error", "m");
     expect(kody.logs).toEqual([["error", "m"]]);
     expect(() => runtime.schedule({ cron: "* * * * *", timezone: "UTC" }, async () => undefined)).toThrow("kody.jobs");
   });
 
-  it("rejects an invalid secret name", async () => {
-    expect(() => secretPlaceholder("a}}b")).toThrow("Invalid secret name");
-    await expect(createKodyRuntime(host()).secret("")).rejects.toThrow("Invalid secret name");
-  });
-
   it("defaults to the real clock", () => {
-    expect(createKodyRuntime(host()).now()).toBeInstanceOf(Date);
+    expect(createKodyRuntime(host(), async () => "").now()).toBeInstanceOf(Date);
   });
 
-  it("kodyRuntime uses placeholders", async () => {
-    await expect(kodyRuntime.secret("X")).resolves.toBe("{{secret:X}}");
+  it("names SUPABASE_KEY as a literal placeholder", () => {
+    expect(SUPABASE_KEY_PLACEHOLDER).toBe("{{secret:SUPABASE_KEY}}");
   });
 });
 
@@ -59,7 +55,7 @@ describe("deployment config", () => {
   it("saves and loads through the package storage", async () => {
     store.clear();
     await expect(loadDeploymentConfig(kodyStorage())).rejects.toThrow("./configure");
-    await expect(saveDeploymentConfig(kodyStorage(), { ...config, supabaseUrl: config.supabaseUrl + "/" })).resolves.toEqual(config);
+    await expect(saveDeploymentConfig(kodyStorage(), { ...config, supabaseUrl: config.supabaseUrl + "/" })).resolves.toEqual(saved);
     await expect(loadDeploymentConfig(kodyStorage())).resolves.toEqual(config);
   });
 
@@ -75,6 +71,7 @@ describe("deployment config", () => {
     expect(() => parseDeploymentConfig({ ...config, supabaseUrl: "https://x/rest/v1" })).toThrow("supabaseUrl");
     expect(() => parseDeploymentConfig({ ...config, familyId: "a b" })).toThrow("familyId");
     expect(() => parseDeploymentConfig({ supabaseUrl: config.supabaseUrl })).toThrow("familyId");
+    expect(() => parseDeploymentConfig({ ...config, credentialKey: "short" })).toThrow("credentialKey");
   });
 });
 
@@ -106,5 +103,12 @@ describe("kody:runtime imports", () => {
       }
     }
     expect(used).toEqual([]);
+  });
+
+  it("build no secret placeholder at runtime (Kody requires literal names)", () => {
+    const computed = files(join(root, "packages"))
+      .filter((file) => !file.endsWith(".test.ts"))
+      .filter((file) => /\{\{secret:\$\{|["'`]\{\{secret:["'`]\s*\+/.test(readFileSync(file, "utf8")));
+    expect(computed).toEqual([]);
   });
 });

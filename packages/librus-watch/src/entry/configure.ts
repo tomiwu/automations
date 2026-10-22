@@ -1,16 +1,17 @@
-import { kodyStorage, saveDeploymentConfig, type DeploymentConfig } from "@automations/shared/kody";
+import { kodyStorage, saveDeploymentConfig, type SavedConfig } from "@automations/shared/kody";
 
 /**
- * Saves the plain deployment config of this package: the Supabase project URL and the Family ID.
- * Call it once after the first deploy (and again to change it). It holds no secret.
+ * Saves the deployment config of this package: the Supabase project URL, the Family ID and the
+ * credential key (base64, from `admin new-credential-key`). Only the owner calls it; never pass the key through an agent.
+ * Call it once after the first deploy (and again to rotate the key).
  *
- * @param input - `{ supabaseUrl, familyId }`; unknown keys are rejected.
- * @returns The saved config.
+ * @param input - `{ supabaseUrl, familyId, credentialKey }`; unknown keys are rejected.
+ * @returns The saved config without the key.
  *
  * @example
  * import configure from "kody:@tomiwu/librus-watch/configure";
- * await configure({ supabaseUrl: "https://<ref>.supabase.co", familyId: "<family id>" });
+ * await configure({ supabaseUrl: "https://<ref>.supabase.co", familyId: "<family id>", credentialKey: "<base64 key>" });
  */
-export default async function configure(input: unknown): Promise<DeploymentConfig> {
+export default async function configure(input: unknown): Promise<SavedConfig> {
   return saveDeploymentConfig(kodyStorage(), input);
 }
