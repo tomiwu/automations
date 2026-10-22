@@ -17,7 +17,11 @@ describe("package manifest", () => {
   });
 
   it("uses a dedicated BotFather secret for this bot", () => {
-    const names = [...entry.matchAll(/secretName:\s*"([^"]+)"/g)].map((match) => match[1]);
+    const names: string[] = [];
+    for (const match of entry.matchAll(/secretName:\s*"([^"]+)"/g)) {
+      const name = match[1];
+      if (name !== undefined) names.push(name);
+    }
     expect(names).toEqual(["telegramBotToken-kradziejka", "telegramBotToken-kradziejka"]);
     expect(names.every((name) => /^telegramBotToken-[a-z0-9]+$/.test(name))).toBe(true);
     expect(readme).toContain("| `telegramBotToken-kradziejka` |");
