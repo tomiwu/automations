@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_FAILED, REQUEST_FAILED, handleAdmin, routePath, type AdminDeps } from "./admin.ts";
+import { REQUEST_FAILED, handleAdmin, routePath, type AdminDeps } from "./admin.ts";
 import { parseAllowlist } from "./allowlist.ts";
 import type { BotRecord, BotRegistry } from "./registry.ts";
 

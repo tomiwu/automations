@@ -118,7 +118,7 @@ async function save(request: Request, deps: AdminDeps, base: string): Promise<Re
   const existing = await findBot(deps, fields.slug ?? "");
   try {
     await saveBotEdit(deps, formToDraft(fields), existing);
-  } catch (error) {
+  } catch {
     return html(page(base, "Bot", formHtml(base, draftBot(fields), REQUEST_FAILED)));
   }
   return redirect(base, "/", {});
@@ -128,7 +128,7 @@ async function saveList(request: Request, deps: AdminDeps, base: string): Promis
   const fields = await formFields(request);
   try {
     await deps.saveAllowlist(fields.allowlist ?? "");
-  } catch (error) {
+  } catch {
     const bots = await deps.registry.list(deps.familyId);
     return html(page(base, "Bots", listHtml(base, bots, deps.allowlist, REQUEST_FAILED)));
   }
