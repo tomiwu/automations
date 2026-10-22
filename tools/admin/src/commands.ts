@@ -1,3 +1,4 @@
+import { encryptCredential, decryptCredential, importCredentialKey, newCredentialKey } from "@automations/shared";
 import { oneOf, parseArgs, required, secretName, weekday } from "./args.ts";
 import { signWatcherKey } from "./jwt.ts";
 import type { RestClient, Row } from "./rest.ts";
@@ -8,6 +9,8 @@ export interface AdminDeps {
   readFile: (path: string) => Promise<string>;
   now: () => number;
   print: (line: string) => void;
+  /** Reads one value from the terminal without echo. */
+  readSecret: (prompt: string) => Promise<string>;
 }
 
 type Flags = Record<string, string>;
@@ -45,9 +48,9 @@ const addChild: Command = async (flags, _positional, deps) => {
 
 export function secretInstructions(login: string, password: string): string[] {
   return [
-    "Enter these secrets in Kody and approve them for the host:",
-    `  ${login}`,
-    `  ${password}`,
+    "Set the two credentials of this Account (encrypted on this computer):",
+    `  admin set-credential --family <family id> --name ${login}`,
+    `  admin set-credential --family <family id> --name ${password}`,
   ];
 }
 
@@ -137,7 +140,53 @@ const makeWatcherKey: Command = async (_flags, _positional, deps) => {
   deps.print(signWatcherKey(secret, Math.floor(deps.now() / 1000)));
 };
 
+async function credentialKey(deps: AdminDeps, name = "CREDENTIAL_KEY"): Promise<CryptoKey> {
+  const value = deps.env[name];
+  if (!value) throw new Error(`Set ${name} in the environment (admin new-credential-key makes one)`);
+  return importCredentialKey(value);
+}
+
+const newKey: Command = async (_flags, _positional, deps) => {
+  deps.print("Credential key (shown one time; keep it in a password manager and pass it to ./configure yourself):");
+  deps.print(newCredentialKey());
+};
+
+const setCredential: Command = async (flags, _positional, deps) => {
+  const familyId = required(flags, "family");
+  const name = secretName(required(flags, "name"), "name");
+  const key = await credentialKey(deps);
+  const value = await deps.readSecret(`Value of ${name} (not shown): `);
+  if (value === "") throw new Error("The value is empty");
+  const ciphertext = await encryptCredential(key, familyId, name, value);
+  await deps.rest().upsert("credentials", [{ family_id: familyId, name, ciphertext, updated_at: new Date(deps.now()).toISOString() }]);
+  deps.print(`Saved credential ${name} (encrypted)`);
+};
+
+const listCredentials: Command = async (flags, _positional, deps) => {
+  const rows = await deps.rest().select("credentials", `select=name,updated_at&family_id=eq.${required(flags, "family")}`);
+  for (const row of rows) deps.print(`${String(row.name)}  ${String(row.updated_at)}`);
+};
+
+const rotateKey: Command = async (flags, _positional, deps) => {
+  const familyId = required(flags, "family");
+  const oldKey = await credentialKey(deps);
+  const newKeyValue = await credentialKey(deps, "NEW_CREDENTIAL_KEY");
+  const rows = await deps.rest().select("credentials", `select=family_id,name,ciphertext&family_id=eq.${familyId}`);
+  const updated = [];
+  for (const row of rows) {
+    const name = String(row.name);
+    const value = await decryptCredential(oldKey, familyId, name, String(row.ciphertext));
+    updated.push({ family_id: familyId, name, ciphertext: await encryptCredential(newKeyValue, familyId, name, value) });
+  }
+  if (updated.length > 0) await deps.rest().upsert("credentials", updated);
+  deps.print(`Re-encrypted ${updated.length} credentials. Now call ./configure with the new key in each package.`);
+};
+
 const COMMANDS: Record<string, Command> = {
+  "new-credential-key": newKey,
+  "set-credential": setCredential,
+  "list-credentials": listCredentials,
+  "rotate-credential-key": rotateKey,
   "add-family": addFamily,
   "add-child": addChild,
   "add-account": addAccount,

@@ -1,11 +1,12 @@
 import { createHmac } from "node:crypto";
+import { decryptCredential, importCredentialKey, newCredentialKey } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import { parseArgs } from "./args.ts";
 import { runAdmin, type AdminDeps } from "./commands.ts";
 import { signWatcherKey } from "./jwt.ts";
 import { createRestClient, type RestClient, type Row } from "./rest.ts";
 
-function setup(files: Record<string, string> = {}, env: Record<string, string> = {}) {
+function setup(files: Record<string, string> = {}, env: Record<string, string> = {}, typed = "typed value") {
   const calls: string[] = [];
   const out: string[] = [];
   const store: Record<string, Row[]> = {};
@@ -24,6 +25,13 @@ function setup(files: Record<string, string> = {}, env: Record<string, string> =
       calls.push(`update ${table} ${query}`);
       return query === "id=eq.missing" ? [] : [{ ...patch }];
     },
+    upsert: async (table, rows) => {
+      calls.push(`upsert ${table}`);
+      const keyOf = (row: Row) => `${String(row.family_id)}:${String(row.name)}`;
+      const kept = (store[table] ?? []).filter((old) => !rows.some((row) => keyOf(row) === keyOf(old)));
+      store[table] = [...kept, ...rows];
+      return [...rows];
+    },
   };
   const deps: AdminDeps = {
     rest: () => rest,
@@ -31,6 +39,7 @@ function setup(files: Record<string, string> = {}, env: Record<string, string> =
     readFile: async (path) => files[path] ?? "",
     now: () => 1_700_000_000_000,
     print: (line) => out.push(line),
+    readSecret: async () => typed,
   };
   return { deps, calls, out, store };
 }
@@ -69,7 +78,11 @@ describe("commands", () => {
       deps,
     );
     expect(store.accounts?.[0]).toMatchObject({ service: "mondo", login_secret: "CHILD1_MONDO_LOGIN", origin: null });
-    expect(out.slice(1)).toEqual(["Enter these secrets in Kody and approve them for the host:", "  CHILD1_MONDO_LOGIN", "  CHILD1_MONDO_PASSWORD"]);
+    expect(out.slice(1)).toEqual([
+      "Set the two credentials of this Account (encrypted on this computer):",
+      "  admin set-credential --family <family id> --name CHILD1_MONDO_LOGIN",
+      "  admin set-credential --family <family id> --name CHILD1_MONDO_PASSWORD",
+    ]);
   });
 
   it("refuses a secret value in place of a name", async () => {
@@ -216,5 +229,49 @@ describe("createRestClient", () => {
 
   it("throws on an error status", async () => {
     await expect(fake(500).client.select("children")).rejects.toThrow("GET children failed: 500 boom");
+  });
+});
+
+describe("credentials", () => {
+  const key = newCredentialKey();
+
+  it("makes a new key", async () => {
+    const { deps, out } = setup();
+    await runAdmin(["new-credential-key"], deps);
+    expect(out[1]).toMatch(/^[A-Za-z0-9+/]{43}=$/);
+  });
+
+  it("encrypts a typed value and never prints it", async () => {
+    const { deps, store, out } = setup({}, { CREDENTIAL_KEY: key });
+    await runAdmin(["set-credential", "--family", "f1", "--name", "CHILD1_LIBRUS_LOGIN"], deps);
+    const row = store.credentials?.[0];
+    expect(row).toMatchObject({ family_id: "f1", name: "CHILD1_LIBRUS_LOGIN" });
+    expect(String(row?.ciphertext)).not.toContain("typed value");
+    await expect(decryptCredential(await importCredentialKey(key), "f1", "CHILD1_LIBRUS_LOGIN", String(row?.ciphertext))).resolves.toBe("typed value");
+    expect(out.join("\n")).not.toContain("typed value");
+  });
+
+  it("needs the key, a valid name and a value", async () => {
+    await expect(runAdmin(["set-credential", "--family", "f", "--name", "N"], setup().deps)).rejects.toThrow("CREDENTIAL_KEY");
+    await expect(runAdmin(["set-credential", "--family", "f", "--name", "a b"], setup({}, { CREDENTIAL_KEY: key }).deps)).rejects.toThrow();
+    await expect(runAdmin(["set-credential", "--family", "f", "--name", "N"], setup({}, { CREDENTIAL_KEY: key }, "").deps)).rejects.toThrow("empty");
+  });
+
+  it("lists names only and rotates the key", async () => {
+    const next = newCredentialKey();
+    const { deps, store, out } = setup({}, { CREDENTIAL_KEY: key, NEW_CREDENTIAL_KEY: next });
+    await runAdmin(["set-credential", "--family", "f1", "--name", "A"], deps);
+    await runAdmin(["list-credentials", "--family", "f1"], deps);
+    expect(out.some((line) => line.startsWith("A  "))).toBe(true);
+    await runAdmin(["rotate-credential-key", "--family", "f1"], deps);
+    const row = store.credentials?.[0];
+    await expect(decryptCredential(await importCredentialKey(next), "f1", "A", String(row?.ciphertext))).resolves.toBe("typed value");
+    expect(out.at(-1)).toContain("Re-encrypted 1 credentials");
+  });
+
+  it("rotates nothing when there are no credentials", async () => {
+    const { deps, out } = setup({}, { CREDENTIAL_KEY: key, NEW_CREDENTIAL_KEY: newCredentialKey() });
+    await runAdmin(["rotate-credential-key", "--family", "f1"], deps);
+    expect(out.at(-1)).toContain("Re-encrypted 0");
   });
 });

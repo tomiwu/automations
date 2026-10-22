@@ -1,5 +1,6 @@
 #!/usr/bin/env -S node --experimental-strip-types
 import { readFile } from "node:fs/promises";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { runAdmin } from "./commands.ts";
 import { createRestClient } from "./rest.ts";
@@ -11,6 +12,21 @@ function restFromEnv() {
   return createRestClient({ url, key, fetch });
 }
 
+/** Reads one line from the terminal without showing it. */
+function readSecret(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    const output = rl as unknown as { _writeToOutput: (text: string) => void };
+    process.stdout.write(prompt);
+    output._writeToOutput = () => undefined;
+    rl.question("", (answer) => {
+      rl.close();
+      process.stdout.write("\n");
+      resolve(answer);
+    });
+  });
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   runAdmin(process.argv.slice(2), {
     rest: restFromEnv,
@@ -18,6 +34,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     readFile: (path) => readFile(path, "utf8"),
     now: () => Date.now(),
     print: (line) => console.log(line),
+    readSecret,
   }).catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

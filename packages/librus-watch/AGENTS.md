@@ -22,11 +22,11 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 
 ## Config
 
-`./configure` with `{ supabaseUrl, familyId }` saves the plain deployment config in the package storage. Without it every export rejects with a message that names `./configure`.
+`./configure` with `{ supabaseUrl, familyId, credentialKey }` (owner only) saves the deployment config in the package storage. Without it every export rejects with a message that names `./configure`.
 
 ## Secrets
 
-Secrets are `{{secret:NAME}}` placeholders that Kody fills in at fetch time; code never sees a value. `SUPABASE_KEY`, `TELEGRAM_BOT_TOKEN`, and the account secrets named in the `accounts` table (`login_secret`, `password_secret`). Never read, print or change their values.
+`SUPABASE_KEY` is the only Kody secret (a literal `{{secret:SUPABASE_KEY}}` placeholder). `TELEGRAM_BOT_TOKEN` is used by `@tomiwu/telegram`. The service logins (the names in `accounts.login_secret` / `password_secret`, and so on) are AES-256-GCM rows in the Supabase table `credentials`, decrypted in the run with the key from `./configure`. Never read, print or return their values.
 
 ## Smoke tests
 

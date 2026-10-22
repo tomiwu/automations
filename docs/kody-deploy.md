@@ -14,24 +14,17 @@ Two packages run as Kody packages. Both are private.
 The time zone of a schedule must be the time zone of the Family.
 Each package exports entry files (`./scheduled`, `./purge` and the exports). Only the entry files import the Kody runtime.
 
-## Secrets
+## Secrets and credentials
 
-Enter these secrets in Kody and approve them for the host:
+- Kody secret `SUPABASE_KEY` (the watcher key). It is the only Kody secret of the packages, sent as the literal `{{secret:SUPABASE_KEY}}`. Allowed host: `<ref>.supabase.co`, header placement.
+- Kody secret `TELEGRAM_BOT_TOKEN`, used by `@tomiwu/telegram`.
+- The service logins (Librus, ActiveNow, Edusky, Mondo, and `EDUSKY_CLIENT_SECRET`) are rows in the Supabase table `credentials`, encrypted with AES-256-GCM. Add or change one with `admin set-credential --family <id> --name <NAME>` on your own computer (it asks for the value without echo and needs `CREDENTIAL_KEY`). New Accounts need no code change and no Kody secret.
 
-| Secret | Use |
-| --- | --- |
-| `SUPABASE_KEY` | Key of the role `automations_watcher` |
-| `TELEGRAM_BOT_TOKEN` | Token of the Telegram bot |
-| `EDUSKY_CLIENT_SECRET` | Client secret of the Edusky web app (only for Edusky) |
-| Account secrets | The NAMES in `accounts.login_secret` and `accounts.password_secret`, for example `CHILD1_LIBRUS_LOGIN` |
+## Deployment config
 
-Kody never gives a secret value to code. The code sends `{{secret:NAME}}` and Kody fills it in for the allowed hosts of the secret, so each secret needs its host: `SUPABASE_KEY` → `<ref>.supabase.co`, the Librus secrets → the Librus hosts, the Activity secrets → the host of their app. Secrets in a form body need body placement.
+After the first deploy, call `./configure` of each package yourself with `{ supabaseUrl, familyId, credentialKey }`. The key comes from `admin new-credential-key`; keep it in a password manager. Do not pass it through an agent. Rotate with `admin rotate-credential-key` (needs `CREDENTIAL_KEY` and `NEW_CREDENTIAL_KEY`), then call `./configure` again.
 
-## Deployment config (not secret)
-
-The Supabase project URL and the Family ID are plain config in the storage of each package. After the first deploy, call `./configure` of `@tomiwu/librus-watch` and of `@tomiwu/activities-watch` with `{ supabaseUrl, familyId }`. They are not in the repository.
-
-Do not put a secret value in the repository, in a file or in a chat with an agent.
+Security: a leak of the database alone gives only ciphertext; a leak of the package storage alone gives a key without data. Anyone who can change and publish these Kody packages can read the decrypted values, as with any code that logs in.
 
 ## Telegram
 

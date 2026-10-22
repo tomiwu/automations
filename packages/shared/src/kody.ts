@@ -23,16 +23,11 @@ export const KODY_RUNTIME_EXPORTS = [
   "workflows",
 ] as const;
 
-const SECRET_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-
 /**
- * Kody never gives secret values to code. A secret is the placeholder `{{secret:NAME}}`, and Kody fills it in
- * when a fetch sends it to one of the allowed hosts of that secret (in a header or the body).
+ * The only Kody secret the packages use, as a literal placeholder (Kody requires literal secret names). Kody fills
+ * it in when a fetch sends it to the allowed host of the secret. The code never sees the value.
  */
-export function secretPlaceholder(name: string): string {
-  if (!SECRET_NAME.test(name)) throw new Error(`Invalid secret name ${JSON.stringify(name)}`);
-  return `{{secret:${name}}}`;
-}
+export const SUPABASE_KEY_PLACEHOLDER = "{{secret:SUPABASE_KEY}}";
 
 /** The key-value storage of the package (`packageStorage()` of `kody:runtime`). */
 export interface KodyStorage {
@@ -46,10 +41,18 @@ export interface KodyHost {
   log(level: LogLevel, message: string): void;
 }
 
-export function createKodyRuntime(host: KodyHost, now: () => Date = () => new Date()): Runtime {
+/**
+ * `secret(name)` gives the service credential with this name (for example `accounts.login_secret`). The value comes
+ * from `resolveCredential`: on Kody it is the encrypted row in Supabase, decrypted with the credential key.
+ */
+export function createKodyRuntime(
+  host: KodyHost,
+  resolveCredential: (name: string) => Promise<string>,
+  now: () => Date = () => new Date(),
+): Runtime {
   return {
     fetch: (input, init) => host.fetch(input, init),
-    secret: async (name) => secretPlaceholder(name),
+    secret: (name) => resolveCredential(name),
     now,
     log: (level, message) => host.log(level, message),
     schedule: () => {
@@ -62,11 +65,13 @@ export function createKodyRuntime(host: KodyHost, now: () => Date = () => new Da
 export interface DeploymentConfig {
   supabaseUrl: string;
   familyId: string;
+  /** Base64 AES-256 key that decrypts the service credentials in Supabase. Never returned by an export. */
+  credentialKey: string;
 }
 
 export const DEPLOYMENT_CONFIG_KEY = "deployment-config";
 
-const CONFIG_KEYS = new Set(["supabaseUrl", "familyId"]);
+const CONFIG_KEYS = new Set(["supabaseUrl", "familyId", "credentialKey"]);
 
 function configObject(raw: unknown): Record<string, unknown> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("The config must be an object.");
@@ -83,6 +88,13 @@ function projectUrl(value: unknown): string {
   return url;
 }
 
+function keyOf(value: unknown): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9+/]{43}=$/.test(value)) {
+    throw new Error("credentialKey must be 32 bytes in base64 (admin new-credential-key).");
+  }
+  return value;
+}
+
 function idOf(value: unknown): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9-]{1,64}$/.test(value)) throw new Error("familyId must be an ID.");
   return value;
@@ -91,23 +103,30 @@ function idOf(value: unknown): string {
 /** Validates a deployment config. Unknown keys are rejected. */
 export function parseDeploymentConfig(raw: unknown): DeploymentConfig {
   const config = configObject(raw);
-  return { supabaseUrl: projectUrl(config.supabaseUrl), familyId: idOf(config.familyId) };
+  return {
+    supabaseUrl: projectUrl(config.supabaseUrl),
+    familyId: idOf(config.familyId),
+    credentialKey: keyOf(config.credentialKey),
+  };
 }
 
 /** Reads the deployment config. Throws with the fix when it is not set. */
 export async function loadDeploymentConfig(storage: KodyStorage): Promise<DeploymentConfig> {
   const stored = await storage.get(DEPLOYMENT_CONFIG_KEY);
   if (stored == null || stored === "") {
-    throw new Error("The deployment config is not set. Call the ./configure export with { supabaseUrl, familyId }.");
+    throw new Error("The deployment config is not set. Call the ./configure export with { supabaseUrl, familyId, credentialKey }.");
   }
   return parseDeploymentConfig(typeof stored === "string" ? JSON.parse(stored) : stored);
 }
 
-/** Validates and saves the deployment config. */
-export async function saveDeploymentConfig(storage: KodyStorage, raw: unknown): Promise<DeploymentConfig> {
+/** What `./configure` returns: the config without the key. */
+export type SavedConfig = Omit<DeploymentConfig, "credentialKey"> & { credentialKey: "set" };
+
+/** Validates and saves the deployment config. The result never contains the key. */
+export async function saveDeploymentConfig(storage: KodyStorage, raw: unknown): Promise<SavedConfig> {
   const config = parseDeploymentConfig(raw);
   await storage.set(DEPLOYMENT_CONFIG_KEY, JSON.stringify(config));
-  return config;
+  return { supabaseUrl: config.supabaseUrl, familyId: config.familyId, credentialKey: "set" };
 }
 
 /** Only the entry files of the packages import this module. This is the only file that imports `kody:runtime`. */
@@ -115,7 +134,5 @@ export const kodyHost: KodyHost = {
   fetch: (input, init) => fetch(input, init),
   log: (level, message) => console.log(`[${level}] ${message}`),
 };
-
-export const kodyRuntime: Runtime = createKodyRuntime(kodyHost);
 
 export const kodyStorage = (): KodyStorage => packageStorage();
