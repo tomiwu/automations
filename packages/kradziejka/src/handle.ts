@@ -52,7 +52,7 @@ export async function handleTelegramUpdate(deps: HandlerDeps, raw: unknown): Pro
 async function acceptOrDrop(deps: HandlerDeps, inbound: Inbound): Promise<HandleResult> {
   if (!senderAllowed(deps.allowlist, inbound)) return { ok: true, status: "dropped" };
   await deps.telegram.typing(inbound.chatId);
-  await deps.telegram.send(inbound.chatId, t(languageFor(inbound.languageCode), "chat.ack"));
+  await reply(deps, inbound, "chat.ack");
   return routeAndForward(deps, inbound);
 }
 
@@ -74,7 +74,7 @@ function memoryText(content: { text: string }): string {
 }
 
 async function rejectContent(deps: HandlerDeps, inbound: Inbound, notice: MessageKey): Promise<HandleResult> {
-  await deps.telegram.send(inbound.chatId, t(languageFor(inbound.languageCode), notice));
+  await reply(deps, inbound, notice);
   return { ok: true, status: "rejected" };
 }
 
@@ -151,13 +151,13 @@ async function forwardChoice(
     await sendPayload(deps, inbound, content, state, chosen.choice, bot);
     return { ok: true, status: "forwarded", slug: chosen.choice.slug };
   } catch {
-    await deps.telegram.send(inbound.chatId, t(languageFor(inbound.languageCode), "chat.forward_failed"));
+    await reply(deps, inbound, "chat.forward_failed");
     return { ok: true, status: "forward-failed" };
   }
 }
 
 async function missingHub(deps: HandlerDeps, inbound: Inbound): Promise<HandleResult> {
-  await deps.telegram.send(inbound.chatId, t(languageFor(inbound.languageCode), "chat.hub_missing"));
+  await reply(deps, inbound, "chat.hub_missing");
   return { ok: true, status: "hub-missing" };
 }
 
@@ -187,4 +187,8 @@ async function sendPayload(
 export async function rememberReply(kv: KeyValue, chatId: string, replyText: string, at: string): Promise<void> {
   const state = await loadChat(kv, chatId);
   await saveChat(kv, chatId, appendTurn(state, "bot", replyText, at));
+}
+
+async function reply(deps: HandlerDeps, inbound: Inbound, key: MessageKey): Promise<void> {
+  await deps.telegram.send(inbound.chatId, t(languageFor(inbound.languageCode), key));
 }
