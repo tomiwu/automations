@@ -172,7 +172,7 @@ async function sendPayload(
   const key = await deps.openKey(bot.slug, bot.webhookKeyCiphertext);
   const payload = buildForwardPayload({
     chatId: inbound.chatId,
-    userId: inbound.userId,
+    senderId: inbound.senderId,
     languageCode: inbound.languageCode,
     text: content.text,
     photo: content.photo,

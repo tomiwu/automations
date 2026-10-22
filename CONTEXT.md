@@ -14,6 +14,7 @@
 - **Runtime**: The interface for fetch, secrets, time, logs and schedules.
 - **Registry**: The Supabase table `kradziejka_bots`. One row is one Grok bot.
 - **Hub**: The registry row with slug `hub`. Unclear messages go to the hub.
-- **Allowlist**: The Telegram user IDs that `kradziejka` accepts. An empty list accepts no one.
+- **Sender**: The Telegram account that sent a message. Its ID is `senderId`.
+- **Allowlist**: The Telegram Sender IDs that `kradziejka` accepts. An empty list accepts no one.
 
 Avoid: "user" for Recipient, "event" for Item, "queue" for Outbox.

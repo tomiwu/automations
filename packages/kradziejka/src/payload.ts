@@ -16,7 +16,7 @@ export interface ForwardTurn {
 
 export interface ForwardInput {
   chatId: string;
-  userId: string;
+  senderId: string;
   languageCode: string | null;
   text: string;
   photo: PhotoInfo | null;
@@ -34,7 +34,7 @@ export function buildForwardPayload(input: ForwardInput): Record<string, unknown
   assertPhotoSafe(input.photo);
   return {
     chat_id: input.chatId,
-    from: { id: input.userId, language_code: input.languageCode },
+    from: { id: input.senderId, language_code: input.languageCode },
     text: input.text,
     photo,
     recent: input.recent.map((turn) => ({ from: turn.from, text: turn.text, at: turn.at })),

@@ -7,7 +7,7 @@ export interface Inbound {
   updateId: number;
   chatId: string;
   chatType: string;
-  userId: string;
+  senderId: string;
   languageCode: string | null;
   text: string;
   photo: PhotoInfo | null;
@@ -57,11 +57,11 @@ function peopleOf(message: Record<string, unknown>): { chat: Record<string, unkn
   return { chat, from };
 }
 
-function identityOf(chat: Record<string, unknown>, from: Record<string, unknown>): { chatId: string; chatType: string; userId: string } | null {
+function identityOf(chat: Record<string, unknown>, from: Record<string, unknown>): { chatId: string; chatType: string; senderId: string } | null {
   const chatId = idText(chat.id);
-  const userId = idText(from.id);
-  if (!chatId || !userId) return null;
-  return { chatId, chatType: chatTypeOf(chat.type), userId };
+  const senderId = idText(from.id);
+  if (!chatId || !senderId) return null;
+  return { chatId, chatType: chatTypeOf(chat.type), senderId };
 }
 
 function chatTypeOf(value: unknown): string {

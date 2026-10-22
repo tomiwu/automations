@@ -12,7 +12,7 @@ describe("inbound updates", () => {
   it("reads a bare update and a webhook envelope", () => {
     const update = { update_id: 4, message };
     expect(parseInbound(update)?.text).toBe("Hello");
-    expect(parseInbound({ webhook: { name: "telegram-update" }, request: { json: update } })?.userId).toBe("1000001");
+    expect(parseInbound({ webhook: { name: "telegram-update" }, request: { json: update } })?.senderId).toBe("1000001");
     expect(parseInbound({ request: { json: null } })).toBeNull();
     expect(parseInbound({ update_id: 1 })).toBeNull();
     expect(parseInbound(null)).toBeNull();
@@ -46,7 +46,7 @@ describe("inbound updates", () => {
       update_id: 8,
       message: { ...message, from: { id: "1000001", language_code: "en" }, chat: { id: "1000001", type: "private" } },
     });
-    expect(parsed?.userId).toBe("1000001");
+    expect(parsed?.senderId).toBe("1000001");
     expect(parseInbound({ update_id: 9, message: { ...message, chat: { id: 0, type: "private" } } })).toBeNull();
   });
 

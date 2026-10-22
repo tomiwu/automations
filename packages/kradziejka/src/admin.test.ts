@@ -112,7 +112,7 @@ describe("admin page", () => {
   it("saves a bot without showing the key, and keeps the key on edit", async () => {
     const deps = harness();
     const cookie = await signIn(deps);
-    const fields = { slug: "hub", name: "Hub", description: "Chooses an agent.", activeHours: "always", webhookUrl: url, webhookKey: secretKey, active: "true" };
+    const fields = { slug: "hub", name: "Hub", description: "Chooses a bot.", activeHours: "always", webhookUrl: url, webhookKey: secretKey, active: "true" };
     const saved = await handleAdmin(form("/save", fields, cookie), deps, "");
     expect(saved.status).toBe(303);
     expect(deps.rows[0]?.webhookKeyCiphertext).toBe(`sealed:hub:${secretKey}`);

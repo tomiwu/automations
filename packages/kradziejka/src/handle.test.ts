@@ -148,7 +148,7 @@ describe("telegram update handling", () => {
         return { answers: { route: { choice: "create_new_bot", confidence: 0.99 } } };
       },
     });
-    await handleTelegramUpdate(harness, update("Make a new agent for trips."));
+    await handleTelegramUpdate(harness, update("Make a new bot for trips."));
     expect(harness.forwarded[0]?.url).toBe(HUB_URL);
     expect(harness.forwarded[0]?.payload).toMatchObject({ route: { slug: "hub", intent: "create_new_bot" } });
   });
@@ -211,7 +211,7 @@ describe("telegram update handling", () => {
       },
     });
     expect(await handleTelegramUpdate(failing, update("Hello"))).toMatchObject({ status: "forward-failed" });
-    expect(failing.sent).toContain("The agent did not accept the message. Try again later.");
+    expect(failing.sent).toContain("The bot did not accept the message. Try again later.");
   });
 
   it("releases the update id when the attempt throws", async () => {

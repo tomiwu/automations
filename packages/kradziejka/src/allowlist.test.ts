@@ -17,9 +17,9 @@ describe("allowlist", () => {
 
   it("accepts only a private chat from an allowlisted id", () => {
     const allowlist = ["1000001"];
-    expect(senderAllowed(allowlist, { userId: "1000001", chatType: "private" })).toBe(true);
-    expect(senderAllowed(allowlist, { userId: "1000002", chatType: "private" })).toBe(false);
-    expect(senderAllowed(allowlist, { userId: "1000001", chatType: "group" })).toBe(false);
-    expect(senderAllowed([], { userId: "1000001", chatType: "private" })).toBe(false);
+    expect(senderAllowed(allowlist, { senderId: "1000001", chatType: "private" })).toBe(true);
+    expect(senderAllowed(allowlist, { senderId: "1000002", chatType: "private" })).toBe(false);
+    expect(senderAllowed(allowlist, { senderId: "1000001", chatType: "group" })).toBe(false);
+    expect(senderAllowed([], { senderId: "1000001", chatType: "private" })).toBe(false);
   });
 });

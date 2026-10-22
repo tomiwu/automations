@@ -28,7 +28,7 @@ describe("register bot", () => {
     const store = registry();
     const result = await registerBot(
       { familyId: "family-1", registry: store, seal: (slug, value) => sealWebhookKey(key, "family-1", slug, value) },
-      { slug: "hub", name: "Hub", description: "Chooses an agent.", webhookUrl: url, webhookKey: "example-webhook-key" },
+      { slug: "hub", name: "Hub", description: "Chooses a bot.", webhookUrl: url, webhookKey: "example-webhook-key" },
     );
     expect(result).toEqual({ ok: true, slug: "hub" });
     expect(JSON.stringify(result)).not.toContain("example-webhook-key");

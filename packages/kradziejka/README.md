@@ -78,13 +78,13 @@ await configure({
   supabaseUrl: "https://<ref>.supabase.co",
   familyId: "<family id>",
   credentialKey: "<base64 key from admin new-credential-key>",
-  allowlist: ["<telegram user id>"],
+  allowlist: ["<telegram sender id>"],
   adminToken: "<16 or more letters, digits, _ or ->",
   confidenceThreshold: 0.6,
 });
 ```
 
-`allowlist` is the Telegram user IDs that may talk to the bot. An empty list accepts no one. Do not hard-code the IDs in the repository. To read an ID, the person can open `@userinfobot` and send `/start`, or you can call `getUpdates` before you set the webhook. `getUpdates` fails while a webhook is set.
+`allowlist` is the Telegram Sender IDs that may talk to the bot. An empty list accepts no one. Do not hard-code the IDs in the repository. To read an ID, the person can open `@userinfobot` and send `/start`, or you can call `getUpdates` before you set the webhook. `getUpdates` fails while a webhook is set.
 
 `confidenceThreshold` is optional. The default is `0.6`.
 

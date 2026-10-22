@@ -10,10 +10,10 @@ export const CREATE_NEW_BOT = "create_new_bot";
 export const DEFAULT_CONFIDENCE = 0.6;
 
 const ROUTE_INSTRUCTIONS =
-  "Choose the agent for this message. Keep the last bot when this message continues the same topic. Choose another agent only when the topic clearly changes. Choose create_new_bot only when the person asks for a new agent.";
+  "Choose the bot for this message. Keep the last bot when this message continues the same topic. Choose another bot only when the topic clearly changes. Choose create_new_bot only when the person asks for a new bot.";
 
-const HUB_CRITERION = "The hub agent. Use it when no specialist fits or the person wants help to choose.";
-const CREATE_CRITERION = "The person asks for a new agent that is not in the list.";
+const HUB_CRITERION = "The Hub bot. Use it when no specialist fits or the person wants help to choose.";
+const CREATE_CRITERION = "The person asks for a new bot that is not in the list.";
 
 export interface RouteBot {
   slug: string;

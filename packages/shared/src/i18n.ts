@@ -73,8 +73,8 @@ const en = {
   "chat.ack": "One moment.",
   "chat.voice_later": "Voice messages are not available yet. Send text or a photo.",
   "chat.unsupported": "Send text or a photo.",
-  "chat.hub_missing": "The hub agent is not in the registry.",
-  "chat.forward_failed": "The agent did not accept the message. Try again later.",
+  "chat.hub_missing": "The Hub is not in the registry.",
+  "chat.forward_failed": "The bot did not accept the message. Try again later.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -153,8 +153,8 @@ const pl: Catalog = {
   "chat.ack": "Chwileczkę.",
   "chat.voice_later": "Wiadomości głosowe nie są jeszcze dostępne. Wyślij tekst lub zdjęcie.",
   "chat.unsupported": "Wyślij tekst lub zdjęcie.",
-  "chat.hub_missing": "Agenta głównego nie ma w rejestrze.",
-  "chat.forward_failed": "Agent nie przyjął wiadomości. Spróbuj później.",
+  "chat.hub_missing": "Huba nie ma w rejestrze.",
+  "chat.forward_failed": "Bot nie przyjął wiadomości. Spróbuj później.",
 };
 
 export const CATALOGS: Record<Language, Catalog> = { pl, en };
