@@ -99,11 +99,12 @@ function stage(pkgArg, outArg) {
   for (const doc of ["README.md", "AGENTS.md"]) {
     if (existsSync(join(pkgDir, doc))) cpSync(join(pkgDir, doc), join(outDir, doc));
   }
-  // The staged tree stands alone, so the base tsconfig is inlined.
+  // The staged tree stands alone, so the base tsconfig is inlined. Kody type-checks without the
+  // types of npm packages (cheerio callbacks become implicit any); CI runs the strict check.
   const base = readJson(join(root, "tsconfig.base.json"));
   writeFileSync(
     join(outDir, "tsconfig.json"),
-    JSON.stringify({ compilerOptions: { ...(base.compilerOptions ?? {}), types: [] }, include: ["src", "vendor"] }, null, 2) + "\n",
+    JSON.stringify({ compilerOptions: { ...(base.compilerOptions ?? {}), types: [], noImplicitAny: false }, include: ["src", "vendor"] }, null, 2) + "\n",
   );
 
   const specifiers = new Map();
