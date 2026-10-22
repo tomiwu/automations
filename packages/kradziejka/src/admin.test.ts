@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { handleAdmin, routePath, type AdminDeps } from "./admin.ts";
+import { APP_FAILED, REQUEST_FAILED, handleAdmin, routePath, type AdminDeps } from "./admin.ts";
 import { parseAllowlist } from "./allowlist.ts";
 import type { BotRecord, BotRegistry } from "./registry.ts";
 
@@ -118,15 +118,40 @@ describe("admin page", () => {
       "",
     );
     const html = await response.text();
-    expect(html).toContain("activeHours");
+    expect(html).toContain(REQUEST_FAILED);
     expect(html).not.toContain(secretKey);
+  });
+
+  it("does not return the text of a failing store or allowlist save", async () => {
+    const fakeSecret = "fake-secret-supabase-detail";
+    const deps = harness();
+    const cookie = await signIn(deps);
+    deps.saveAllowlist = async () => {
+      throw new Error(fakeSecret);
+    };
+    const list = await handleAdmin(form("/allowlist", { allowlist: "1000001" }, cookie), deps, "");
+    const listHtml = await list.text();
+    expect(listHtml).toContain(REQUEST_FAILED);
+    expect(listHtml).not.toContain(fakeSecret);
+
+    deps.seal = async () => {
+      throw new Error(fakeSecret);
+    };
+    const save = await handleAdmin(
+      form("/save", { slug: "hub", name: "Hub", description: "Chooses.", activeHours: "always", webhookUrl: url, webhookKey: secretKey, active: "true" }, cookie),
+      deps,
+      "",
+    );
+    const saveHtml = await save.text();
+    expect(saveHtml).toContain(REQUEST_FAILED);
+    expect(saveHtml).not.toContain(fakeSecret);
   });
 
   it("updates the allowlist and rejects an unknown path", async () => {
     const deps = harness();
     const cookie = await signIn(deps);
     const bad = await handleAdmin(form("/allowlist", { allowlist: "nope" }, cookie), deps, "");
-    expect(await bad.text()).toContain("digits");
+    expect(await bad.text()).toContain(REQUEST_FAILED);
     const ok = await handleAdmin(form("/allowlist", { allowlist: "1000001, 1000002" }, cookie), deps, "");
     expect(ok.status).toBe(303);
     const page = await handleAdmin(new Request("https://example.test/", { headers: { cookie } }), deps, "");
