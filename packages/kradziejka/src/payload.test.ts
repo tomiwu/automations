@@ -12,7 +12,7 @@ describe("payload building", () => {
     ]);
     const payload = buildForwardPayload({
       chatId: "1000001",
-      userId: "1000001",
+      senderId: "1000001",
       languageCode: "en",
       text: "See this",
       photo,
@@ -46,7 +46,7 @@ describe("payload building", () => {
   it("allows a message with no photo", () => {
     const payload = buildForwardPayload({
       chatId: "1000001",
-      userId: "1000001",
+      senderId: "1000001",
       languageCode: null,
       text: "Hello",
       photo: null,

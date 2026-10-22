@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildDecisionRequest, mapRoute, readChoice, routeCriteria, type MapRouteInput } from "./routing.ts";
 
 const bots = [
-  { slug: "hub", description: "Help to choose an agent." },
+  { slug: "hub", description: "Help to choose a bot." },
   { slug: "grades", description: "Questions about grades." },
 ];
 
@@ -33,7 +33,7 @@ describe("routing decision mapping", () => {
 
   it("adds a hub criterion when the registry has no hub row", () => {
     expect(routeCriteria([{ slug: "grades", description: "Grades" }]).hub).toContain("hub");
-    expect(routeCriteria([{ slug: "create_new_bot", description: "skip" }]).create_new_bot).toContain("new agent");
+    expect(routeCriteria([{ slug: "create_new_bot", description: "skip" }]).create_new_bot).toContain("new bot");
   });
 
   it("keeps a confident choice and sends create_new_bot to the hub", () => {

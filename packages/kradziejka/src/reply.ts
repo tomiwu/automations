@@ -23,7 +23,7 @@ export interface ReplyResult {
 /** Sends a Grok bot reply to an allowlisted chat and stores it in the chat memory. */
 export async function handleReply(deps: ReplyDeps, raw: unknown): Promise<ReplyResult> {
   const input = parseReply(raw);
-  if (!senderAllowed(deps.allowlist, { userId: input.chatId, chatType: "private" })) {
+  if (!senderAllowed(deps.allowlist, { senderId: input.chatId, chatType: "private" })) {
     throw new Error("This chat is not allowlisted.");
   }
   await sendParts(deps.telegram, input.chatId, input.text);

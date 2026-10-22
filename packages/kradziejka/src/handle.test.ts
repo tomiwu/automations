@@ -148,7 +148,7 @@ describe("telegram update handling", () => {
         return { answers: { route: { choice: "create_new_bot", confidence: 0.99 } } };
       },
     });
-    await handleTelegramUpdate(harness, update("Make a new agent for trips."));
+    await handleTelegramUpdate(harness, update("Make a new bot for trips."));
     expect(harness.forwarded[0]?.url).toBe(HUB_URL);
     expect(harness.forwarded[0]?.payload).toMatchObject({ route: { slug: "hub", intent: "create_new_bot" } });
   });
