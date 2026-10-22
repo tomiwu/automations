@@ -14,19 +14,19 @@ import type { ReplyDeps } from "../reply.ts";
 import type { RegisterDeps } from "../register.ts";
 import { noSpeech } from "../speech.ts";
 
-/** Sends through the external telegram package. `TELEGRAM_BOT_TOKEN` is that package's secret. */
+/** Sends through @tomiwu/telegram. The literal secret name is this package's own BotFather bot. */
 export const telegramPort: TelegramPort = {
   async typing(chatId) {
     await request({
       method: "sendChatAction",
       params: { chat_id: chatId, action: "typing" },
-      secretName: "TELEGRAM_BOT_TOKEN",
+      secretName: "telegramBotToken-kradziejka",
       confirm: true,
     });
   },
   async send(chatId, body) {
     for (const part of splitText(body)) {
-      await sendMessage({ chatId, text: part, secretName: "TELEGRAM_BOT_TOKEN", confirm: true });
+      await sendMessage({ chatId, text: part, secretName: "telegramBotToken-kradziejka", confirm: true });
     }
   },
 };

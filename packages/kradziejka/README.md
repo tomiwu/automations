@@ -47,9 +47,11 @@ Create these secrets in Kody. Approve each host. Do not change other secrets.
 
 | Secret | Value | Host | Placement |
 | --- | --- | --- | --- |
-| `TELEGRAM_BOT_TOKEN` | The BotFather token | `api.telegram.org` | The `telegram` package sends it. |
+| `telegramBotToken-kradziejka` | The token of the new BotFather bot from step 2 | `api.telegram.org` | `@tomiwu/telegram` sends it. Pass `secretName: "telegramBotToken-kradziejka"`. |
 | `SUPABASE_KEY` | The `automations_watcher` key | `<ref>.supabase.co` | Header |
 | `JEV_API_KEY` | A key from [getjevai.com](https://www.getjevai.com/) | `api.getjevai.com` | Header (`Authorization`) |
+
+`telegramBotToken-kradziejka` is a new secret. `TELEGRAM_BOT_TOKEN` is the Librus polling bot. Leave `TELEGRAM_BOT_TOKEN` unchanged. The slug after `telegramBotToken-` is lowercase letters and digits. That is the extra-bot form `@tomiwu/telegram` accepts.
 
 `JEV_API_KEY` must be the literal secret name. The code sends `Bearer {{secret:JEV_API_KEY}}`.
 
@@ -101,7 +103,7 @@ Kody cannot check the header `X-Telegram-Bot-Api-Secret-Token`. Do not set `secr
 On your computer:
 
 ```sh
-curl -sS -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+curl -sS -X POST "https://api.telegram.org/bot<telegramBotToken-kradziejka>/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{"url":"<minted telegram-update URL>"}'
 ```

@@ -25,7 +25,7 @@ Do not call `./telegram-update` as a live test. It can message a real chat.
 
 `SUPABASE_KEY` and `JEV_API_KEY` are the Kody secrets. Both are literal placeholders (`{{secret:SUPABASE_KEY}}`, `{{secret:JEV_API_KEY}}`). Do not build a secret name at runtime.
 
-`TELEGRAM_BOT_TOKEN` belongs to `@tomiwu/telegram`. This package passes `secretName: "TELEGRAM_BOT_TOKEN"`.
+This package passes the literal `secretName: "telegramBotToken-kradziejka"` to `@tomiwu/telegram`. That secret is a new BotFather bot. `TELEGRAM_BOT_TOKEN` is the Librus polling bot. Leave that secret unchanged.
 
 Routine webhook keys are ciphertext in `kradziejka_bots`. They are not Kody secrets. Never log, return, or put a key in an example.
 
