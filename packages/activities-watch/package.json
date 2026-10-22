@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./scheduled": "./src/entry/scheduled.ts",
     "./sessions": "./src/entry/sessions.ts",
-    "./after-school": "./src/entry/after-school.ts"
+    "./after-school": "./src/entry/after-school.ts",
+    "./configure": "./src/entry/configure.ts"
   },
   "dependencies": {
     "@automations/librus-data": "*",
@@ -29,7 +30,10 @@
     "jobs": {
       "scheduled-check": {
         "entry": "./src/entry/scheduled.ts",
-        "schedule": { "type": "cron", "expression": "0 7,18 * * *" }
+        "schedule": {
+          "type": "cron",
+          "expression": "0 7,18 * * *"
+        }
       }
     }
   }

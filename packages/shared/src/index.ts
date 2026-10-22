@@ -23,6 +23,7 @@ export { hasNoInput } from "./no-input.ts";
 export { addDays, localDate, localTime, weekdayOf, zonedParts } from "./time.ts";
 export type { ZonedParts } from "./time.ts";
 export { activitiesOn, nextOccurrence, parseTime, runsOn } from "./schedule.ts";
+export { formBody } from "./form.ts";
 export { createHttpSession } from "./session.ts";
 export type { HttpSession } from "./session.ts";
 export { CATALOGS, t } from "./i18n.ts";

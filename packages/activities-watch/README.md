@@ -31,7 +31,7 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./after-school` | `{ childId, day, language? }`. `{ text }`: the after-school section of one Child. |
 
 Each Session has `childId` and the name of the Child (`child`).
-The secret `FAMILY_ID` holds the ID of the Family. `SUPABASE_URL` and `SUPABASE_KEY` give access to the storage.
+The Supabase URL and the Family ID are plain config set with `./configure` (`{ supabaseUrl, familyId }`). The secret `SUPABASE_KEY` gives access to the storage.
 The secret `EDUSKY_CLIENT_SECRET` holds the client secret that the Edusky web app sends to log in. The repository does not hold it.
 
 ## After-school section and mail comparison

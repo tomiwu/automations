@@ -28,7 +28,7 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./children` | No input. `{ children }`: `id`, `name` and `calendar_id` of every Child. |
 
 Both exports include `childId` and the name of the Child. Without `childId` the Family must have one Child with Librus.
-The secret `FAMILY_ID` holds the ID of the Family. `SUPABASE_URL` and `SUPABASE_KEY` give access to the storage.
+The Supabase URL and the Family ID are plain config set with `./configure` (`{ supabaseUrl, familyId }`). The secret `SUPABASE_KEY` gives access to the storage.
 
 ## Not in this package
 

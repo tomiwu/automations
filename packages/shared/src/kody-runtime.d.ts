@@ -1,7 +1,7 @@
 declare module "kody:runtime" {
-  import type { KodyHost } from "./kody.ts";
-  export const fetch: KodyHost["fetch"];
-  export const getSecret: KodyHost["getSecret"];
-  export const log: KodyHost["log"];
-  export const schedule: KodyHost["schedule"];
+  /** Durable key-value storage of the calling package. */
+  export function packageStorage(): {
+    get(key: string): Promise<unknown>;
+    set(key: string, value: string): Promise<unknown>;
+  };
 }

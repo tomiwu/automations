@@ -20,13 +20,17 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 
 `./scheduled` and `./purge` are the jobs in `package.json` (`kody.jobs`). Do not call them as a test: `./scheduled` can send real messages.
 
+## Config
+
+`./configure` with `{ supabaseUrl, familyId }` saves the plain deployment config in the package storage. Without it every export rejects with a message that names `./configure`.
+
 ## Secrets
 
-`SUPABASE_URL`, `SUPABASE_KEY`, `FAMILY_ID`, `TELEGRAM_BOT_TOKEN`, and the account secrets named in the `accounts` table (`login_secret`, `password_secret`). Never read, print or change their values.
+Secrets are `{{secret:NAME}}` placeholders that Kody fills in at fetch time; code never sees a value. `SUPABASE_KEY`, `TELEGRAM_BOT_TOKEN`, and the account secrets named in the `accounts` table (`login_secret`, `password_secret`). Never read, print or change their values.
 
 ## Smoke tests
 
-1. `children` with `{}`: returns at least one Child. This proves the Supabase secrets and `FAMILY_ID`.
+1. `children` with `{}`: returns at least one Child. This proves the config and `SUPABASE_KEY`.
 2. `lessons` with `{ childId }` from step 1: returns Lessons. This proves the Librus login. Do not pass `days`; `lessons` rejects it.
 3. `upcoming` with `{ childId, days: 7 }`.
 
