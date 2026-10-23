@@ -16,6 +16,14 @@ export interface SnippetInput {
   paymentsToken?: string;
 }
 
+/** The `./configure` argument of payments-watch: the Dashboard allowlist with the token digest, never the token. */
+function paymentsArg(input: SnippetInput): string {
+  if (!input.paymentsUser) throw new Error("PAYMENTS_DASHBOARD_USER is empty");
+  if (!input.paymentsToken) throw new Error("PAYMENTS_DASHBOARD_TOKEN is empty");
+  const tokenDigest = createHash("sha256").update(input.paymentsToken).digest("hex");
+  return `{ ...base, allowlist: ${JSON.stringify([{ user: input.paymentsUser, tokenDigest }])} }`;
+}
+
 /**
  * Builds the Kody `execute` code that calls `./configure` of each package with the same key. The result has the
  * key in it: write it only to a private temp file, never print it. The code returns `ok` or `failed: <reason>`
@@ -25,18 +33,11 @@ export function configureSnippet(input: SnippetInput): string {
   const j = JSON.stringify;
   const allowlist: unknown = JSON.parse(input.allowlist);
   if (!Array.isArray(allowlist)) throw new Error("KRADZIEJKA_ALLOWLIST must be a JSON list");
-  let paymentsArg = "base";
-  if (input.withPayments) {
-    if (!input.paymentsUser) throw new Error("PAYMENTS_DASHBOARD_USER is empty");
-    if (!input.paymentsToken) throw new Error("PAYMENTS_DASHBOARD_TOKEN is empty");
-    const tokenDigest = createHash("sha256").update(input.paymentsToken).digest("hex");
-    paymentsArg = `{ ...base, allowlist: ${j([{ user: input.paymentsUser, tokenDigest }])} }`;
-  }
   const packages = [
     ["librus-watch", "librus", "base"],
     ["activities-watch", "activities", "base"],
     ["kradziejka", "kradziejka", `{ ...base, allowlist: ${j(allowlist.map(String))}, adminToken: ${j(input.adminToken)} }`],
-    ...(input.withPayments ? [["payments-watch", "payments", paymentsArg]] : []),
+    ...(input.withPayments ? [["payments-watch", "payments", paymentsArg(input)]] : []),
   ];
   return [
     ...packages.map(([pkg, id]) => `import ${id} from "kody:@tomiwu/${pkg}/configure";`),
