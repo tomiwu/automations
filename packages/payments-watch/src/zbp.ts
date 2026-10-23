@@ -48,9 +48,13 @@ function formatAmount(amountGrosze: number): string {
   return String(amountGrosze).padStart(AMOUNT_MIN_DIGITS, "0");
 }
 
-export function buildZbpText(input: ZbpInput): string {
-  const nip = input.nip ?? "";
+function checkedNip(nip: string): string {
   if (nip !== "" && !isValidNip(nip)) throw new Error("ZBP NIP is not valid.");
+  return nip;
+}
+
+export function buildZbpText(input: ZbpInput): string {
+  const nip = checkedNip(input.nip ?? "");
   if (!isValidNrb(input.nrb)) throw new Error("ZBP NRB is not valid.");
   const amount = formatAmount(input.amountGrosze);
   const recipient = cleanField(input.recipient, RECIPIENT_MAX);
