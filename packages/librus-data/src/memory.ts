@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Config } from "@automations/shared";
-import type { NewNotification, OutboxEntry, StorageAdapter, StoredItem } from "./storage.ts";
+import type { Fee, NewNotification, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 
@@ -10,6 +11,7 @@ export interface MemoryStorageOptions {
 
 export interface MemoryStorage extends StorageAdapter {
   setConfig(config: Config): void;
+  setFee(fee: Fee): void;
 }
 
 /** In-memory StorageAdapter for tests. It uses no network. */
@@ -18,6 +20,8 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
   const items = new Map<string, StoredItem>();
   const outbox = new Map<string, OutboxEntry>();
   const configs = new Map<string, Config>();
+  const fees = new Map<string, Fee>();
+  const payments = new Map<string, Payment>();
   const setConfig = (config: Config): void => {
     configs.set(config.family.id, config);
   };
@@ -28,6 +32,9 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
 
   return {
     setConfig,
+    setFee: (fee) => {
+      fees.set(fee.id, fee);
+    },
     knownItemIds: async (familyId, watcher) => new Set(itemsOf(familyId, watcher).map((item) => item.id)),
     listItems: async (familyId, watcher) => itemsOf(familyId, watcher),
     recordItems: async (familyId, watcher, ids) => {
@@ -66,6 +73,33 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       const config = configs.get(familyId);
       if (!config) throw new Error(`Family ${familyId} has no config`);
       return config;
+    },
+    listFees: async (familyId) => [...fees.values()].filter((fee) => fee.familyId === familyId),
+    upsertPayment: async (payment) => {
+      const existing = [...payments.values()].find(
+        (other) => other.feeId === payment.feeId && other.month === payment.month,
+      );
+      if (existing) return { ...existing };
+      const made: Payment = {
+        ...payment,
+        id: randomUUID(),
+        status: "pending",
+        notifiedAt: null,
+        remindedAt: null,
+        decidedAt: null,
+        decidedBy: null,
+        createdAt: now(),
+      };
+      payments.set(made.id, made);
+      return { ...made };
+    },
+    listPayments: async (familyId) =>
+      [...payments.values()].filter((payment) => payment.familyId === familyId).map((payment) => ({ ...payment })),
+    setPaymentStatus: async (id, status, decidedBy) => {
+      const payment = payments.get(id);
+      if (!payment || payment.status !== "pending") return false;
+      Object.assign(payment, { status, decidedBy, decidedAt: now() });
+      return true;
     },
   };
 }

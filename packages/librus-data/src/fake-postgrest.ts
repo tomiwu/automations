@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Config } from "@automations/shared";
+import type { Fee } from "./storage.ts";
 
 type Row = Record<string, unknown>;
 type Predicate = (row: Row) => boolean;
@@ -8,6 +10,7 @@ const CONTROL_PARAMS = new Set(["select", "order", "on_conflict", "limit"]);
 const PRIMARY_KEYS: Record<string, readonly string[]> = {
   items: ["family_id", "watcher", "id"],
   outbox: ["key"],
+  payments: ["fee_id", "month"],
 };
 
 const json = (body: unknown, status = 200): Response =>
@@ -39,6 +42,7 @@ export interface FakePostgrest {
   /** Every request that the fake received. */
   requests: { method: string; url: string; headers: Headers }[];
   seedConfig(config: Config): void;
+  seedFee(fee: Fee): void;
   advanceDays(days: number): void;
 }
 
@@ -52,6 +56,15 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
     return rows;
   };
 
+  const defaultsOf = (name: string): Row => {
+    const time = current.toISOString();
+    if (name === "payments") {
+      const empty = { notified_at: null, reminded_at: null, decided_at: null, decided_by: null };
+      return { id: randomUUID(), status: "pending", created_at: time, ...empty };
+    }
+    return { queued_at: time, delivered_at: null, first_seen: time };
+  };
+
   const insert = (name: string, body: Row[], ignoreDuplicates: boolean): Row[] => {
     const keys = PRIMARY_KEYS[name] ?? [];
     const rows = table(name);
@@ -62,7 +75,7 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
         if (!ignoreDuplicates) throw new Error("duplicate key");
         continue;
       }
-      const stored = { queued_at: current.toISOString(), delivered_at: null, first_seen: current.toISOString(), ...row };
+      const stored = { ...defaultsOf(name), ...row };
       rows.push(stored);
       added.push(stored);
     }
@@ -80,7 +93,7 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
     }
     if (method === "PATCH") {
       selected.forEach((row) => Object.assign(row, JSON.parse(String(init?.body))));
-      return new Response(null, { status: 204 });
+      return prefer.includes("return=representation") ? json(selected) : new Response(null, { status: 204 });
     }
     const rows = table(name);
     tables.set(name, rows.filter((row) => !selected.includes(row)));
@@ -112,6 +125,25 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
       table("accounts").push(...withTime(config.accounts));
       table("activities").push(...withTime(config.activities));
       table("recipients").push(...withTime(config.recipients));
+    },
+    seedFee: (fee) => {
+      table("fees").push({
+        id: fee.id,
+        family_id: fee.familyId,
+        child_id: fee.childId,
+        organizer: fee.organizer,
+        recipient_name: fee.recipientName,
+        nip: fee.nip,
+        account: fee.account,
+        title: fee.title,
+        due_day: fee.dueDay,
+        notify_day: fee.notifyDay,
+        reminder_day: fee.reminderDay,
+        amounts: fee.amounts,
+        source_url: fee.sourceUrl,
+        account_id: fee.accountId,
+        enabled: fee.enabled,
+      });
     },
     advanceDays: (days) => {
       current = new Date(current.getTime() + days * DAY_MS);

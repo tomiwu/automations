@@ -12,6 +12,10 @@
 | `markDelivered(key)` | Sets `deliveredAt` |
 | `purgeDelivered(olderThanDays)` | Number of removed Outbox entries |
 | `loadConfig(familyId)` | `Config` of the Family |
+| `listFees(familyId)` | Fees of the Family. The Watcher cannot change them |
+| `upsertPayment(payment)` | Makes a `pending` Payment and returns it. A Payment for the same Fee and month is returned as it is |
+| `listPayments(familyId)` | Payments of the Family, oldest first |
+| `setPaymentStatus(id, status, decidedBy)` | Sets `paid` or `skipped`, `decidedAt` and `decidedBy` of a `pending` Payment. Returns `false` if nothing changed |
 
 `createMemoryStorage` is the in-memory fake. It uses no network.
 
