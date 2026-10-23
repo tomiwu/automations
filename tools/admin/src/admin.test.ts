@@ -318,3 +318,53 @@ describe("credentials", () => {
     expect(out.at(-1)).toContain("Re-encrypted 0");
   });
 });
+
+describe("set-fee and list-fees", () => {
+  const NRB = "61109010140000071219812874";
+  const base = [
+    "set-fee", "--family", "f1", "--child", "c1", "--organizer", "Example Club", "--recipient-name", "Example Club Ltd",
+    "--nip", "5260001246", "--account", NRB, "--title", "Fee Child One", "--due-day", "15", "--amounts", "2026-09=15000,2026-10=15000",
+  ];
+
+  it("adds a Fee with defaults", async () => {
+    const { deps, store } = setup();
+    await runAdmin(base, deps);
+    expect(store.fees?.[0]).toMatchObject({
+      family_id: "f1", child_id: "c1", nip: "5260001246", account: NRB, due_day: 15, notify_day: 10, reminder_day: 14,
+      amounts: { "2026-09": 15000, "2026-10": 15000 }, source_url: null, account_id: null,
+    });
+  });
+
+  it("accepts an account with spaces and no NIP", async () => {
+    const { deps, store } = setup();
+    const args = base.filter((arg) => arg !== "--nip" && arg !== "5260001246").map((arg) => (arg === NRB ? "61 1090 1014 0000 0712 1981 2874" : arg));
+    await runAdmin(args, deps);
+    expect(store.fees?.[0]).toMatchObject({ nip: null, account: NRB });
+  });
+
+  const withOption = (name: string, value: string) => [...base.filter((arg, i) => arg !== `--${name}` && base[i - 1] !== `--${name}`), `--${name}`, value];
+
+  it.each([
+    ["account", "61109010140000071219812875", "NRB"],
+    ["account", "123", "NRB"],
+    ["nip", "5260001247", "NIP"],
+    ["due-day", "29", "due-day"],
+    ["notify-day", "15", "notify-day"],
+    ["amounts", "2026-9=100", "amounts"],
+    ["amounts", "2026-09=0", "amounts"],
+    ["amounts", "2026-09=1.5", "amounts"],
+  ])("rejects bad --%s %s", async (name, value, message) => {
+    const { deps, calls } = setup();
+    await expect(runAdmin(withOption(name, value), deps)).rejects.toThrow(message);
+    expect(calls).toEqual([]);
+  });
+
+  it("lists Fees without the secrets of other tables", async () => {
+    const { deps, out, calls } = setup();
+    await runAdmin(base, deps);
+    await runAdmin(["list-fees", "--family", "f1"], deps);
+    expect(calls.at(-1)).toBe("select fees select=*&family_id=eq.f1&order=organizer");
+    expect(out.at(-2)).toBe("fees: 1");
+    expect(out.at(-1)).toContain("Example Club");
+  });
+});
