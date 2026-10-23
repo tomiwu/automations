@@ -74,13 +74,13 @@ describe("buildZbpText", () => {
 describe("buildZbpQr", () => {
   it("gives a PNG that decodes to the text", async () => {
     const { text, png } = await buildZbpQr({ ...base, nip: NIP, recipient: "Zażółć", title: "Opłata" });
-    const image = PNG.sync.read(png);
+    const image = PNG.sync.read(Buffer.from(png));
     const decoded = jsQR(new Uint8ClampedArray(image.data), image.width, image.height);
     expect(decoded?.data).toBe(text);
   });
   it("uses error correction L and a border of 4 modules", async () => {
     const { text, png } = await buildZbpQr(base);
-    const image = PNG.sync.read(png);
+    const image = PNG.sync.read(Buffer.from(png));
     const expected = QRCode.create(text, { errorCorrectionLevel: "L" }).modules.size;
     expect(image.width / SCALE - 8).toBe(expected);
     const dark = (x: number, y: number) => (image.data[(y * image.width + x) * 4] ?? 255) < 128;
