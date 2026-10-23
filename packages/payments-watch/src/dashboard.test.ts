@@ -136,3 +136,55 @@ describe("read view", () => {
     expect(body).toContain("Nothing to show.");
   });
 });
+
+describe("Paid and Skip buttons", () => {
+  const pendingId = async (d: DashboardDeps) =>
+    (await d.storage.listPayments(FAMILY)).find((payment) => payment.status === "pending")?.id ?? "";
+
+  it("shows the buttons on pending Payments only", async () => {
+    const d = await deps();
+    const body = await (await handleDashboard(get("/", await sessionCookie(d)), d, "")).text();
+    expect(body).toContain(`/payments/${await pendingId(d)}/paid`);
+    expect(body).toContain(`/payments/${await pendingId(d)}/skip`);
+    expect(body.match(/\/payments\//g)).toHaveLength(2);
+  });
+
+  const press = (path: string, cookie: string) =>
+    new Request(`https://example.test${path}`, { method: "POST", headers: cookie ? { cookie } : {} });
+
+  it("sets the status and decided_by to the dashboard user", async () => {
+    const d = await deps();
+    const id = await pendingId(d);
+    const response = await handleDashboard(press(`/payments/${id}/skip`, await sessionCookie(d)), d, "");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/");
+    const payment = (await d.storage.listPayments(FAMILY)).find((p) => p.id === id);
+    expect(payment?.status).toBe("skipped");
+    expect(payment?.decidedBy).toBe("adult-one");
+  });
+
+  it("does not change the status again on a repeated press", async () => {
+    const d = await deps();
+    const id = await pendingId(d);
+    const cookie = await sessionCookie(d);
+    await handleDashboard(press(`/payments/${id}/paid`, cookie), d, "");
+    const again = await handleDashboard(press(`/payments/${id}/skip`, cookie), d, "");
+    expect(again.status).toBe(303);
+    const payment = (await d.storage.listPayments(FAMILY)).find((p) => p.id === id);
+    expect(payment?.status).toBe("paid");
+  });
+
+  it("changes nothing without a session", async () => {
+    const d = await deps();
+    const id = await pendingId(d);
+    const response = await handleDashboard(press(`/payments/${id}/paid`, ""), d, "");
+    expect(await response.text()).toContain('action="/login"');
+    expect((await d.storage.listPayments(FAMILY)).find((p) => p.id === id)?.status).toBe("pending");
+  });
+
+  it("gives a redirect for an unknown Payment and keeps the base path", async () => {
+    const d = await deps();
+    const response = await handleDashboard(press("/app/payments/unknown/paid", await sessionCookie(d, "/app")), d, "/app");
+    expect(response.headers.get("location")).toBe("/app/");
+  });
+});
