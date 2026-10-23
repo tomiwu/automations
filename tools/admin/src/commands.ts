@@ -1,4 +1,4 @@
-import { encryptCredential, decryptCredential, importCredentialKey, newCredentialKey } from "@automations/shared";
+import { encryptCredential, decryptCredential, importCredentialKey, isValidNip, isValidNrb, newCredentialKey } from "@automations/shared";
 import { oneOf, parseArgs, required, secretName, weekday } from "./args.ts";
 import { signWatcherKey } from "./jwt.ts";
 import { rekey } from "./rekey.ts";
@@ -21,7 +21,7 @@ type Command = (flags: Flags, positional: string[], deps: AdminDeps) => Promise<
 
 const SERVICES = ["librus", "activenow", "edusky", "mondo"];
 const LANGUAGES = ["pl", "en"];
-const SEED_TABLES = ["families", "children", "accounts", "activities", "recipients"];
+const SEED_TABLES = ["families", "children", "accounts", "activities", "recipients", "fees"];
 
 const optional = (flags: Flags, name: string): string | undefined => (flags[name] === undefined ? undefined : required(flags, name));
 
@@ -95,6 +95,67 @@ const addRecipient: Command = async (flags, _positional, deps) => {
   });
 };
 
+function intInRange(value: string, min: number, max: number, name: string): number {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < min || number > max) throw new Error(`Option --${name} must be a whole number from ${min} to ${max}`);
+  return number;
+}
+
+/** Reads `YYYY-MM=grosze,...`. Each amount is a positive whole number of grosze. */
+export function parseAmounts(value: string): Record<string, number> {
+  const amounts: Record<string, number> = {};
+  for (const pair of value.split(",").filter((item) => item !== "")) {
+    const [month = "", grosze = ""] = pair.split("=");
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !/^[1-9]\d*$/.test(grosze)) {
+      throw new Error("Option --amounts is a list of YYYY-MM=grosze, for example 2026-09=15000");
+    }
+    amounts[month] = Number(grosze);
+  }
+  return amounts;
+}
+
+function checkedNrb(value: string): string {
+  const account = value.replace(/\s+/g, "");
+  if (!isValidNrb(account)) throw new Error("Option --account is not a valid NRB (26 digits with a correct checksum)");
+  return account;
+}
+
+function checkedNip(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  if (!isValidNip(value)) throw new Error("Option --nip is not a valid NIP (10 digits with a correct checksum)");
+  return value;
+}
+
+function feeDays(flags: Flags): { due_day: number; notify_day: number; reminder_day: number } {
+  const dueDay = intInRange(required(flags, "due-day"), 1, 28, "due-day");
+  const notifyDay = intInRange(flags["notify-day"] ?? "10", 1, 28, "notify-day");
+  if (notifyDay >= dueDay) throw new Error("Option --notify-day must be less than --due-day");
+  return { due_day: dueDay, notify_day: notifyDay, reminder_day: intInRange(flags["reminder-day"] ?? "14", 1, 28, "reminder-day") };
+}
+
+const setFee: Command = async (flags, _positional, deps) => {
+  const checked = { account: checkedNrb(required(flags, "account")), nip: checkedNip(optional(flags, "nip")), ...feeDays(flags) };
+  await insertOne(deps, "fees", {
+    family_id: required(flags, "family"),
+    child_id: required(flags, "child"),
+    organizer: required(flags, "organizer"),
+    recipient_name: required(flags, "recipient-name"),
+    title: required(flags, "title"),
+    amounts: parseAmounts(optional(flags, "amounts") ?? ""),
+    source_url: optional(flags, "source-url") ?? null,
+    account_id: optional(flags, "account-id") ?? null,
+    ...checked,
+  });
+};
+
+const listFees: Command = async (flags, _positional, deps) => {
+  const filter = optional(flags, "family");
+  const query = `select=*${filter === undefined ? "" : `&family_id=eq.${filter}`}&order=organizer`;
+  const rows = await deps.rest().select("fees", query);
+  deps.print(`fees: ${rows.length}`);
+  for (const row of rows) deps.print(`  ${JSON.stringify(row)}`);
+};
+
 const list: Command = async (flags, _positional, deps) => {
   const filter = optional(flags, "family");
   for (const table of SEED_TABLES) {
@@ -112,7 +173,13 @@ const disableAccount: Command = async (flags, _positional, deps) => {
   deps.print(`Disabled Account ${id}`);
 };
 
+function checkFeeRow(row: Row): void {
+  checkedNrb(String(row.account));
+  if (row.nip !== null && row.nip !== undefined) checkedNip(String(row.nip));
+}
+
 export function checkSeedRow(table: string, row: Row): void {
+  if (table === "fees") checkFeeRow(row);
   if (table !== "accounts") return;
   secretName(String(row.login_secret), "login_secret");
   secretName(String(row.password_secret), "password_secret");
@@ -232,6 +299,8 @@ const COMMANDS: Record<string, Command> = {
   "add-activity": addActivity,
   "add-recipient": addRecipient,
   list,
+  "set-fee": setFee,
+  "list-fees": listFees,
   "disable-account": disableAccount,
   "import-seed": importSeed,
   "make-watcher-key": makeWatcherKey,
