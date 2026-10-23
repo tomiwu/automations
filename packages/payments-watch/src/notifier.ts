@@ -15,7 +15,7 @@ export interface Notifier {
   sendPayment(recipient: Recipient, notice: PaymentNotice, qr: ZbpQr): Promise<void>;
 }
 
-export type TelegramParams = Record<string, string | number | Uint8Array | object>;
+export type TelegramParams = Record<string, string | number | boolean | Uint8Array | object>;
 
 /** Calls one method of the Telegram bot API. */
 export interface TelegramClient {

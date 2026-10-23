@@ -32,3 +32,11 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - The caption and the button names come from the pl/en catalogs in the language of the Recipient. The caption shows the Child, the Organizer, the month, the amount, the due date and the amount source.
 - When the Payment amount comes from the page and the config has a different amount for the month, the caption shows both amounts.
 - `createTelegramHttpClient(fetch, token)` is a `TelegramClient` that posts to the bot API. The token is the existing `TELEGRAM_BOT_TOKEN`. No new secret is needed.
+
+## Callback
+
+- `handlePaymentCallback(deps, query)` handles a button press with the data `pay:<payment id>:paid` or `pay:<payment id>:skip`. It gives `false` for other data.
+- Only a Recipient of the Child of the Fee can change the Payment. Another chat gets an error answer and the Payment stays as it is.
+- The first press sets the status and `decidedBy` (the chat ID), answers the press, edits the caption with the new status and removes the buttons.
+- A second press changes nothing. The chat gets an error answer.
+- The texts come from the pl/en catalogs. A chat that is not a Recipient gets the default language of the Family.

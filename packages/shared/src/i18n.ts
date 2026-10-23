@@ -83,6 +83,11 @@ const en = {
   "payment.source.config": "config",
   "payment.button.paid": "Paid",
   "payment.button.skip": "Skip",
+  "payment.status.paid": "Status: paid",
+  "payment.status.skipped": "Status: skipped",
+  "payment.callback.denied": "You cannot change this Payment.",
+  "payment.callback.unknown": "This Payment does not exist.",
+  "payment.callback.already": "This Payment has a status already.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -171,6 +176,11 @@ const pl: Catalog = {
   "payment.source.config": "konfiguracja",
   "payment.button.paid": "Zapłacone",
   "payment.button.skip": "Pomiń",
+  "payment.status.paid": "Status: zapłacone",
+  "payment.status.skipped": "Status: pominięte",
+  "payment.callback.denied": "Nie możesz zmienić tej płatności.",
+  "payment.callback.unknown": "Ta płatność nie istnieje.",
+  "payment.callback.already": "Ta płatność ma już status.",
 };
 
 export const CATALOGS: Record<Language, Catalog> = { pl, en };

@@ -2,6 +2,8 @@ export { runLibrusWatch, librusTargets } from "./run.ts";
 export type { RunDeps, LibrusTarget } from "./run.ts";
 export { createLibrusSource } from "./source.ts";
 export type { LibrusSourceOptions } from "./source.ts";
+export { routeTelegramUpdate } from "./telegram-update.ts";
+export type { TelegramUpdate, UpdateHandlers } from "./telegram-update.ts";
 export { deliverPending, splitForTelegram } from "./deliver.ts";
 export type { Messenger } from "./deliver.ts";
 export { PURGE_AFTER_DAYS, runPurge } from "./purge.ts";

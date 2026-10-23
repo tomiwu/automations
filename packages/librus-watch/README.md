@@ -34,3 +34,7 @@ The Supabase URL and the Family ID are plain config set with `./configure` (`{ s
 
 The Telegram bot commands (`/librus_*`), the pause state and the `grades` and `messages` exports are not ported.
 The schedule is in `package.json` (`kody.jobs`). Its time zone must be the time zone of the Family.
+
+## Telegram update router
+
+`routeTelegramUpdate(update, handlers)` sends a callback with data that starts with `pay:` to `handlers.payment` (the handler `handlePaymentCallback` of `payments-watch`). It sends all other updates to `handlers.other`, as before.
