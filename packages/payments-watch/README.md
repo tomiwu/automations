@@ -23,3 +23,12 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - Each Recipient of the Child gets one Outbox entry with the key `payment:<payment id>:<chat id>`.
 - On `reminderDay` or later, a `pending` Payment gets one reminder with the key `payment:<payment id>:<chat id>:reminder`.
 - A `paid` or `skipped` Payment gets no Notification. A repeated run queues nothing twice.
+
+## Notifier
+
+- The port `Notifier.sendPayment(recipient, notice, qr)` takes the Recipient, a `PaymentNotice` (`child`, `fee`, `payment`) and the QR code.
+- `createTelegramNotifier` is the v1 adapter. It calls `sendPhoto` with the QR PNG, a caption and two inline buttons.
+- The callback data is `pay:<payment id>:paid` and `pay:<payment id>:skip`.
+- The caption and the button names come from the pl/en catalogs in the language of the Recipient. The caption shows the Child, the Organizer, the month, the amount, the due date and the amount source.
+- When the Payment amount comes from the page and the config has a different amount for the month, the caption shows both amounts.
+- `createTelegramHttpClient(fetch, token)` is a `TelegramClient` that posts to the bot API. The token is the existing `TELEGRAM_BOT_TOKEN`. No new secret is needed.
