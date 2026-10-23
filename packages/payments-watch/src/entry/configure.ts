@@ -16,8 +16,9 @@ import { saveDashboardAllowlist, type DashboardUser } from "../dashboard-config.
  * await configure({ supabaseUrl: "https://<ref>.supabase.co", familyId: "<family id>", credentialKey: "<base64 key>" });
  */
 export default async function configure(input: unknown): Promise<SavedConfig & { allowlist?: string[] }> {
-  const { allowlist, ...rest } = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
-  const saved = await saveDeploymentConfig(kodyStorage(), typeof input === "object" && input !== null ? rest : input);
+  if (typeof input !== "object" || input === null) return saveDeploymentConfig(kodyStorage(), input);
+  const { allowlist, ...rest } = input as Record<string, unknown>;
+  const saved = await saveDeploymentConfig(kodyStorage(), rest);
   if (allowlist === undefined) return saved;
   const users: DashboardUser[] = await saveDashboardAllowlist(kodyStorage(), allowlist);
   return { ...saved, allowlist: users.map((entry) => entry.user) };
