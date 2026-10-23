@@ -8,10 +8,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 let out: string;
 
-function files(dir: string): string[] {
-  return readdirSync(dir).flatMap((n) => {
-    const p = join(dir, n);
-    return statSync(p).isDirectory() ? files(p) : [p];
+function readManifest() {
+  return JSON.parse(readFileSync(join(out, "package.json"), "utf8"));
+}
+
+function listFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? listFiles(path) : [path];
   });
 }
 
@@ -32,7 +36,7 @@ describe("Kody staging of payments-watch", () => {
   });
 
   it("keeps the kody block with the job, the app and the credential", () => {
-    const manifest = JSON.parse(readFileSync(join(out, "package.json"), "utf8"));
+    const manifest = readManifest();
     expect(manifest.kody.jobs["scheduled-check"].entry).toBe("./src/entry/scheduled.ts");
     expect(manifest.kody.app.entry).toBe("./src/entry/app.ts");
     expect(Object.keys(manifest.kody.credentials)).toEqual(["SUPABASE_KEY"]);
@@ -41,9 +45,9 @@ describe("Kody staging of payments-watch", () => {
   });
 
   it("leaves no workspace dependency, script or test file in the tree", () => {
-    const manifest = JSON.parse(readFileSync(join(out, "package.json"), "utf8"));
+    const manifest = readManifest();
     expect(Object.keys(manifest.dependencies).filter((d) => d.startsWith("@automations/") || d === "@tomiwu/librus-watch")).toEqual([]);
     expect(manifest.scripts).toBeUndefined();
-    expect(files(out).filter((f) => /\.test\.ts$/.test(f))).toEqual([]);
+    expect(listFiles(out).filter((file) => file.endsWith(".test.ts"))).toEqual([]);
   });
 });
