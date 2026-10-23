@@ -34,7 +34,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        package: [librus-watch, activities-watch, kradziejka]
+        package: [librus-watch, activities-watch, kradziejka, payments-watch]
     steps:
       - uses: actions/checkout@v5
         with:
