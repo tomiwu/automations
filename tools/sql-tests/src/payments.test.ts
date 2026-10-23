@@ -48,7 +48,7 @@ describe.skipIf(!url)("0005_payments.sql", () => {
   });
 
   it("accepts a NIP of 10 digits or null", () => {
-    expect(psql(db, `${insertFee("00000000-0000-0000-0000-0000000000f6", { nip: "null" })}`).ok).toBe(true);
+    expect(psql(db, insertFee("00000000-0000-0000-0000-0000000000f6", { nip: "null" })).ok).toBe(true);
   });
 
   it("rejects a bad NRB", () => {
