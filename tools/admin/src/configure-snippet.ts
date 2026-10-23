@@ -1,4 +1,5 @@
 #!/usr/bin/env -S node --experimental-strip-types
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 export interface SnippetInput {
@@ -9,6 +10,10 @@ export interface SnippetInput {
   allowlist: string;
   adminToken: string;
   withPayments: boolean;
+  /** Dashboard user of payments-watch. Needed with `withPayments`. */
+  paymentsUser?: string;
+  /** Dashboard login token of payments-watch. Only its SHA-256 goes into the snippet. */
+  paymentsToken?: string;
 }
 
 /**
@@ -20,11 +25,18 @@ export function configureSnippet(input: SnippetInput): string {
   const j = JSON.stringify;
   const allowlist: unknown = JSON.parse(input.allowlist);
   if (!Array.isArray(allowlist)) throw new Error("KRADZIEJKA_ALLOWLIST must be a JSON list");
+  let paymentsArg = "base";
+  if (input.withPayments) {
+    if (!input.paymentsUser) throw new Error("PAYMENTS_DASHBOARD_USER is empty");
+    if (!input.paymentsToken) throw new Error("PAYMENTS_DASHBOARD_TOKEN is empty");
+    const tokenDigest = createHash("sha256").update(input.paymentsToken).digest("hex");
+    paymentsArg = `{ ...base, allowlist: ${j([{ user: input.paymentsUser, tokenDigest }])} }`;
+  }
   const packages = [
     ["librus-watch", "librus", "base"],
     ["activities-watch", "activities", "base"],
     ["kradziejka", "kradziejka", `{ ...base, allowlist: ${j(allowlist.map(String))}, adminToken: ${j(input.adminToken)} }`],
-    ...(input.withPayments ? [["payments-watch", "payments", "base"]] : []),
+    ...(input.withPayments ? [["payments-watch", "payments", paymentsArg]] : []),
   ];
   return [
     ...packages.map(([pkg, id]) => `import ${id} from "kody:@tomiwu/${pkg}/configure";`),
@@ -53,6 +65,8 @@ export function snippetFromEnv(e: Record<string, string | undefined>): string {
     allowlist: v("KRADZIEJKA_ALLOWLIST", "[]"),
     adminToken: v("KRADZIEJKA_ADMIN_TOKEN"),
     withPayments: e.WITH_PAYMENTS === "1",
+    paymentsUser: v("PAYMENTS_DASHBOARD_USER"),
+    paymentsToken: v("PAYMENTS_DASHBOARD_TOKEN"),
   });
 }
 
