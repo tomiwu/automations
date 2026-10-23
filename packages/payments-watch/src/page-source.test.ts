@@ -36,11 +36,11 @@ const fee: Fee = {
   enabled: true,
 };
 
-function setup(respond: () => Response | Promise<Response>, row: Fee = fee) {
+function setup(respond: () => Response | Promise<Response>) {
   const storage = createMemoryStorage({ configs: [config] });
   const runtime = fakeRuntime({ now: new Date("2025-01-12T08:00:00Z"), respond });
   const source = createWebFeeSource({ runtime, storage, familyId: FAMILY_ID });
-  return { storage, runtime, source, row };
+  return { storage, runtime, source };
 }
 
 const ok = () => new Response(html, { status: 200 });
