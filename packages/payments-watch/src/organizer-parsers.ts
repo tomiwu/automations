@@ -8,16 +8,12 @@ type Parser = (html: string, month: string) => number | undefined;
 
 const MISSING = "Organizer page: fee list not found (site changed?)";
 
-/** Reads the amount of a month from the rows of a list. Throws when the list is not in the page. */
-function fromRows(html: string, list: string, rowOf: (month: string) => string, cell: string, month: string) {
+const activenow: Parser = (html, month) => {
   const $ = cheerio.load(html);
-  if ($(list).length === 0) throw new Error(MISSING);
-  const text = $(list).find(rowOf(month)).first().find(cell).first().text();
+  if ($(".an-fees").length === 0) throw new Error(MISSING);
+  const text = $(`.an-fees .an-fee[data-period="${month}"] .an-fee__price`).first().text();
   return text ? grosze(text) : undefined;
-}
-
-const activenow: Parser = (html, month) =>
-  fromRows(html, ".an-fees", (m) => `.an-fee[data-period="${m}"]`, ".an-fee__price", month);
+};
 
 /** Edusky has the month in a cell, so the row is found by the text of that cell. */
 const edusky: Parser = (html, month) => {
