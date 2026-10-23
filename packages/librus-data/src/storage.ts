@@ -66,7 +66,6 @@ export interface Payment extends NewPayment {
 }
 
 /** Items, the Outbox, Fees, Payments and config reads. */
-
 export interface StorageAdapter {
   knownItemIds(familyId: string, watcher: string): Promise<Set<string>>;
   listItems(familyId: string, watcher: string): Promise<StoredItem[]>;
