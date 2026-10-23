@@ -75,6 +75,8 @@ const en = {
   "chat.unsupported": "Send text or a photo.",
   "chat.hub_missing": "The Hub is not in the registry.",
   "chat.forward_failed": "The bot did not accept the message. Try again later.",
+  "payment.new": "Payment for {child}: {organizer}, {month}, {amount} PLN, due {date}",
+  "payment.reminder": "Reminder. Not paid yet for {child}: {organizer}, {month}, {amount} PLN, due {date}",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -155,6 +157,8 @@ const pl: Catalog = {
   "chat.unsupported": "Wyślij tekst lub zdjęcie.",
   "chat.hub_missing": "Huba nie ma w rejestrze.",
   "chat.forward_failed": "Bot nie przyjął wiadomości. Spróbuj później.",
+  "payment.new": "Płatność dla {child}: {organizer}, {month}, {amount} PLN, termin {date}",
+  "payment.reminder": "Przypomnienie. Brak wpłaty dla {child}: {organizer}, {month}, {amount} PLN, termin {date}",
 };
 
 export const CATALOGS: Record<Language, Catalog> = { pl, en };

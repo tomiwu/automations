@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@automations/librus-data": "*",
+    "@automations/shared": "*",
     "qrcode": "^1.5.4"
   }
 }
