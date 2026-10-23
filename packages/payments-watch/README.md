@@ -10,3 +10,8 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - The recipient is cut to 20 characters. The title is cut to 32 characters. A character that is not allowed becomes a space.
 - The full text has 160 characters or less.
 - `buildZbpQr` gives `{ text, png }`. The PNG uses UTF-8, error correction L and a border of 4 modules.
+
+## Fee sources
+
+- A `FeeSource` has `amountFor(fee, month)`. It gives `{ feeId, month, amount, source }` or `undefined`.
+- `createConfigFeeSource` gives the `amounts` value of the Fee for the month, with `source: "config"`. It gives `undefined` when the month has no amount. The engine ignores an amount of 0.
