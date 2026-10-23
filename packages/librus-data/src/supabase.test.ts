@@ -22,7 +22,7 @@ function setup() {
 
 runStorageContract("supabase (fake PostgREST)", async () => {
   const { server, storage, advanceDays } = setup();
-  return { storage, advanceDays, seedConfig: async (config) => server.seedConfig(config) };
+  return { storage, advanceDays, seedConfig: async (config) => server.seedConfig(config), seedFee: async (fee) => server.seedFee(fee) };
 });
 
 describe("createSupabaseStorage", () => {

@@ -9,6 +9,7 @@ runStorageContract("memory", async () => {
   return {
     storage,
     seedConfig: async (config) => storage.setConfig(config),
+    seedFee: async (fee) => storage.setFee(fee),
     advanceDays: async (days) => {
       current = new Date(current.getTime() + days * 86_400_000);
     },

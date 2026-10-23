@@ -1,5 +1,5 @@
 import type { Config, FetchFn, Runtime } from "@automations/shared";
-import type { NewNotification, OutboxEntry, StorageAdapter, StoredItem } from "./storage.ts";
+import type { Fee, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -43,6 +43,55 @@ function toEntry(row: Row): OutboxEntry {
     text: String(row.text),
     queuedAt: new Date(String(row.queued_at)),
     deliveredAt: row.delivered_at === null ? null : new Date(String(row.delivered_at)),
+  };
+}
+
+function toFee(row: Row): Fee {
+  return {
+    id: String(row.id),
+    familyId: String(row.family_id),
+    childId: String(row.child_id),
+    organizer: String(row.organizer),
+    recipientName: String(row.recipient_name),
+    nip: row.nip === null ? null : String(row.nip),
+    account: String(row.account),
+    title: String(row.title),
+    dueDay: Number(row.due_day),
+    notifyDay: Number(row.notify_day),
+    reminderDay: Number(row.reminder_day),
+    amounts: row.amounts as Record<string, number>,
+    sourceUrl: row.source_url === null ? null : String(row.source_url),
+    accountId: row.account_id === null ? null : String(row.account_id),
+    enabled: Boolean(row.enabled),
+  };
+}
+
+const toDate = (value: unknown): Date | null => (value === null ? null : new Date(String(value)));
+
+function toPayment(row: Row): Payment {
+  return {
+    id: String(row.id),
+    familyId: String(row.family_id),
+    feeId: String(row.fee_id),
+    month: String(row.month),
+    amount: Number(row.amount),
+    amountSource: row.amount_source as Payment["amountSource"],
+    status: row.status as Payment["status"],
+    notifiedAt: toDate(row.notified_at),
+    remindedAt: toDate(row.reminded_at),
+    decidedAt: toDate(row.decided_at),
+    decidedBy: row.decided_by === null ? null : String(row.decided_by),
+    createdAt: new Date(String(row.created_at)),
+  };
+}
+
+function toPaymentRow(payment: NewPayment): Row {
+  return {
+    family_id: payment.familyId,
+    fee_id: payment.feeId,
+    month: payment.month,
+    amount: payment.amount,
+    amount_source: payment.amountSource,
   };
 }
 
@@ -100,6 +149,15 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     } as unknown as Config;
   }
 
+  async function upsertPayment(payment: NewPayment): Promise<Payment> {
+    const [added] = await insertNew("payments", "fee_id,month", [toPaymentRow(payment)]);
+    if (added) return toPayment(added);
+    const query = `${filter("fee_id", "eq", payment.feeId)}&${filter("month", "eq", payment.month)}`;
+    const [existing] = await select("payments", query);
+    if (!existing) throw new Error(`Payment ${payment.feeId} ${payment.month} was not saved`);
+    return toPayment(existing);
+  }
+
   return {
     keepalive: async () => {
       await select("families", "select=id&limit=1");
@@ -131,6 +189,16 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       return ((await removed.json()) as Row[]).length;
     },
     loadConfig,
+    listFees: async (familyId) => (await select("fees", filter("family_id", "eq", familyId))).map(toFee),
+    upsertPayment,
+    listPayments: async (familyId) =>
+      (await select("payments", `${filter("family_id", "eq", familyId)}&order=created_at.asc`)).map(toPayment),
+    setPaymentStatus: async (id, status, decidedBy) => {
+      const body = JSON.stringify({ status, decided_by: decidedBy, decided_at: now().toISOString() });
+      const init = { headers: headers({ ...JSON_HEADERS, prefer: "return=representation" }), body };
+      const query = `${filter("id", "eq", id)}&status=eq.pending`;
+      return ((await (await request("PATCH", "payments", query, init)).json()) as Row[]).length > 0;
+    },
   };
 }
 
