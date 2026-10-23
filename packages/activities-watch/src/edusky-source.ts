@@ -48,6 +48,21 @@ function tokenOf(text: string): string | undefined {
   }
 }
 
+/** The OAuth2 error code of a failed grant (for example `invalid_grant` or `invalid_client`). It is never a secret. */
+export function grantError(text: string): string | undefined {
+  try {
+    const code = (JSON.parse(text) as { error?: unknown }).error;
+    return typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const GRANT_HINTS: Record<string, string> = {
+  invalid_grant: "wrong user name or password",
+  invalid_client: "wrong EDUSKY_CLIENT_SECRET",
+};
+
 async function login(http: Http, origin: string, secrets: Login): Promise<string> {
   const config = await getJson<BaseConfig>(http, `${origin}/core/web/external/baseconfig`, "", "configuration");
   const grant = await http.request(config.OAuth2.accessTokenUri, {
@@ -62,7 +77,11 @@ async function login(http: Http, origin: string, secrets: Login): Promise<string
     }),
   });
   const accessToken = grant.status === 200 ? tokenOf(grant.text) : undefined;
-  if (!accessToken) throw new Error(`Edusky: login rejected at ${new URL(origin).host} (check credentials)`);
+  if (!accessToken) {
+    const code = grantError(grant.text);
+    const detail = code ? `${code}: ${GRANT_HINTS[code] ?? "see the Edusky answer"}` : "check credentials";
+    throw new Error(`Edusky: login rejected at ${new URL(origin).host} (HTTP ${grant.status}, ${detail})`);
+  }
   return accessToken;
 }
 

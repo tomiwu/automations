@@ -30,6 +30,7 @@ The CLI never takes a secret value as an argument. `--login-secret` and `--passw
 | `import-seed <file>` | A JSON file with the keys `families`, `children`, `accounts`, `activities`, `recipients`. Each value is a list of table rows. |
 | `new-credential-key` | None. Prints a new credential key (base64). |
 | `set-credential` | `--family`, `--name`, `--stdin` (read the value from standard input instead of a prompt). Needs `CREDENTIAL_KEY`. |
+| `verify-credential` | `--family`, `--name`. Reads a value from standard input and compares it with the stored credential. Prints only `match`, `no match`, `does not decrypt with this CREDENTIAL_KEY` or `not stored`. Needs `CREDENTIAL_KEY`. |
 | `list-credentials` | `--family`. Names only. |
 | `rotate-credential-key` | `--family`. Needs `CREDENTIAL_KEY` and `NEW_CREDENTIAL_KEY`. |
 | `make-watcher-key` | None. Prints a JWT for the role `automations_watcher`. |

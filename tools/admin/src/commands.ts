@@ -167,6 +167,31 @@ const setCredential: Command = async (flags, _positional, deps) => {
   deps.print(`Saved credential ${name} (encrypted)`);
 };
 
+/**
+ * Compares a value from standard input with the stored credential. It prints only "match" or "no match"
+ * (or why it cannot compare). It never prints the value or the stored plaintext.
+ */
+const verifyCredential: Command = async (flags, _positional, deps) => {
+  const familyId = required(flags, "family");
+  const name = secretName(required(flags, "name"), "name");
+  const key = await credentialKey(deps);
+  const value = (await deps.readStdin()).replace(/\r?\n$/, "");
+  const query = `select=ciphertext&family_id=eq.${encodeURIComponent(familyId)}&name=eq.${encodeURIComponent(name)}`;
+  const sealed = (await deps.rest().select("credentials", query))[0]?.ciphertext;
+  if (typeof sealed !== "string") {
+    deps.print(`${name}: not stored`);
+    return;
+  }
+  let stored: string;
+  try {
+    stored = await decryptCredential(key, familyId, name, sealed);
+  } catch {
+    deps.print(`${name}: does not decrypt with this CREDENTIAL_KEY`);
+    return;
+  }
+  deps.print(`${name}: ${stored === value ? "match" : "no match"}`);
+};
+
 const listCredentials: Command = async (flags, _positional, deps) => {
   const rows = await deps.rest().select("credentials", `select=name,updated_at&family_id=eq.${required(flags, "family")}`);
   for (const row of rows) deps.print(`${String(row.name)}  ${String(row.updated_at)}`);
@@ -191,6 +216,7 @@ const COMMANDS: Record<string, Command> = {
   "new-credential-key": newKey,
   "set-credential": setCredential,
   "list-credentials": listCredentials,
+  "verify-credential": verifyCredential,
   "rotate-credential-key": rotateKey,
   "add-family": addFamily,
   "add-child": addChild,

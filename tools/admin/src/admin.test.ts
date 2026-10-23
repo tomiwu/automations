@@ -267,6 +267,33 @@ describe("credentials", () => {
     await expect(decryptCredential(await importCredentialKey(key), "f1", "X", sealed)).resolves.toBe("typed value-from-stdin");
   });
 
+  it("verify-credential prints only match or no match", async () => {
+    const { deps, out } = setup({}, { CREDENTIAL_KEY: key });
+    await runAdmin(["set-credential", "--family", "f1", "--name", "X", "--stdin"], deps);
+    out.length = 0;
+    await runAdmin(["verify-credential", "--family", "f1", "--name", "X"], deps);
+    expect(out).toEqual(["X: match"]);
+    const other = setup({}, { CREDENTIAL_KEY: key }, "other");
+    await runAdmin(["set-credential", "--family", "f1", "--name", "X", "--stdin"], other.deps);
+    other.out.length = 0;
+    const wrong = { ...other.deps, readStdin: async () => "different" };
+    await runAdmin(["verify-credential", "--family", "f1", "--name", "X"], wrong);
+    expect(other.out).toEqual(["X: no match"]);
+    expect(other.out.join("\n")).not.toContain("different");
+  });
+
+  it("verify-credential says when the key does not decrypt the row or the row is missing", async () => {
+    const { deps, out } = setup({}, { CREDENTIAL_KEY: key });
+    await runAdmin(["set-credential", "--family", "f1", "--name", "X", "--stdin"], deps);
+    out.length = 0;
+    const otherKey = { ...deps, env: { CREDENTIAL_KEY: newCredentialKey() } };
+    await runAdmin(["verify-credential", "--family", "f1", "--name", "X"], otherKey);
+    expect(out).toEqual(["X: does not decrypt with this CREDENTIAL_KEY"]);
+    const empty = setup({}, { CREDENTIAL_KEY: key });
+    await runAdmin(["verify-credential", "--family", "f1", "--name", "X"], empty.deps);
+    expect(empty.out).toEqual(["X: not stored"]);
+  });
+
   it("needs the key, a valid name and a value", async () => {
     await expect(runAdmin(["set-credential", "--family", "f", "--name", "N"], setup().deps)).rejects.toThrow("CREDENTIAL_KEY");
     await expect(runAdmin(["set-credential", "--family", "f", "--name", "a b"], setup({}, { CREDENTIAL_KEY: key }).deps)).rejects.toThrow();
