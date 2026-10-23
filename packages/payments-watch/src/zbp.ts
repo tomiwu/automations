@@ -13,7 +13,7 @@ export interface ZbpInput {
 
 export interface ZbpQr {
   text: string;
-  png: Buffer;
+  png: Uint8Array;
 }
 
 const RECIPIENT_MAX = 20;
