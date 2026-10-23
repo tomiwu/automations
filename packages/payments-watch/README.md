@@ -54,3 +54,11 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - `./scheduled` (`src/entry/scheduled.ts`) is the job `scheduled-check`. It runs once a day at 08:00. The time zone of the schedule must be the time zone of the Family. It takes no input and rejects when a step failed.
 - `./configure` (`src/entry/configure.ts`) takes `{ supabaseUrl, familyId, credentialKey }`. Only the owner calls it.
 - Only the entry files import the Kody runtime. The only Kody secret is `SUPABASE_KEY`. The delivery uses `TELEGRAM_BOT_TOKEN` through `@tomiwu/telegram`.
+
+## Dashboard
+
+- `./app` (`src/entry/app.ts`) is the Kody web app. `handleDashboard(request, deps, base)` serves it. The routes are `/login`, `/logout` and `/`.
+- Every page except the login needs a session. A request without a session, or with a user that is not on the allowlist, gets the login page and no data. An empty allowlist lets no one in.
+- The allowlist is in the deployment config, not in the code. `./configure` takes the optional `allowlist`: a list of `{ user, tokenDigest }`. `tokenDigest` is the SHA-256 of the login token in hex. The owner makes the token and the digest. The app never shows the token.
+- Views: unpaid Payments, next due Payments (date, amount), paid Payments, and the spend per Child per month and per school year. `schoolYearOf` maps September to December of year N and January to June of year N+1 to "N/N+1". July and August are in no school year. The spend counts `paid` Payments only.
+- The texts come from the pl/en catalogs (`dashboard.*`) in the default language of the Family.
