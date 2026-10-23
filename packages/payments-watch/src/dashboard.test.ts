@@ -1,0 +1,138 @@
+import { createMemoryStorage } from "@automations/librus-data";
+import type { Fee } from "@automations/librus-data";
+import type { Config } from "@automations/shared";
+import { describe, expect, it } from "vitest";
+import { handleDashboard, tokenDigest, type DashboardDeps } from "./dashboard.ts";
+
+const FAMILY = "00000000-0000-4000-8000-000000000001";
+const CHILD = "00000000-0000-4000-8000-0000000000c1";
+const config: Config = {
+  family: { id: FAMILY, name: "Example Family", timezone: "Europe/Warsaw", default_language: "en" },
+  children: [{ id: CHILD, family_id: FAMILY, name: "Child One", has_librus: true, calendar_id: null }],
+  accounts: [],
+  activities: [],
+  recipients: [],
+};
+const fee: Fee = {
+  id: "00000000-0000-4000-8000-0000000000f1",
+  familyId: FAMILY,
+  childId: CHILD,
+  organizer: "Example <Organizer>",
+  recipientName: "Example Recipient",
+  nip: null,
+  account: "61109010140000071219812874",
+  title: "Example fee",
+  dueDay: 20,
+  notifyDay: 10,
+  reminderDay: 14,
+  amounts: {},
+  sourceUrl: null,
+  accountId: null,
+  enabled: true,
+};
+const TOKEN = "example-token-one";
+
+async function deps(): Promise<DashboardDeps> {
+  const storage = createMemoryStorage({ configs: [config] });
+  storage.setFee(fee);
+  await storage.upsertPayment({ familyId: FAMILY, feeId: fee.id, month: "2026-02", amount: 15050, amountSource: "config" });
+  const paid = await storage.upsertPayment({ familyId: FAMILY, feeId: fee.id, month: "2026-01", amount: 12000, amountSource: "config" });
+  await storage.setPaymentStatus(paid.id, "paid", "adult-one");
+  return {
+    storage,
+    familyId: FAMILY,
+    now: () => new Date("2026-02-10T08:00:00Z"),
+    allowlist: [{ user: "adult-one", tokenDigest: await tokenDigest(TOKEN) }],
+  };
+}
+
+const get = (path: string, cookie = "") => new Request(`https://example.test${path}`, { headers: cookie ? { cookie } : {} });
+const post = (path: string, body: string) =>
+  new Request(`https://example.test${path}`, { method: "POST", body, headers: { "content-type": "application/x-www-form-urlencoded" } });
+
+async function sessionCookie(d: DashboardDeps, base = ""): Promise<string> {
+  const response = await handleDashboard(post(`${base}/login`, `user=adult-one&token=${TOKEN}`), d, base);
+  return (response.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+}
+
+describe("access", () => {
+  it("shows the login page and no data without a session", async () => {
+    const response = await handleDashboard(get("/"), await deps(), "");
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain('action="/login"');
+    expect(body).not.toContain("Child One");
+    expect(body).not.toContain("150.50");
+  });
+
+  it("gives a user that is not on the allowlist no session and no data", async () => {
+    const d = await deps();
+    const login = await handleDashboard(post("/login", `user=stranger&token=${TOKEN}`), d, "");
+    expect(login.headers.get("set-cookie")).toBeNull();
+    expect(await login.text()).toContain("The user or the token is not correct.");
+    const forged = await handleDashboard(get("/", "payments_dashboard=stranger.abc"), d, "");
+    expect(await forged.text()).not.toContain("Child One");
+  });
+
+  it("rejects a wrong token", async () => {
+    const response = await handleDashboard(post("/login", "user=adult-one&token=wrong"), await deps(), "");
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("gives no access when the allowlist is empty", async () => {
+    const d = { ...(await deps()), allowlist: [] };
+    const response = await handleDashboard(post("/login", `user=adult-one&token=${TOKEN}`), d, "");
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("drops a session after the user leaves the allowlist", async () => {
+    const d = await deps();
+    const cookie = await sessionCookie(d);
+    const body = await (await handleDashboard(get("/", cookie), { ...d, allowlist: [] }, "")).text();
+    expect(body).not.toContain("Child One");
+  });
+});
+
+describe("read view", () => {
+  it("shows the Payments after login", async () => {
+    const d = await deps();
+    const login = await handleDashboard(post("/login", `user=adult-one&token=${TOKEN}`), d, "");
+    expect(login.status).toBe(303);
+    expect(login.headers.get("location")).toBe("/");
+    const response = await handleDashboard(get("/", await sessionCookie(d)), d, "");
+    const body = await response.text();
+    expect(body).toContain("Unpaid");
+    expect(body).toContain("Next due");
+    expect(body).toContain("2026-02-20");
+    expect(body).toContain("150.50");
+    expect(body).toContain("120.00");
+    expect(body).toContain("2025/2026");
+    expect(body).toContain("Example &lt;Organizer&gt;");
+  });
+
+  it("uses the mount prefix for links and the cookie path", async () => {
+    const d = await deps();
+    const response = await handleDashboard(post("/pay/login", `user=adult-one&token=${TOKEN}`), d, "/pay");
+    expect(response.headers.get("location")).toBe("/pay/");
+    expect(response.headers.get("set-cookie")).toContain("Path=/pay");
+    const page = await handleDashboard(get("/pay/", await sessionCookie(d, "/pay")), d, "/pay");
+    expect(await page.text()).toContain('action="/pay/logout"');
+  });
+
+  it("signs out", async () => {
+    const response = await handleDashboard(post("/logout", ""), await deps(), "");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(response.headers.get("location")).toBe("/login");
+  });
+
+  it("answers 404 for an unknown route", async () => {
+    expect((await handleDashboard(get("/nothing"), await deps(), "")).status).toBe(404);
+  });
+
+  it("shows an empty note when there are no Payments", async () => {
+    const d = await deps();
+    const empty = { ...d, storage: createMemoryStorage({ configs: [config] }) };
+    const body = await (await handleDashboard(get("/", await sessionCookie(d)), empty, "")).text();
+    expect(body).toContain("Nothing to show.");
+  });
+});

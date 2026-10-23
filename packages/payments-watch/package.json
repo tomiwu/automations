@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./scheduled": "./src/entry/scheduled.ts",
-    "./configure": "./src/entry/configure.ts"
+    "./configure": "./src/entry/configure.ts",
+    "./app": "./src/entry/app.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -45,6 +46,9 @@
       "SUPABASE_KEY": {
         "description": "Key of the restricted Supabase role automations_watcher (sent as {{secret:SUPABASE_KEY}} to the Supabase project host)."
       }
+    },
+    "app": {
+      "entry": "./src/entry/app.ts"
     }
   }
 }
