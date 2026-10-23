@@ -17,6 +17,8 @@ const RECIPIENT_MAX = 20;
 const TITLE_MAX = 32;
 const TEXT_MAX = 160;
 const AMOUNT_MIN_DIGITS = 6;
+const QR_MARGIN_MODULES = 4;
+const QR_SCALE = 6;
 const NIP_WEIGHTS = [6, 5, 7, 2, 3, 4, 5, 6, 7];
 const DISALLOWED = /[^A-Za-z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ .,\-/():+?']/g;
 
@@ -69,8 +71,8 @@ export async function buildZbpQr(input: ZbpInput): Promise<ZbpQr> {
   const png = await QRCode.toBuffer(text, {
     type: "png",
     errorCorrectionLevel: "L",
-    margin: 4,
-    scale: 6,
+    margin: QR_MARGIN_MODULES,
+    scale: QR_SCALE,
   });
   return { text, png };
 }
