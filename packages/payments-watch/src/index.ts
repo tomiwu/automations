@@ -2,6 +2,9 @@ export { buildZbpQr, buildZbpText, cleanField, isValidNip, isValidNrb } from "./
 export type { ZbpInput, ZbpQr } from "./zbp.ts";
 export { createConfigFeeSource } from "./fee-source.ts";
 export type { FeeAmount, FeeSource } from "./fee-source.ts";
+export { parseOrganizerAmount } from "./page-parse.ts";
+export { createWebFeeSource } from "./page-source.ts";
+export type { WebFeeSourceDeps } from "./page-source.ts";
 export { formatAmount, runPayments } from "./engine.ts";
 export type { PaymentRun } from "./engine.ts";
 export { createTelegramHttpClient, createTelegramNotifier } from "./notifier.ts";
