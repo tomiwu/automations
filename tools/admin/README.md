@@ -33,8 +33,15 @@ The CLI never takes a secret value as an argument. `--login-secret` and `--passw
 | `verify-credential` | `--family`, `--name`. Reads a value from standard input and compares it with the stored credential. Prints only `match`, `no match`, `does not decrypt with this CREDENTIAL_KEY` or `not stored`. Needs `CREDENTIAL_KEY`. |
 | `list-credentials` | `--family`. Names only. |
 | `rotate-credential-key` | `--family`. Needs `CREDENTIAL_KEY` and `NEW_CREDENTIAL_KEY`. |
+| `rekey` | `--family`. Encrypts every credential again with `NEW_CREDENTIAL_KEY` (value from the environment, else the old row opened with `CREDENTIAL_KEY`, else a hidden prompt), sets the Librus origin where it is empty, and prints only `NAME: ok`, `does not decrypt` or `missing`. Use it through `bash tools/admin/rekey.sh`. |
 | `make-watcher-key` | None. Prints a JWT for the role `automations_watcher`. |
 
 Each `add-*` command prints the ID of the new row. `add-account` also prints the Kody secrets that you must enter.
 
 Keep the seed file on your own computer. Never put it in the repository.
+
+## Rotate the credential key in one step
+
+From the repo root: `bash tools/admin/rekey.sh`. It loads `.env`, makes a new key, encrypts all credentials, writes the new key to `.env` (old file in `.env.bak`), calls `./configure` of each Kody package with the same key, and prints a status per name. It never prints a value. Run it again if a step fails.
+
+Put values in `.env` in single quotes (`NAME='value'`). The script sources `.env`, so an unquoted `$`, space or `#` changes the value.

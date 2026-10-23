@@ -1,6 +1,7 @@
 import { encryptCredential, decryptCredential, importCredentialKey, newCredentialKey } from "@automations/shared";
 import { oneOf, parseArgs, required, secretName, weekday } from "./args.ts";
 import { signWatcherKey } from "./jwt.ts";
+import { rekey } from "./rekey.ts";
 import type { RestClient, Row } from "./rest.ts";
 
 export interface AdminDeps {
@@ -212,7 +213,14 @@ const rotateKey: Command = async (flags, _positional, deps) => {
   deps.print(`Re-encrypted ${updated.length} credentials. Now call ./configure with the new key in each package.`);
 };
 
+/** Encrypts all credentials again with NEW_CREDENTIAL_KEY and verifies them (see rekey.ts). */
+const rekeyCommand: Command = async (flags, _positional, deps) => {
+  const bad = await rekey({ ...deps, rest: deps.rest() }, required(flags, "family"));
+  if (bad > 0) throw new Error(`${bad} credential(s) are not ok`);
+};
+
 const COMMANDS: Record<string, Command> = {
+  rekey: rekeyCommand,
   "new-credential-key": newKey,
   "set-credential": setCredential,
   "list-credentials": listCredentials,

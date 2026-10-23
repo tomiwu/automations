@@ -62,3 +62,9 @@ Setup (the owner does this, never an agent):
 - Set the repository variable `KODY_DEPLOY_ENABLED` to `true` when you want real deploys.
 
 Roll back by deploying the previous version again (see Deploy steps). The workflow never changes Kody secrets and never changes the visibility of a package.
+
+## Key rotation and redeploys
+
+`./configure` writes the config (with the key) to the package storage. Each job and webhook reads it again on every run (`entryDeps()` calls `loadDeploymentConfig(kodyStorage())`). Nothing caches it at module load. So a new key takes effect on the next run; you do not need to publish the package code again.
+
+A credential "does not decrypt" only when the key, the Family ID or the name differ from encryption time, or the row was changed. The value itself (quotes, `@`, a new line) cannot cause it. The old flow had two scripts that each took `CREDENTIAL_KEY` from a different place (the shell for `setup-credentials`, `.env` for `kody-configure`), and skipped stored rows without `--force`. So rows could have a different key from the packages. `tools/admin/rekey.sh` uses one key for all steps and verifies it.
