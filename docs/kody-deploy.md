@@ -4,16 +4,17 @@ Do the steps in `docs/supabase-setup.md` first.
 
 ## Packages
 
-Three packages run as Kody packages. All are private.
+Four packages run as Kody packages. All are private.
 
 | Package | Jobs (in `package.json`, `kody.jobs`) |
 | --- | --- |
 | `@tomiwu/librus-watch` | `scheduled-check` (07:00 and 18:00), `daily-purge` (03:30) |
 | `@tomiwu/activities-watch` | The scheduled pass and the exports. See its README. |
+| `@tomiwu/payments-watch` | `scheduled-check` (08:00) |
 | `@tomiwu/kradziejka` | No jobs. Two inbound webhooks and one register webhook. See its README. |
 
 The time zone of a schedule must be the time zone of the Family.
-Each watcher package exports entry files (`./scheduled`, `./purge` and the exports). `@tomiwu/kradziejka` exports webhooks instead of jobs. Only the entry files import the Kody runtime.
+Each watcher package exports entry files (`./scheduled`, `./purge`, `./configure` and the exports). `@tomiwu/kradziejka` exports webhooks instead of jobs. Only the entry files import the Kody runtime.
 
 ## Secrets and credentials
 
