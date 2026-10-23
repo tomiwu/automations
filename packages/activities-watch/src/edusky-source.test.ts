@@ -75,6 +75,18 @@ describe("createEduskySource", () => {
     await expect(source.sessions()).rejects.toThrow(/login rejected/);
   });
 
+  it("names the OAuth2 error code: invalid_grant is the user login", async () => {
+    const body = '{"error":"invalid_grant","error_description":"The user credentials were incorrect."}';
+    const { source } = setup({ ...happy, [`POST ${ORIGIN}/core/web/oauth/v2/token`]: { status: 400, body } });
+    await expect(source.sessions()).rejects.toThrow(/HTTP 400, invalid_grant: wrong user name or password/);
+  });
+
+  it("names the OAuth2 error code: invalid_client is the client secret", async () => {
+    const body = '{"error":"invalid_client","error_description":"Client authentication failed"}';
+    const { source } = setup({ ...happy, [`POST ${ORIGIN}/core/web/oauth/v2/token`]: { status: 400, body } });
+    await expect(source.sessions()).rejects.toThrow(/invalid_client: wrong EDUSKY_CLIENT_SECRET/);
+  });
+
   it("rejects a login answer that is not JSON", async () => {
     const { source } = setup({ ...happy, [`POST ${ORIGIN}/core/web/oauth/v2/token`]: { body: "<html>" } });
     await expect(source.sessions()).rejects.toThrow(/login rejected/);

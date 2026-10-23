@@ -1,6 +1,7 @@
 import { encryptCredential, decryptCredential, importCredentialKey, newCredentialKey } from "@automations/shared";
 import { oneOf, parseArgs, required, secretName, weekday } from "./args.ts";
 import { signWatcherKey } from "./jwt.ts";
+import { rekey } from "./rekey.ts";
 import type { RestClient, Row } from "./rest.ts";
 
 export interface AdminDeps {
@@ -167,6 +168,31 @@ const setCredential: Command = async (flags, _positional, deps) => {
   deps.print(`Saved credential ${name} (encrypted)`);
 };
 
+/**
+ * Compares a value from standard input with the stored credential. It prints only "match" or "no match"
+ * (or why it cannot compare). It never prints the value or the stored plaintext.
+ */
+const verifyCredential: Command = async (flags, _positional, deps) => {
+  const familyId = required(flags, "family");
+  const name = secretName(required(flags, "name"), "name");
+  const key = await credentialKey(deps);
+  const value = (await deps.readStdin()).replace(/\r?\n$/, "");
+  const query = `select=ciphertext&family_id=eq.${encodeURIComponent(familyId)}&name=eq.${encodeURIComponent(name)}`;
+  const sealed = (await deps.rest().select("credentials", query))[0]?.ciphertext;
+  if (typeof sealed !== "string") {
+    deps.print(`${name}: not stored`);
+    return;
+  }
+  let stored: string;
+  try {
+    stored = await decryptCredential(key, familyId, name, sealed);
+  } catch {
+    deps.print(`${name}: does not decrypt with this CREDENTIAL_KEY`);
+    return;
+  }
+  deps.print(`${name}: ${stored === value ? "match" : "no match"}`);
+};
+
 const listCredentials: Command = async (flags, _positional, deps) => {
   const rows = await deps.rest().select("credentials", `select=name,updated_at&family_id=eq.${required(flags, "family")}`);
   for (const row of rows) deps.print(`${String(row.name)}  ${String(row.updated_at)}`);
@@ -187,10 +213,18 @@ const rotateKey: Command = async (flags, _positional, deps) => {
   deps.print(`Re-encrypted ${updated.length} credentials. Now call ./configure with the new key in each package.`);
 };
 
+/** Encrypts all credentials again with NEW_CREDENTIAL_KEY and verifies them (see rekey.ts). */
+const rekeyCommand: Command = async (flags, _positional, deps) => {
+  const bad = await rekey({ ...deps, rest: deps.rest() }, required(flags, "family"));
+  if (bad > 0) throw new Error(`${bad} credential(s) are not ok`);
+};
+
 const COMMANDS: Record<string, Command> = {
+  rekey: rekeyCommand,
   "new-credential-key": newKey,
   "set-credential": setCredential,
   "list-credentials": listCredentials,
+  "verify-credential": verifyCredential,
   "rotate-credential-key": rotateKey,
   "add-family": addFamily,
   "add-child": addChild,
