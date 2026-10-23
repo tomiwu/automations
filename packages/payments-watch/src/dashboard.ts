@@ -106,10 +106,11 @@ function headRow(language: Language, keys: readonly MessageKey[]): string {
   return `<tr>${keys.map((key) => `<th>${escapeHtml(t(language, key))}</th>`).join("")}</tr>`;
 }
 
-function section(language: Language, title: MessageKey, head: readonly MessageKey[], rows: readonly string[][]): string {
+/** Rows are text cells. `extra` is trusted HTML for one more cell at the end of a row. */
+function section(language: Language, title: MessageKey, head: readonly MessageKey[], rows: readonly string[][], extra: readonly string[] = []): string {
   const heading = `<h2>${escapeHtml(t(language, title))}</h2>`;
   if (rows.length === 0) return `${heading}<p>${escapeHtml(t(language, "dashboard.none"))}</p>`;
-  const body = rows.map((row) => `<tr>${row.map(cell).join("")}</tr>`).join("");
+  const body = rows.map((row, index) => `<tr>${row.map(cell).join("")}${extra[index] ?? ""}</tr>`).join("");
   return `${heading}<table><thead>${headRow(language, head)}</thead><tbody>${body}</tbody></table>`;
 }
 
@@ -117,10 +118,21 @@ const ROW_HEAD: MessageKey[] = ["dashboard.col.child", "dashboard.col.organizer"
 
 const rowCells = (row: DashboardRow): string[] => [row.child, row.organizer, row.month, row.dueDate, formatAmount(row.amount)];
 
+function decisionForm(context: Context, row: DashboardRow, action: "paid" | "skip"): string {
+  const url = `${context.base}/payments/${encodeURIComponent(row.paymentId)}/${action}`;
+  const label = t(context.language, `payment.button.${action}`);
+  return `<form method="post" action="${escapeHtml(url)}"><button type="submit">${escapeHtml(label)}</button></form>`;
+}
+
+function actionCell(context: Context, row: DashboardRow): string {
+  if (row.status !== "pending") return "<td></td>";
+  return `<td>${decisionForm(context, row, "paid")}${decisionForm(context, row, "skip")}</td>`;
+}
+
 function viewHtml(context: Context, view: Dashboard): string {
   const lang = context.language;
   return [
-    section(lang, "dashboard.unpaid", ROW_HEAD, view.unpaid.map(rowCells)),
+    section(lang, "dashboard.unpaid", [...ROW_HEAD, "dashboard.col.actions"], view.unpaid.map(rowCells), view.unpaid.map((row) => actionCell(context, row))),
     section(lang, "dashboard.next_due", ROW_HEAD, view.nextDue.map(rowCells)),
     section(lang, "dashboard.paid", ROW_HEAD, view.paid.map(rowCells)),
     section(lang, "dashboard.spend_month", ["dashboard.col.child", "dashboard.col.month", "dashboard.col.amount"],
@@ -147,6 +159,22 @@ async function login(request: Request, context: Context): Promise<Response> {
   return redirect(context.base, "/", cookieHeader(await sessionValue(entry), context.base, SESSION_SECONDS));
 }
 
+const DECISION_PATH = /^\/payments\/([^/]+)\/(paid|skip)$/;
+
+/**
+ * Sets the status with the same storage function as the Telegram callback. The first press wins.
+ * A repeated press changes nothing. Both end in a redirect to the overview.
+ */
+async function decide(request: Request, context: Context, route: string): Promise<Response> {
+  const user = await sessionUser(request, context.deps.allowlist);
+  if (!user) return html(page(context, loginHtml(context, false)));
+  const match = DECISION_PATH.exec(route);
+  if (!match) return notFound(context);
+  const status = match[2] === "paid" ? "paid" : "skipped";
+  await context.deps.storage.setPaymentStatus(decodeURIComponent(match[1] ?? ""), status, user.user);
+  return redirect(context.base, "/");
+}
+
 function notFound(context: Context): Response {
   return html(escapeHtml(t(context.language, "dashboard.not_found")), 404);
 }
@@ -157,15 +185,20 @@ async function readRoute(request: Request, context: Context, route: string): Pro
 }
 
 /**
- * Serves the read view of the Dashboard. Every page except the login needs a session of a user on the allowlist.
+ * Serves the Dashboard: the read view and the Paid and Skip buttons. Every page except the login needs a session of a user on the allowlist.
  * A request without one gets the login page and no data.
  */
 export async function handleDashboard(request: Request, deps: DashboardDeps, base: string): Promise<Response> {
   const config = await deps.storage.loadConfig(deps.familyId);
   const context: Context = { deps, base, language: config.family.default_language };
   const route = `${request.method} ${routePath(request.url, base)}`;
+  if (request.method === "POST") return postRoute(request, context, route);
+  return route === "GET /" || route === "GET /login" ? readRoute(request, context, route) : notFound(context);
+}
+
+async function postRoute(request: Request, context: Context, route: string): Promise<Response> {
   if (route === "POST /login") return login(request, context);
-  if (route === "POST /logout") return redirect(base, "/login", cookieHeader("", base, 0));
-  if (route === "GET /" || route === "GET /login") return readRoute(request, context, route);
+  if (route === "POST /logout") return redirect(context.base, "/login", cookieHeader("", context.base, 0));
+  if (route.startsWith("POST /payments/")) return decide(request, context, route.slice("POST ".length));
   return notFound(context);
 }

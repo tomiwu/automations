@@ -106,6 +106,7 @@ const en = {
   "dashboard.col.due": "Due",
   "dashboard.col.amount": "Amount (PLN)",
   "dashboard.col.school_year": "School year",
+  "dashboard.col.actions": "Action",
   "dashboard.not_found": "Not found.",
   "dashboard.failed": "The app failed. Error code: app_failed.",
 } as const;
@@ -219,6 +220,7 @@ const pl: Catalog = {
   "dashboard.col.due": "Termin",
   "dashboard.col.amount": "Kwota (PLN)",
   "dashboard.col.school_year": "Rok szkolny",
+  "dashboard.col.actions": "Akcja",
   "dashboard.not_found": "Nie znaleziono.",
   "dashboard.failed": "Aplikacja nie działa. Kod błędu: app_failed.",
 };
