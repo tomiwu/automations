@@ -21,6 +21,7 @@
     "pngjs": "^7.0.0"
   },
   "dependencies": {
+    "@automations/librus-data": "*",
     "qrcode": "^1.5.4"
   }
 }
