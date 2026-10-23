@@ -6,7 +6,7 @@
 import type { Fee, StorageAdapter } from "@automations/librus-data";
 import { localDate, t, type Runtime } from "@automations/shared";
 import { createConfigFeeSource, type FeeAmount, type FeeSource } from "./fee-source.ts";
-import { parseOrganizerAmount } from "./page-parse.ts";
+import { organizerTypeOf, parseFeePage } from "./organizer-parsers.ts";
 
 /** Time limit of one request, in milliseconds. */
 const REQUEST_TIMEOUT_MS = 25_000;
@@ -28,7 +28,7 @@ function failureReason(message: string): string {
 async function pageAmount(runtime: Runtime, url: string, month: string): Promise<number | undefined> {
   const response = await runtime.fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (response.status !== 200) throw new Error(`Organizer page: request failed (HTTP ${response.status})`);
-  return parseOrganizerAmount(await response.text(), month);
+  return parseFeePage(organizerTypeOf(url), await response.text(), month);
 }
 
 /** Queues one failure Notification for each Recipient of the Child. The key has the day, so it is sent once a day. */
