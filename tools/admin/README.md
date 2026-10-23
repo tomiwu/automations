@@ -47,3 +47,5 @@ Keep the seed file on your own computer. Never put it in the repository.
 From the repo root: `bash tools/admin/rekey.sh`. It loads `.env`, makes a new key, encrypts all credentials, writes the new key to `.env` (old file in `.env.bak`), calls `./configure` of each Kody package with the same key, and prints a status per name. It never prints a value. Run it again if a step fails.
 
 Put values in `.env` in single quotes (`NAME='value'`). The script sources `.env`, so an unquoted `$`, space or `#` changes the value.
+
+With `WITH_PAYMENTS=1`, the script also saves the payments-watch Dashboard allowlist. It reads `PAYMENTS_DASHBOARD_USER` from `.env` (it asks if missing) and `PAYMENTS_DASHBOARD_TOKEN` (it makes one with `openssl rand -hex 24` and appends it to `.env` if missing). Only the SHA-256 digest of the token goes to `./configure`. The script prints the user and says where the token is. It never prints the token or the digest. It stops if the user or the token is empty.

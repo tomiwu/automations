@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { decryptCredential, encryptCredential, importCredentialKey, newCredentialKey } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import { configureSnippet, snippetFromEnv } from "./configure-snippet.ts";
@@ -92,10 +93,23 @@ describe("configureSnippet", () => {
     expect(code).toContain('import kradziejka from "kody:@tomiwu/kradziejka/configure";');
     expect(code).toContain('allowlist: ["1","2"]');
     expect(code).not.toContain("payments-watch");
-    expect(configureSnippet({ ...input, withPayments: true })).toContain('["payments-watch", () => payments(base)]');
+  });
+  it("passes the Dashboard allowlist with the token digest, not the token", () => {
+    const token = "secret-token-value";
+    const code = configureSnippet({ ...input, withPayments: true, paymentsUser: "parent1", paymentsToken: token });
+    const digest = createHash("sha256").update(token).digest("hex");
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(code).toContain(`payments({ ...base, allowlist: [{"user":"parent1","tokenDigest":"${digest}"}] })`);
+    expect(code).not.toContain(token);
+  });
+  it("needs a Dashboard user and token with payments", () => {
+    expect(() => configureSnippet({ ...input, withPayments: true, paymentsToken: "t" })).toThrow("PAYMENTS_DASHBOARD_USER");
+    expect(() => configureSnippet({ ...input, withPayments: true, paymentsUser: "u" })).toThrow("PAYMENTS_DASHBOARD_TOKEN");
   });
   it("reads the input from the environment", () => {
-    expect(snippetFromEnv({ WITH_PAYMENTS: "1", FAMILY_ID: FAMILY })).toContain("payments-watch");
+    const env = { WITH_PAYMENTS: "1", FAMILY_ID: FAMILY, PAYMENTS_DASHBOARD_USER: "u", PAYMENTS_DASHBOARD_TOKEN: "t" };
+    expect(snippetFromEnv(env)).toContain("payments-watch");
+    expect(() => snippetFromEnv({ WITH_PAYMENTS: "1" })).toThrow("PAYMENTS_DASHBOARD_USER");
     expect(snippetFromEnv({})).toContain("allowlist: []");
   });
   it("refuses an allowlist that is not a list", () => {

@@ -9,7 +9,9 @@
 #    else it asks you), in one upsert. Sets the Librus origin where it is empty.
 # 3. Writes the new key to .env (the old key stays in .env.bak) so all later steps use the SAME key.
 # 4. Saves the new key in the config of every Kody package (./configure), then prints a per-name status.
-# Set WITH_PAYMENTS=1 (in .env or before the command) after @tomiwu/payments-watch is on Kody.
+# Set WITH_PAYMENTS=1 (in .env or before the command) after @tomiwu/payments-watch is on Kody. Then it also
+#    saves the payments-watch Dashboard allowlist: PAYMENTS_DASHBOARD_USER (asked if missing) and
+#    PAYMENTS_DASHBOARD_TOKEN (made and kept in .env if missing). Only the SHA-256 of the token goes to Kody.
 # If a step fails, run the script again: it starts from the key that is now in .env.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -32,6 +34,16 @@ ask() { # ask NAME "description": read a missing plain setting and keep it in .e
 ask SUPABASE_URL "https://<ref>.supabase.co"
 ask FAMILY_ID "the Family ID"
 ask KRADZIEJKA_ALLOWLIST "JSON list of Telegram chat IDs, like [\"1\",\"2\"]"
+if [ "${WITH_PAYMENTS:-}" = "1" ]; then
+  ask PAYMENTS_DASHBOARD_USER "the Dashboard user name"
+  if [ -z "${PAYMENTS_DASHBOARD_TOKEN:-}" ]; then
+    PAYMENTS_DASHBOARD_TOKEN=$(openssl rand -hex 24)
+    printf 'PAYMENTS_DASHBOARD_TOKEN=%s\n' "$PAYMENTS_DASHBOARD_TOKEN" >> .env
+    export PAYMENTS_DASHBOARD_TOKEN
+  fi
+  [ -n "${PAYMENTS_DASHBOARD_USER:-}" ] || { echo "PAYMENTS_DASHBOARD_USER is empty" >&2; exit 1; }
+  [ -n "${PAYMENTS_DASHBOARD_TOKEN:-}" ] || { echo "PAYMENTS_DASHBOARD_TOKEN is empty" >&2; exit 1; }
+fi
 [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] || { echo "Put SUPABASE_SERVICE_ROLE_KEY in .env first" >&2; exit 1; }
 
 NEW_CREDENTIAL_KEY=$(openssl rand -base64 32 | tr -d '[:space:]')
@@ -61,6 +73,11 @@ TOKEN_FILE="$HOME/.kradziejka-admin-token"
 KRADZIEJKA_ADMIN_TOKEN=$(tr -d '[:space:]' < "$TOKEN_FILE") \
   node --experimental-strip-types tools/admin/src/configure-snippet.ts > "$SNIPPET"
 npx -y @kodycodes/cli@1.31.4 execute --file "$SNIPPET" || status=1
+
+if [ "${WITH_PAYMENTS:-}" = "1" ]; then
+  echo "Dashboard user: $PAYMENTS_DASHBOARD_USER"
+  echo "Dashboard token: in .env (PAYMENTS_DASHBOARD_TOKEN)"
+fi
 
 echo "== Done =="
 if [ "$status" -eq 0 ]; then echo "All credentials: ok"; else echo "Some steps are not ok (see above). Fix .env and run again."; fi

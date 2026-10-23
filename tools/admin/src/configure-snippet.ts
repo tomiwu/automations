@@ -1,4 +1,5 @@
 #!/usr/bin/env -S node --experimental-strip-types
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 export interface SnippetInput {
@@ -9,6 +10,18 @@ export interface SnippetInput {
   allowlist: string;
   adminToken: string;
   withPayments: boolean;
+  /** Dashboard user of payments-watch. Needed with `withPayments`. */
+  paymentsUser?: string;
+  /** Dashboard login token of payments-watch. Only its SHA-256 goes into the snippet. */
+  paymentsToken?: string;
+}
+
+/** The `./configure` argument of payments-watch: the Dashboard allowlist with the token digest, never the token. */
+function paymentsArg(input: SnippetInput): string {
+  if (!input.paymentsUser) throw new Error("PAYMENTS_DASHBOARD_USER is empty");
+  if (!input.paymentsToken) throw new Error("PAYMENTS_DASHBOARD_TOKEN is empty");
+  const tokenDigest = createHash("sha256").update(input.paymentsToken).digest("hex");
+  return `{ ...base, allowlist: ${JSON.stringify([{ user: input.paymentsUser, tokenDigest }])} }`;
 }
 
 /**
@@ -24,7 +37,7 @@ export function configureSnippet(input: SnippetInput): string {
     ["librus-watch", "librus", "base"],
     ["activities-watch", "activities", "base"],
     ["kradziejka", "kradziejka", `{ ...base, allowlist: ${j(allowlist.map(String))}, adminToken: ${j(input.adminToken)} }`],
-    ...(input.withPayments ? [["payments-watch", "payments", "base"]] : []),
+    ...(input.withPayments ? [["payments-watch", "payments", paymentsArg(input)]] : []),
   ];
   return [
     ...packages.map(([pkg, id]) => `import ${id} from "kody:@tomiwu/${pkg}/configure";`),
@@ -53,6 +66,8 @@ export function snippetFromEnv(e: Record<string, string | undefined>): string {
     allowlist: v("KRADZIEJKA_ALLOWLIST", "[]"),
     adminToken: v("KRADZIEJKA_ADMIN_TOKEN"),
     withPayments: e.WITH_PAYMENTS === "1",
+    paymentsUser: v("PAYMENTS_DASHBOARD_USER"),
+    paymentsToken: v("PAYMENTS_DASHBOARD_TOKEN"),
   });
 }
 
