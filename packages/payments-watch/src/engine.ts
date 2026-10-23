@@ -48,8 +48,18 @@ async function queue(context: RunContext, fee: Fee, payment: Payment, kind: "pay
   }
 }
 
+function isDue(context: RunContext, fee: Fee): boolean {
+  return fee.enabled && context.day >= fee.notifyDay;
+}
+
+async function notifyPayment(context: RunContext, fee: Fee, payment: Payment): Promise<void> {
+  if (payment.status !== "pending") return;
+  await queue(context, fee, payment, "payment.new");
+  if (context.day >= fee.reminderDay) await queue(context, fee, payment, "payment.reminder");
+}
+
 async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Promise<void> {
-  if (!fee.enabled || context.day < fee.notifyDay) return;
+  if (!isDue(context, fee)) return;
   const found = await source.amountFor(fee, context.month);
   if (!found || found.amount <= 0) return;
   const payment = await context.storage.upsertPayment({
@@ -59,9 +69,7 @@ async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Prom
     amount: found.amount,
     amountSource: found.source,
   });
-  if (payment.status !== "pending") return;
-  await queue(context, fee, payment, "payment.new");
-  if (context.day >= fee.reminderDay) await queue(context, fee, payment, "payment.reminder");
+  await notifyPayment(context, fee, payment);
 }
 
 /**
