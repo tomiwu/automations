@@ -3,3 +3,7 @@
 declare module "kody:@tomiwu/telegram/send-message" {
   export default function sendMessage(params: Record<string, unknown>): Promise<{ ok: true; messageId: number | null }>;
 }
+
+declare module "kody:@tomiwu/telegram/request" {
+  export default function request(params: Record<string, unknown>): Promise<unknown>;
+}

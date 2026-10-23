@@ -5,6 +5,9 @@ import { splitForTelegram, type Messenger } from "@tomiwu/librus-watch";
 import { loadDashboardAllowlist } from "../dashboard-config.ts";
 import type { DashboardDeps } from "../dashboard.ts";
 import sendMessage from "kody:@tomiwu/telegram/send-message";
+import request from "kody:@tomiwu/telegram/request";
+import type { TelegramClient } from "../notifier.ts";
+import type { UpdateDeps } from "../telegram-update.ts";
 
 /** Sends to Telegram through the external `telegram` package. A long text goes out as several messages. */
 export const telegramMessenger: Messenger = {
@@ -32,4 +35,17 @@ export async function entryDeps() {
 export async function dashboardDeps(): Promise<DashboardDeps> {
   const { storage, familyId } = await entryDeps();
   return { storage, familyId, allowlist: await loadDashboardAllowlist(kodyStorage()), now: () => new Date() };
+}
+
+/** Calls the bot API through the external `telegram` package. The token stays in the Kody secret. */
+const telegramClient: TelegramClient = {
+  async call(method, params) {
+    await request({ method, params, secretName: "TELEGRAM_BOT_TOKEN", confirm: true });
+  },
+};
+
+/** Dependencies for the `telegram-update` webhook. */
+export async function updateDeps(): Promise<UpdateDeps> {
+  const { runtime, storage, familyId } = await entryDeps();
+  return { callback: { familyId, storage, client: telegramClient }, log: (message) => runtime.log("info", message) };
 }

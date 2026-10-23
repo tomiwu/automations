@@ -64,3 +64,10 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - The texts come from the pl/en catalogs (`dashboard.*`) in the default language of the Family.
 - Each `pending` Payment in the unpaid table has a `Paid` and a `Skip` button. A button posts to `/payments/<payment id>/paid` or `/payments/<payment id>/skip`. The handler calls `StorageAdapter.setPaymentStatus`, the same function as the Telegram callback, with the dashboard user as `decidedBy`. A request without a session changes nothing.
 - The first press wins. A repeated press, or a press for an unknown Payment, changes nothing. Each press ends in a redirect to the overview. The session cookie is `SameSite=Lax`, so a form on another site cannot press a button.
+
+## Telegram webhook
+
+- The Kody webhook `telegram-update` (`./telegram-update`, `src/entry/telegram-update.ts`) receives the Telegram updates. It uses `responseMode` `ack` and `url-secret` verification.
+- `routeTelegramUpdate` sends a `pay:` callback to `handlePaymentCallback`. The `callback_query` gives the id, the data, the chat ID, the message ID and the caption. A callback without a message changes nothing. Any other update is ignored and logged.
+- The reply goes through `@tomiwu/telegram` with the secret `TELEGRAM_BOT_TOKEN`.
+- The code does not register the webhook with Telegram. The owner calls `setWebhook` by hand with the webhook URL.

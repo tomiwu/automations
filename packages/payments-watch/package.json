@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./scheduled": "./src/entry/scheduled.ts",
     "./configure": "./src/entry/configure.ts",
-    "./app": "./src/entry/app.ts"
+    "./app": "./src/entry/app.ts",
+    "./telegram-update": "./src/entry/telegram-update.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -47,6 +48,17 @@
         "description": "Key of the restricted Supabase role automations_watcher (sent as {{secret:SUPABASE_KEY}} to the Supabase project host)."
       }
     },
+    "dependencies": {
+      "@tomiwu/telegram": "*"
+    },
+    "webhooks": [
+      {
+        "name": "telegram-update",
+        "export": "./telegram-update",
+        "responseMode": "ack",
+        "verification": { "type": "url-secret" }
+      }
+    ],
     "app": {
       "entry": "./src/entry/app.ts"
     }
