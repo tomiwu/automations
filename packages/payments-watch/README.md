@@ -40,3 +40,10 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - The first press sets the status and `decidedBy` (the chat ID), answers the press, edits the caption with the new status and removes the buttons.
 - A second press changes nothing. The chat gets an error answer.
 - The texts come from the pl/en catalogs. A chat that is not a Recipient gets the default language of the Family.
+
+## Entry files and Kody job
+
+- `runPaymentsWatch` runs the Payment engine with a `FeeSource`, then delivers the Outbox to the Recipients. It gives the failure texts.
+- `./scheduled` (`src/entry/scheduled.ts`) is the job `scheduled-check`. It runs once a day at 08:00. The time zone of the schedule must be the time zone of the Family. It takes no input and rejects when a step failed.
+- `./configure` (`src/entry/configure.ts`) takes `{ supabaseUrl, familyId, credentialKey }`. Only the owner calls it.
+- Only the entry files import the Kody runtime. The only Kody secret is `SUPABASE_KEY`. The delivery uses `TELEGRAM_BOT_TOKEN` through `@tomiwu/telegram`.

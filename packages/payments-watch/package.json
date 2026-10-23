@@ -6,7 +6,9 @@
   "description": "Builds ZBP payment QR codes for the Fees of the Organizers and sends them to the Recipients on Telegram.",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./scheduled": "./src/entry/scheduled.ts",
+    "./configure": "./src/entry/configure.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -23,6 +25,25 @@
   "dependencies": {
     "@automations/librus-data": "*",
     "@automations/shared": "*",
+    "@tomiwu/librus-watch": "*",
     "qrcode": "^1.5.4"
+  },
+  "kody": {
+    "id": "payments-watch",
+    "description": "Sends the Fee Payments with a ZBP QR code to the Recipients on Telegram.",
+    "jobs": {
+      "scheduled-check": {
+        "entry": "./src/entry/scheduled.ts",
+        "schedule": {
+          "type": "cron",
+          "expression": "0 8 * * *"
+        }
+      }
+    },
+    "credentials": {
+      "SUPABASE_KEY": {
+        "description": "Key of the restricted Supabase role automations_watcher (sent as {{secret:SUPABASE_KEY}} to the Supabase project host)."
+      }
+    }
   }
 }
