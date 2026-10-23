@@ -63,25 +63,31 @@ const GRANT_HINTS: Record<string, string> = {
   invalid_client: "wrong EDUSKY_CLIENT_SECRET",
 };
 
+/** The error text of a failed login. It names the cause and never holds a secret. */
+function loginFailure(host: string, grant: { status: number; text: string }): string {
+  if (grant.status === 403 && /Just a moment/.test(grant.text)) {
+    return `Edusky: login blocked by the Cloudflare challenge at ${host} (HTTP 403)`;
+  }
+  const code = grantError(grant.text);
+  const detail = code ? `${code}: ${GRANT_HINTS[code] ?? "see the Edusky answer"}` : "check credentials";
+  return `Edusky: login rejected at ${host} (HTTP ${grant.status}, ${detail})`;
+}
+
 async function login(http: Http, origin: string, secrets: Login): Promise<string> {
   const config = await getJson<BaseConfig>(http, `${origin}/core/web/external/baseconfig`, "", "configuration");
-  const grant = await http.request(config.OAuth2.accessTokenUri, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
-    body: formBody({
-      grant_type: "password",
-      client_id: config.OAuth2.clientId,
-      client_secret: secrets.clientSecret,
-      username: secrets.login,
-      password: secrets.password,
-    }),
+  // Cloudflare in front of Edusky challenges every POST to the token endpoint from a data-center
+  // network (HTTP 403 "Just a moment..."), but lets a GET through. The token endpoint also takes
+  // the grant as query parameters, and the Edusky web app itself sends its refresh grant that way.
+  const query = formBody({
+    grant_type: "password",
+    client_id: config.OAuth2.clientId,
+    client_secret: secrets.clientSecret,
+    username: secrets.login,
+    password: secrets.password,
   });
+  const grant = await http.request(`${config.OAuth2.accessTokenUri}?${query}`, { headers: { accept: "application/json" } });
   const accessToken = grant.status === 200 ? tokenOf(grant.text) : undefined;
-  if (!accessToken) {
-    const code = grantError(grant.text);
-    const detail = code ? `${code}: ${GRANT_HINTS[code] ?? "see the Edusky answer"}` : "check credentials";
-    throw new Error(`Edusky: login rejected at ${new URL(origin).host} (HTTP ${grant.status}, ${detail})`);
-  }
+  if (!accessToken) throw new Error(loginFailure(new URL(origin).host, grant));
   return accessToken;
 }
 
