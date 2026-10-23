@@ -27,6 +27,6 @@ describe("parseOrganizerAmount", () => {
   });
 
   it("throws when the page has no fee table", () => {
-    expect(() => parseOrganizerAmount("<p>Login</p>", "2025-01")).toThrow("fee table not found");
+    expect(() => parseOrganizerAmount("<p>Login</p>", "2025-01")).toThrow("fee list not found");
   });
 });

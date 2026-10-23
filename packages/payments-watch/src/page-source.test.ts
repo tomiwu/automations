@@ -56,6 +56,13 @@ describe("createWebFeeSource", () => {
     });
   });
 
+  it("picks the parser from the address of the page", async () => {
+    const edusky = readFileSync(new URL("./fixtures/edusky-fees.html", import.meta.url), "utf8");
+    const { source } = setup(() => new Response(edusky, { status: 200 }));
+    const found = await source.amountFor({ ...fee, amounts: {}, sourceUrl: "https://school.edusky.example.com/fees" }, "2025-01");
+    expect(found).toMatchObject({ amount: 21000, source: "page" });
+  });
+
   it("uses the config amount when the Fee has no page address", async () => {
     const { source, runtime } = setup(ok);
     const found = await source.amountFor({ ...fee, sourceUrl: null }, "2025-01");
