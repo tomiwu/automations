@@ -77,6 +77,12 @@ const en = {
   "chat.forward_failed": "The bot did not accept the message. Try again later.",
   "payment.new": "Payment for {child}: {organizer}, {month}, {amount} PLN, due {date}",
   "payment.reminder": "Reminder. Not paid yet for {child}: {organizer}, {month}, {amount} PLN, due {date}",
+  "payment.caption": "{child}: {organizer}, {month}\n{amount} PLN, due {date}\nAmount source: {source}",
+  "payment.amounts_differ": "The page shows {page} PLN. The config shows {config} PLN.",
+  "payment.source.page": "organizer page",
+  "payment.source.config": "config",
+  "payment.button.paid": "Paid",
+  "payment.button.skip": "Skip",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -159,6 +165,12 @@ const pl: Catalog = {
   "chat.forward_failed": "Bot nie przyjął wiadomości. Spróbuj później.",
   "payment.new": "Płatność dla {child}: {organizer}, {month}, {amount} PLN, termin {date}",
   "payment.reminder": "Przypomnienie. Brak wpłaty dla {child}: {organizer}, {month}, {amount} PLN, termin {date}",
+  "payment.caption": "{child}: {organizer}, {month}\n{amount} PLN, termin {date}\nŹródło kwoty: {source}",
+  "payment.amounts_differ": "Strona podaje {page} PLN. Konfiguracja podaje {config} PLN.",
+  "payment.source.page": "strona organizatora",
+  "payment.source.config": "konfiguracja",
+  "payment.button.paid": "Zapłacone",
+  "payment.button.skip": "Pomiń",
 };
 
 export const CATALOGS: Record<Language, Catalog> = { pl, en };
