@@ -3,7 +3,6 @@ import { t, type Config, type Language, type MessageKey, type Recipient } from "
 import type { TelegramClient } from "./notifier.ts";
 
 const PREFIX = "pay:";
-const ACTIONS = { paid: "paid", skip: "skipped" } as const;
 
 /** One button press, read from a Telegram `callback_query`. */
 export interface CallbackQuery {
@@ -21,7 +20,7 @@ export interface CallbackDeps {
   client: TelegramClient;
 }
 
-type Decision = (typeof ACTIONS)[keyof typeof ACTIONS];
+type Decision = "paid" | "skipped";
 
 interface Parsed {
   paymentId: string;
@@ -31,8 +30,9 @@ interface Parsed {
 const DATA_PATTERN = /^pay:([^:]+):(paid|skip)$/;
 
 function parse(data: string): Parsed | undefined {
-  const match = DATA_PATTERN.exec(data);
-  return match ? { paymentId: match[1] as string, decision: ACTIONS[match[2] as keyof typeof ACTIONS] } : undefined;
+  const [, paymentId, action] = DATA_PATTERN.exec(data) ?? [];
+  if (!paymentId || !action) return undefined;
+  return { paymentId, decision: action === "paid" ? "paid" : "skipped" };
 }
 
 async function answer(deps: CallbackDeps, query: CallbackQuery, language: Language, key: MessageKey): Promise<void> {
