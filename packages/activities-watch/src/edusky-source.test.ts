@@ -29,7 +29,7 @@ const calendarItems = [
 
 const happy: Record<string, Answer> = {
   [`GET ${ORIGIN}/core/web/external/baseconfig`]: { body: baseConfig },
-  [`POST ${ORIGIN}/core/web/oauth/v2/token`]: { body: JSON.stringify({ access_token: "tok" }) },
+  [`GET ${ORIGIN}/core/web/oauth/v2/token`]: { body: JSON.stringify({ access_token: "tok" }) },
   [`GET ${ORIGIN}/core/web/api/common/users/auth`]: { body: JSON.stringify({ id_userdata: 7 }) },
   [`GET ${ORIGIN}/core/web/api/ext/calendaritemslist`]: { body: JSON.stringify(calendarItems) },
 };
@@ -61,9 +61,11 @@ describe("createEduskySource", () => {
   it("logs in with the secret values and reads the calendar of the window", async () => {
     const { source, runtime } = setup(happy);
     await source.sessions();
-    const login = runtime.requests.find((r) => r.init?.method === "POST");
-    expect(login?.init?.body).toBe(
-      "grant_type=password&client_id=cid&client_secret=client-secret&username=login-two&password=password%26two",
+    const login = runtime.requests.find((r) => r.input.includes("/oauth/v2/token"));
+    expect(login?.init?.method ?? "GET").toBe("GET");
+    expect(login?.init?.body).toBeUndefined();
+    expect(login?.input).toBe(
+      `${ORIGIN}/core/web/oauth/v2/token?grant_type=password&client_id=cid&client_secret=client-secret&username=login-two&password=password%26two`,
     );
     const list = runtime.requests.find((r) => r.input.includes("calendaritemslist"));
     expect(list?.input).toBe(`${ORIGIN}/core/web/api/ext/calendaritemslist?idParent=7&dateFrom=2026-10-20&dateTo=2026-11-03`);
@@ -71,24 +73,30 @@ describe("createEduskySource", () => {
   });
 
   it("rejects a login that the organizer rejects", async () => {
-    const { source } = setup({ ...happy, [`POST ${ORIGIN}/core/web/oauth/v2/token`]: { status: 400, body: '{"error":"invalid_request"}' } });
+    const { source } = setup({ ...happy, [`GET ${ORIGIN}/core/web/oauth/v2/token`]: { status: 400, body: '{"error":"invalid_request"}' } });
     await expect(source.sessions()).rejects.toThrow(/login rejected/);
+  });
+
+  it("names the Cloudflare challenge when the token endpoint is blocked", async () => {
+    const body = "<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>";
+    const { source } = setup({ ...happy, [`GET ${ORIGIN}/core/web/oauth/v2/token`]: { status: 403, body } });
+    await expect(source.sessions()).rejects.toThrow(/blocked by the Cloudflare challenge .* \(HTTP 403\)/);
   });
 
   it("names the OAuth2 error code: invalid_grant is the user login", async () => {
     const body = '{"error":"invalid_grant","error_description":"The user credentials were incorrect."}';
-    const { source } = setup({ ...happy, [`POST ${ORIGIN}/core/web/oauth/v2/token`]: { status: 400, body } });
+    const { source } = setup({ ...happy, [`GET ${ORIGIN}/core/web/oauth/v2/token`]: { status: 400, body } });
     await expect(source.sessions()).rejects.toThrow(/HTTP 400, invalid_grant: wrong user name or password/);
   });
 
   it("names the OAuth2 error code: invalid_client is the client secret", async () => {
     const body = '{"error":"invalid_client","error_description":"Client authentication failed"}';
-    const { source } = setup({ ...happy, [`POST ${ORIGIN}/core/web/oauth/v2/token`]: { status: 400, body } });
+    const { source } = setup({ ...happy, [`GET ${ORIGIN}/core/web/oauth/v2/token`]: { status: 400, body } });
     await expect(source.sessions()).rejects.toThrow(/invalid_client: wrong EDUSKY_CLIENT_SECRET/);
   });
 
   it("rejects a login answer that is not JSON", async () => {
-    const { source } = setup({ ...happy, [`POST ${ORIGIN}/core/web/oauth/v2/token`]: { body: "<html>" } });
+    const { source } = setup({ ...happy, [`GET ${ORIGIN}/core/web/oauth/v2/token`]: { body: "<html>" } });
     await expect(source.sessions()).rejects.toThrow(/login rejected/);
   });
 
