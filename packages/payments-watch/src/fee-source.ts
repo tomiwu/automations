@@ -8,6 +8,8 @@ export interface FeeAmount {
   /** Amount in grosze. */
   amount: number;
   source: AmountSource;
+  /** The config amount, when the amount comes from the page and the config has a different amount. */
+  configAmount?: number;
 }
 
 export interface FeeSource {

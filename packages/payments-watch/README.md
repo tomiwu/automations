@@ -16,6 +16,11 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - A `FeeSource` has `amountFor(fee, month)`. It gives `{ feeId, month, amount, source }` or `undefined`.
 - `createConfigFeeSource` gives the `amounts` value of the Fee for the month, with `source: "config"`. It gives `undefined` when the month has no amount. The engine ignores an amount of 0.
 
+- `parseOrganizerAmount(html, month)` reads the amount in grosze from the fee table of an Organizer page (`table.fees`, one `tr[data-month="YYYY-MM"]` with a `.amount` cell). It gives `undefined` for a month with no amount. It throws when the page has no fee table.
+- `createWebFeeSource` is the page source. A Fee with a `sourceUrl` gets one GET of that page with `Runtime.fetch`. The page amount wins (`source: "page"`). When the config has a different amount, it stays in `configAmount`.
+- A Fee without a `sourceUrl`, a page without the month, or a failed page gives the config amount. A failed page also queues one failure Notification a day for each Recipient of the Child (`failure:<fee id>:<day>:<chat id>`).
+- `./scheduled` uses the page source.
+
 ## Payment engine
 
 - `runPayments` reads the Family config, the Fees and a `FeeSource`. It uses the day and month in the Family time zone.
