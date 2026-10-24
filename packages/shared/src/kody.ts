@@ -67,11 +67,13 @@ export interface DeploymentConfig {
   familyId: string;
   /** Base64 AES-256 key that decrypts the service credentials in Supabase. Never returned by an export. */
   credentialKey: string;
+  /** Hours between two fetches of one ActiveNow Account. Optional; the default is 24. */
+  activenowCacheHours?: number;
 }
 
 export const DEPLOYMENT_CONFIG_KEY = "deployment-config";
 
-const CONFIG_KEYS = new Set(["supabaseUrl", "familyId", "credentialKey"]);
+const CONFIG_KEYS = new Set(["supabaseUrl", "familyId", "credentialKey", "activenowCacheHours"]);
 
 function configObject(raw: unknown): Record<string, unknown> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("The config must be an object.");
@@ -100,6 +102,17 @@ function idOf(value: unknown): string {
   return value;
 }
 
+const MAX_CACHE_HOURS = 720;
+
+function hoursOf(value: unknown): { activenowCacheHours?: number } {
+  if (value === undefined) return {};
+  const valid = typeof value === "number" && value > 0 && value <= MAX_CACHE_HOURS;
+  if (!valid) {
+    throw new Error("activenowCacheHours must be a number of hours above 0 and at most 720.");
+  }
+  return { activenowCacheHours: value };
+}
+
 /** Validates a deployment config. Unknown keys are rejected. */
 export function parseDeploymentConfig(raw: unknown): DeploymentConfig {
   const config = configObject(raw);
@@ -107,6 +120,7 @@ export function parseDeploymentConfig(raw: unknown): DeploymentConfig {
     supabaseUrl: projectUrl(config.supabaseUrl),
     familyId: idOf(config.familyId),
     credentialKey: keyOf(config.credentialKey),
+    ...hoursOf(config.activenowCacheHours),
   };
 }
 

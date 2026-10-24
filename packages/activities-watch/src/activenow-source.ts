@@ -6,10 +6,11 @@
 import * as cheerio from "cheerio";
 import { localDate, type Runtime } from "@automations/shared";
 import { parseActiveNowEvents } from "./activenow-parse.ts";
+import { ACTIVENOW_CACHE_TTL_MS, goodEntry, isFresh, keptEntry, loadEntry, nextFetchAt, saveEntry, type CacheEntry, type CacheStore } from "./activenow-cache.ts";
 import { toSession } from "./activenow-sessions.ts";
 import { createHttp, formBody, type Http, type HttpResult, type RequestOptions } from "./http.ts";
 import { inWindow, type Session } from "./sessions.ts";
-import { firstActivity, type ActivityTarget, type SessionSource } from "./targets.ts";
+import { firstActivity, type ActivityTarget, type SessionSource, type SourceReading } from "./targets.ts";
 
 interface Login {
   login: string;
@@ -73,24 +74,100 @@ async function allLessons(http: Http, target: ActivityTarget, secrets: Login): P
   return page.text;
 }
 
+export interface ActiveNowOptions {
+  /** Keeps the Sessions between runs. Without it every read fetches from ActiveNow. */
+  store?: CacheStore;
+  /** Time between two fetches of one Account. */
+  ttlMs?: number;
+}
+
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+async function fetchSessions(runtime: Runtime, target: ActivityTarget, timezone: string): Promise<Session[]> {
+  const activity = firstActivity(target);
+  const secrets = {
+    login: await runtime.secret(target.account.login_secret),
+    password: await runtime.secret(target.account.password_secret),
+  };
+  const html = await allLessons(createHttp(runtime), target, secrets);
+  return windowed(parseActiveNowEvents(html).map((event) => toSession(event, target.child, activity)), runtime, timezone);
+}
+
+function windowed(sessions: Session[], runtime: Runtime, timezone: string): Session[] {
+  const today = localDate(runtime.now(), timezone);
+  return sessions.filter((session) => inWindow(session, today)).sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** Gives the cached Sessions that still are in the window, with the error of the last attempt. */
+function fromCache(runtime: Runtime, timezone: string, entry: CacheEntry | undefined, error?: string): SourceReading {
+  const reading: SourceReading = {
+    sessions: windowed(entry?.sessions ?? [], runtime, timezone),
+    cached: entry !== undefined && entry.fetchedAt !== null,
+    fetchedAt: entry?.fetchedAt ?? null,
+  };
+  return error === undefined ? reading : { ...reading, error };
+}
+
+async function attempt(
+  runtime: Runtime,
+  target: ActivityTarget,
+  timezone: string,
+  previous: CacheEntry | undefined,
+): Promise<{ entry: CacheEntry; reading: SourceReading }> {
+  const now = runtime.now();
+  try {
+    const sessions = await fetchSessions(runtime, target, timezone);
+    if (sessions.length === 0) {
+      const entry = keptEntry(previous, now, null);
+      return { entry, reading: fromCache(runtime, timezone, entry) };
+    }
+    const entry = goodEntry(now, sessions);
+    return { entry, reading: { sessions, cached: false, fetchedAt: entry.fetchedAt } };
+  } catch (error) {
+    const message = messageOf(error);
+    const entry = keptEntry(previous, now, message);
+    return { entry, reading: fromCache(runtime, timezone, entry, message) };
+  }
+}
+
+function logLine(runtime: Runtime, entry: CacheEntry, ttlMs: number, fetched: boolean): void {
+  const next = nextFetchAt(entry, ttlMs).toISOString();
+  if (!fetched) runtime.log("info", `activenow: cached (next fetch after ${next})`);
+  else runtime.log("info", entry.error === null ? "activenow: fetched" : `activenow: fetch failed (next fetch after ${next})`);
+}
+
 /**
  * Reads the Sessions of one ActiveNow Account for the next 14 days. The `group` of the Account is the
- * name of the profile of the Child when one login serves several Children.
+ * name of the profile of the Child when one login serves several Children. With a store, ActiveNow is
+ * fetched at most once in the TTL for the Account, counted from the last attempt. A failed or empty fetch
+ * keeps the last good Sessions.
  */
-export function createActiveNowSource(runtime: Runtime, target: ActivityTarget, timezone: string): SessionSource {
+export function createActiveNowSource(
+  runtime: Runtime,
+  target: ActivityTarget,
+  timezone: string,
+  options: ActiveNowOptions = {},
+): SessionSource {
+  const ttlMs = options.ttlMs ?? ACTIVENOW_CACHE_TTL_MS;
+  const { store } = options;
+  async function read(): Promise<SourceReading> {
+    if (!store) return (await attempt(runtime, target, timezone, undefined)).reading;
+    const previous = await loadEntry(store, target.account.id);
+    if (previous && isFresh(previous, runtime.now(), ttlMs)) {
+      logLine(runtime, previous, ttlMs, false);
+      return fromCache(runtime, timezone, previous, previous.error ?? undefined);
+    }
+    const { entry, reading } = await attempt(runtime, target, timezone, previous);
+    await saveEntry(store, target.account.id, entry);
+    logLine(runtime, entry, ttlMs, true);
+    return reading;
+  }
   return {
+    read,
     async sessions(): Promise<Session[]> {
-      const activity = firstActivity(target);
-      const secrets = {
-        login: await runtime.secret(target.account.login_secret),
-        password: await runtime.secret(target.account.password_secret),
-      };
-      const html = await allLessons(createHttp(runtime), target, secrets);
-      const today = localDate(runtime.now(), timezone);
-      return parseActiveNowEvents(html)
-        .map((event) => toSession(event, target.child, activity))
-        .filter((session) => inWindow(session, today))
-        .sort((a, b) => a.start.localeCompare(b.start));
+      const reading = await read();
+      if (reading.error !== undefined) throw new Error(reading.error);
+      return reading.sessions;
     },
   };
 }

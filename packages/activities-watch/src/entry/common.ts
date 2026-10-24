@@ -19,9 +19,10 @@ export const telegramMessenger: Messenger = {
  * encrypted rows in Supabase; `runtime.secret(name)` decrypts them.
  */
 export async function entryDeps() {
-  const { supabaseUrl, familyId, credentialKey } = await loadDeploymentConfig(kodyStorage());
+  const { supabaseUrl, familyId, credentialKey, activenowCacheHours } = await loadDeploymentConfig(kodyStorage());
   const supabase = { url: supabaseUrl, key: SUPABASE_KEY_PLACEHOLDER, fetch: kodyHost.fetch };
   const resolve = createCredentialResolver(createSupabaseCredentialStore(supabase), await importCredentialKey(credentialKey), familyId);
   const runtime = createKodyRuntime(kodyHost, resolve);
-  return { runtime, storage: createSupabaseStorage(supabase), familyId };
+  const activeNow = { store: kodyStorage(), ...(activenowCacheHours === undefined ? {} : { ttlMs: activenowCacheHours * 3_600_000 }) };
+  return { runtime, storage: createSupabaseStorage(supabase), familyId, activeNow };
 }
