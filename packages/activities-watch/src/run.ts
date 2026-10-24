@@ -1,6 +1,7 @@
 import { localDate, t, type Config, type Runtime } from "@automations/shared";
 import type { StorageAdapter } from "@automations/librus-data";
 import { deliverPending, type Messenger } from "@tomiwu/librus-watch";
+import type { ActiveNowOptions } from "./activenow-source.ts";
 import { runWatcher } from "./engine.ts";
 import { createSource, type CreateSource } from "./source.ts";
 import { activityTargets, type ActivityTarget } from "./targets.ts";
@@ -14,6 +15,8 @@ export interface RunDeps {
   familyId: string;
   /** Makes the source of one Account. The default reads the app. The tests replace it. */
   createSource?: CreateSource;
+  /** The cache of the ActiveNow Sessions. */
+  activeNow?: ActiveNowOptions;
 }
 
 /** Returns the scope of the Items of one Account. */
@@ -43,7 +46,7 @@ async function notifyFailure(deps: RunDeps, target: ActivityTarget, message: str
 async function runTarget(deps: RunDeps, config: Config, target: ActivityTarget): Promise<string | undefined> {
   const { runtime } = deps;
   const timezone = config.family.timezone;
-  const source = (deps.createSource ?? createSource(runtime))(target, timezone);
+  const source = (deps.createSource ?? createSource(runtime, deps.activeNow))(target, timezone);
   try {
     await runWatcher({
       familyId: deps.familyId,

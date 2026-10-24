@@ -65,6 +65,14 @@ describe("deployment config", () => {
     await expect(loadDeploymentConfig({ get: async () => config, set: async () => undefined })).resolves.toEqual(config);
   });
 
+  it("accepts the optional ActiveNow cache hours", () => {
+    expect(parseDeploymentConfig({ ...config, activenowCacheHours: 12 }).activenowCacheHours).toBe(12);
+    expect(parseDeploymentConfig(config)).not.toHaveProperty("activenowCacheHours");
+    for (const bad of [0, -1, 721, "12", Number.NaN]) {
+      expect(() => parseDeploymentConfig({ ...config, activenowCacheHours: bad })).toThrow("activenowCacheHours");
+    }
+  });
+
   it("rejects bad input", () => {
     expect(() => parseDeploymentConfig(null)).toThrow("object");
     expect(() => parseDeploymentConfig([])).toThrow("object");

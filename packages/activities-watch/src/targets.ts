@@ -51,10 +51,24 @@ export function activityTargets(config: Config): { targets: ActivityTarget[]; er
   return { targets, errors };
 }
 
-/** Reads the Sessions of one Account. It rejects when the login or a page fails. */
-export interface SessionSource {
+/** What one read of an Account gives. */
+export interface SourceReading {
   /** The Sessions for the next 14 days, ordered by start. */
+  sessions: Session[];
+  /** True when the Sessions come from the cache and not from the app. */
+  cached: boolean;
+  /** ISO time of the fetch that made the Sessions, or null when there was none. */
+  fetchedAt: string | null;
+  /** The error of the last fetch. The Sessions are then the cached ones. */
+  error?: string;
+}
+
+/** Reads the Sessions of one Account. */
+export interface SessionSource {
+  /** The Sessions for the next 14 days, ordered by start. It rejects when the login or a page fails. */
   sessions(): Promise<Session[]>;
+  /** Like `sessions`, but a failed fetch gives the cached Sessions and the error, and tells if they are cached. */
+  read?(): Promise<SourceReading>;
 }
 
 /** Returns the Activity that names the Sessions of the Account. An Account needs one enabled Activity. */
