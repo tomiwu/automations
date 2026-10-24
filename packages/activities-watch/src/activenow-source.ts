@@ -7,7 +7,7 @@ import * as cheerio from "cheerio";
 import { localDate, type Runtime } from "@automations/shared";
 import { parseActiveNowEvents } from "./activenow-parse.ts";
 import { toSession } from "./activenow-sessions.ts";
-import { createHttp, formBody, type Http } from "./http.ts";
+import { createHttp, formBody, type Http, type HttpResult, type RequestOptions } from "./http.ts";
 import { inWindow, type Session } from "./sessions.ts";
 import { firstActivity, type ActivityTarget, type SessionSource } from "./targets.ts";
 
@@ -18,11 +18,28 @@ interface Login {
 
 const loginRejected = (html: string): boolean => html.includes('name="user[password]"');
 
+const blockPage = (text: string): boolean => /Dostęp zablokowany|tymczasowo zablokowany/.test(text);
+
+/**
+ * Sends one request and checks its status. A 403 block page means ActiveNow blocks the network for about an
+ * hour. The error ends the read of the Account, so no request is repeated: a retry makes the block longer.
+ */
+async function checked(http: Http, url: string, init?: RequestOptions): Promise<HttpResult> {
+  const result = await http.request(url, init);
+  if (result.status >= 200 && result.status < 400) return result;
+  if (result.status === 403 && blockPage(result.text)) {
+    throw new Error(
+      "ActiveNow: HTTP 403, access temporarily blocked by ActiveNow (from the Kody network; clears within about 1 hour)",
+    );
+  }
+  throw new Error(`ActiveNow: HTTP ${result.status} from ${new URL(url).pathname}`);
+}
+
 async function login(http: Http, origin: string, secrets: Login): Promise<string> {
-  const form = await http.request(`${origin}/users/sign_in`);
+  const form = await checked(http, `${origin}/users/sign_in`);
   const token = cheerio.load(form.text)("input[name=authenticity_token]").attr("value");
   if (!token) throw new Error("ActiveNow: login form not found (site changed?)");
-  const after = await http.request(`${origin}/users/sign_in`, {
+  const after = await checked(http, `${origin}/users/sign_in`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", referer: `${origin}/users/sign_in` },
     body: formBody({ authenticity_token: token, "user[email]": secrets.login, "user[password]": secrets.password }),
@@ -39,7 +56,7 @@ async function chooseProfile(http: Http, origin: string, html: string, profile: 
   const link = links.find((a) => profile !== null && $(a).text().includes(profile));
   if (!link) throw new Error("ActiveNow: profile of the Child not found (name changed?)");
   const token = $("meta[name=csrf-token]").attr("content") ?? "";
-  await http.request(new URL($(link).attr("href") ?? "", origin).toString(), {
+  await checked(http, new URL($(link).attr("href") ?? "", origin).toString(), {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", "x-csrf-token": token },
     body: formBody({ authenticity_token: token }),
@@ -49,12 +66,10 @@ async function chooseProfile(http: Http, origin: string, html: string, profile: 
 async function allLessons(http: Http, target: ActivityTarget, secrets: Login): Promise<string> {
   const { origin, group } = target.account;
   await chooseProfile(http, origin, await login(http, origin, secrets), group);
-  const page = await http.request(`${origin}/client_panel/all_events/events?around_now=true`, {
+  const page = await checked(http, `${origin}/client_panel/all_events/events?around_now=true`, {
     headers: { "x-requested-with": "XMLHttpRequest" },
   });
-  if (page.status !== 200 || loginRejected(page.text)) {
-    throw new Error(`ActiveNow: lessons page not available (HTTP ${page.status})`);
-  }
+  if (loginRejected(page.text)) throw new Error("ActiveNow: lessons page not available (login lost)");
   return page.text;
 }
 

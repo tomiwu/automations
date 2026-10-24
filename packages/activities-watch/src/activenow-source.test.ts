@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fakeRuntime } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import { createActiveNowSource } from "./activenow-source.ts";
@@ -15,6 +16,13 @@ const LESSONS =
     card({ date: "27 października, wtorek" }),
     card({ date: "6 października, wtorek" }),
   ) + month("2026-12", card({ date: "1 grudnia, wtorek" }));
+
+const fixture = (name: string): string => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
+const BLOCKED = fixture("activenow-blocked.html");
+const FORBIDDEN = fixture("activenow-forbidden.txt");
+const NO_TOKEN = fixture("activenow-no-token.html");
+const BLOCK_MESSAGE =
+  "ActiveNow: HTTP 403, access temporarily blocked by ActiveNow (from the Kody network; clears within about 1 hour)";
 
 type Answer = { status?: number; location?: string; body?: string; cookie?: string };
 
@@ -74,8 +82,34 @@ describe("createActiveNowSource", () => {
   });
 
   it("reports a login page without a token as a changed site", async () => {
-    const { source } = setup({ ...happy, "GET /users/sign_in": { body: "<html></html>" } });
+    const { source } = setup({ ...happy, "GET /users/sign_in": { body: NO_TOKEN } });
     await expect(source.sessions()).rejects.toThrow(/login form not found/);
+  });
+
+  it("reports the ActiveNow block page as a temporary block and sends no second request", async () => {
+    const { source, runtime } = setup({ ...happy, "GET /users/sign_in": { status: 403, body: BLOCKED } });
+    await expect(source.sessions()).rejects.toThrow(BLOCK_MESSAGE);
+    expect(runtime.requests).toHaveLength(1);
+  });
+
+  it("reports a block page at the login POST", async () => {
+    const { source } = setup({ ...happy, "POST /users/sign_in": { status: 403, body: BLOCKED } });
+    await expect(source.sessions()).rejects.toThrow(BLOCK_MESSAGE);
+  });
+
+  it("reports a plain Forbidden 403 with the status and the path", async () => {
+    const { source } = setup({ ...happy, "GET /users/sign_in": { status: 403, body: FORBIDDEN } });
+    await expect(source.sessions()).rejects.toThrow("ActiveNow: HTTP 403 from /users/sign_in");
+  });
+
+  it("reports another failing status of the login page with the path, not as a changed site", async () => {
+    const { source } = setup({ ...happy, "GET /users/sign_in": { status: 503, body: NO_TOKEN } });
+    await expect(source.sessions()).rejects.toThrow("ActiveNow: HTTP 503 from /users/sign_in");
+  });
+
+  it("reports a failing profile request with its path", async () => {
+    const { source } = setup({ ...happy, "POST /role_selector/change_role": { status: 500 } });
+    await expect(source.sessions()).rejects.toThrow("ActiveNow: HTTP 500 from /role_selector/change_role");
   });
 
   it("reports a login that has no profile of the Child", async () => {
@@ -91,7 +125,7 @@ describe("createActiveNowSource", () => {
 
   it("reports a lessons page that fails with its status", async () => {
     const { source } = setup({ ...happy, "GET /client_panel/all_events/events": { status: 500 } });
-    await expect(source.sessions()).rejects.toThrow(/HTTP 500/);
+    await expect(source.sessions()).rejects.toThrow("ActiveNow: HTTP 500 from /client_panel/all_events/events");
   });
 
   it("stops a redirect loop", async () => {

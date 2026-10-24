@@ -16,6 +16,7 @@ The ActiveNow, Edusky and Mondo Watchers, the `sessions` export, the after-schoo
 - The Items of one Account have the scope `<service>:<account id>`. The first run of a scope is a silent Baseline. The record `__baseline__` marks a scope as baselined, also when the app gave no Session.
 - The Item ID is `<activity id>:<day before any move>:<start time>`, with a hash of status, time and place. Only an updated Item that is now `cancelled` or `moved` queues a Notification, for each Recipient that has the Child in `child_ids`. The text comes from the pl/en catalogs in the language of the Recipient. The Outbox key is `<scope>:<item>:<chat id>`.
 - A change that starts in 24 hours or less gets the prefix of `session.urgent`.
+- ActiveNow checks the status of every response. A 403 with the block page gives the error `access temporarily blocked by ActiveNow`. Any other failing status gives `HTTP <status> from <path>`. "login form not found" means status 200 without a token. A Watcher never retries a request: a retry after a 403 makes the block longer.
 - A failed Account queues one failure Notification a day for each Recipient of the Child (`failure:<account id>:<day>:<chat id>`).
 - At the end, `deliverPending` of `@tomiwu/librus-watch` sends the Outbox through the `Messenger` port.
 - Each run reads the config, so each run is also the keepalive read of Supabase.
