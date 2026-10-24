@@ -124,8 +124,9 @@ async function attempt(
     const entry = goodEntry(now, sessions);
     return { entry, reading: { sessions, cached: false, fetchedAt: entry.fetchedAt } };
   } catch (error) {
-    const entry = keptEntry(previous, now, messageOf(error));
-    return { entry, reading: fromCache(runtime, timezone, entry, messageOf(error)) };
+    const message = messageOf(error);
+    const entry = keptEntry(previous, now, message);
+    return { entry, reading: fromCache(runtime, timezone, entry, message) };
   }
 }
 
