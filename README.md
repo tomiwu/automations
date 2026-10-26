@@ -4,6 +4,8 @@ Generic watchers for school and after-school activity apps. The watchers find ne
 
 The code runs on the [Kody](https://kody.codes) platform first. A runtime interface lets plain Node run it later.
 
+Start here: [system overview](docs/overview.md).
+
 ## Packages
 
 | Path | Purpose |
