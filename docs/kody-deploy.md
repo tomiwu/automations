@@ -1,5 +1,7 @@
 # Deploy on Kody
 
+For the big picture, see `docs/overview.md`.
+
 Do the steps in `docs/supabase-setup.md` first.
 
 ## Packages
