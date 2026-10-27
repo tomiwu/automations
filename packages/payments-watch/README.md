@@ -51,7 +51,7 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 ## Entry files and Kody job
 
 - `runPaymentsWatch` runs the Payment engine with a `FeeSource`, then delivers the Outbox to the Recipients. It gives the failure texts.
-- `./scheduled` (`src/entry/scheduled.ts`) is the job `scheduled-check`. It runs once a day at 08:00. The time zone of the schedule must be the time zone of the Family. It takes no input and rejects when a step failed.
+- `./scheduled` (`src/entry/scheduled.ts`) is the job `scheduled-check`. It runs once a day at 08:00 UTC (cron is in UTC). It takes no input and rejects when a step failed.
 - `./configure` (`src/entry/configure.ts`) takes `{ supabaseUrl, familyId, credentialKey }`. Only the owner calls it.
 - Only the entry files import the Kody runtime. The only Kody secret is `SUPABASE_KEY`. The delivery uses `TELEGRAM_BOT_TOKEN` through `@tomiwu/telegram`.
 

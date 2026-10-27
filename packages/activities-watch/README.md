@@ -45,4 +45,4 @@ The secret `EDUSKY_CLIENT_SECRET` holds the client secret that the Edusky web ap
 ## Not verified
 
 `UNVERIFIED`: no move was seen in a live Mondo account, and no cancellation or move in a live ActiveNow or Edusky account. Check the status rules on the first real cancellation and move.
-The schedule is in `package.json` (`kody.jobs`). Its time zone must be the time zone of the Family.
+The schedule is in `package.json` (`kody.jobs`). Cron is in UTC: `30 4,12 * * *` (04:30 and 12:30 UTC).

@@ -12,8 +12,8 @@ import type { StorageAdapter } from "@automations/librus-data";
 import { upcoming, type ChildRef, type Upcoming, type UpcomingEntry } from "./upcoming.ts";
 import type { LibrusSource } from "./types.ts";
 
-/** Local hour of the scheduled run that also sends the Morning report, Monday to Friday. */
-export const MORNING_REPORT_HOUR = 7;
+/** UTC hour of the scheduled run (cron `30 4,12 * * *`) that also sends the Morning report, Monday to Friday. */
+export const MORNING_REPORT_UTC_HOUR = 4;
 /** Days after today that the report lists. */
 const WEEK_DAYS = 8;
 const CONTENT_LIMIT = 200;
@@ -82,10 +82,10 @@ export function formatMorningReport(language: Language, childName: string, today
   return parts.join("\n\n");
 }
 
-/** Returns true when the local time is a weekday at the hour of the report. */
+/** Returns true when the UTC hour is the hour of the report and the local day is a weekday. */
 export function isMorningReportRun(date: Date, timezone: string): boolean {
-  const { weekday, hour } = zonedParts(date, timezone);
-  return weekday <= 5 && hour === MORNING_REPORT_HOUR;
+  const { weekday } = zonedParts(date, timezone);
+  return weekday <= 5 && date.getUTCHours() === MORNING_REPORT_UTC_HOUR;
 }
 
 export interface MorningReportDeps {

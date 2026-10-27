@@ -9,7 +9,7 @@ function setup(mutate: (config: ReturnType<typeof testConfig>) => void = () => {
   const config = testConfig();
   mutate(config);
   const storage = createMemoryStorage({ configs: [config] });
-  const runtime = fakeRuntime({ now: new Date("2026-01-05T07:10:00Z") });
+  const runtime = fakeRuntime({ now: new Date("2026-01-05T04:30:00Z") });
   const source = fakeSource();
   const sent: string[] = [];
   const messenger: Messenger = {
@@ -61,7 +61,7 @@ describe("runLibrusWatch", () => {
 
   it("reports a failed Watcher, sends one failure Notification a day and still delivers the rest", async () => {
     const { deps, source, sent, runtime } = setup();
-    runtime.setNow(new Date("2026-01-05T18:00:00Z"));
+    runtime.setNow(new Date("2026-01-05T12:30:00Z"));
     const original = source.currentItems;
     source.currentItems = async (watcher, since) => {
       if (watcher === "grades") throw new Error("Librus: no access");
@@ -78,7 +78,7 @@ describe("runLibrusWatch", () => {
 
   it("sends a login error text when the login is rejected", async () => {
     const { deps, source, sent, runtime } = setup();
-    runtime.setNow(new Date("2026-01-05T18:00:00Z"));
+    runtime.setNow(new Date("2026-01-05T12:30:00Z"));
     source.currentItems = async () => {
       throw new Error("Librus: login rejected (check credentials)");
     };

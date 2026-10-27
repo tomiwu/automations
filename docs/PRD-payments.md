@@ -98,7 +98,7 @@ docs/adr/0005-payments-qr-not-pay.md    why the bot never pays
 
 ### Part G: deploy on Kody
 
-1. `package.json` `kody.jobs`: `scheduled-check` once a day (for example `0 8 * * *`). The time zone must be the Family time zone.
+1. `package.json` `kody.jobs`: `scheduled-check` once a day (for example `0 8 * * *`). Kody reads the cron in UTC, not in the Family time zone.
 2. `./configure` takes `{ supabaseUrl, familyId, credentialKey }`. The dashboard also needs `allowlist`.
 3. The CI deploy workflow stages and checks the new package as for the other packages.
 
