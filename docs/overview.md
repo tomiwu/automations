@@ -61,15 +61,22 @@ A database leak alone gives only ciphertext. A package config leak alone gives a
 
 | Package / job | Cron (`package.json`) | What it does |
 | --- | --- | --- |
-| librus-watch `scheduled-check` | `0 7,18 * * *` | New Librus items to Telegram |
+| librus-watch `scheduled-check` | `30 4,12 * * *` | New Librus items to Telegram |
 | librus-watch `daily-purge` | `30 3 * * *` | Removes old stored items |
-| activities-watch `scheduled-check` | `0 7,18 * * *` | Cancelled or moved after-school classes to Telegram |
+| activities-watch `scheduled-check` | `30 4,12 * * *` | Cancelled or moved after-school classes to Telegram |
 | payments-watch `scheduled-check` | `0 8 * * *` | Due fees to Telegram with a ZBP QR code |
 | payments-watch webhook `telegram-update` | Owner taps Paid / Skip | Marks the fee in Supabase |
 | payments-watch app (dashboard) | Owner opens it and logs in | Shows fees and payments |
 | kradziejka webhooks `telegram-update`, `reply`, `register` | Incoming messages | Routes allowlisted chats to bots. No timed jobs |
 
-The cron expressions have no time zone in `package.json`. `docs/kody-deploy.md` says the schedule time zone must be the Family time zone (Europe/Warsaw), and lists 07:00/18:00, 03:30 and 08:00. Whether Kody runs these crons in UTC or in the Family zone: **to confirm**.
+Kody reads the cron expressions in UTC. The jobs set no cron time zone. The table shows the local time in Warsaw:
+
+| Cron (UTC) | Warsaw, winter (UTC+1) | Warsaw, summer (UTC+2) | Job |
+| --- | --- | --- | --- |
+| 04:30 | 05:30 | 06:30 | librus-watch and activities-watch, morning run |
+| 12:30 | 13:30 | 14:30 | librus-watch and activities-watch, afternoon run |
+| 08:00 | 09:00 | 10:00 | payments-watch |
+| 03:30 | 04:30 | 05:30 | librus-watch `daily-purge` |
 
 ## 6. How results get back to the assistant and into Google Calendar
 
@@ -114,5 +121,4 @@ Routines only read from Kody. The Owner hears only about changes or failures. Th
 | --- | --- |
 | Telegram webhook for payments buttons (mint `telegram-update` and `setWebhook`) | **to confirm** |
 | Allow `SUPABASE_KEY` for payments-watch (dashboard) | **to confirm** |
-| Cron time zone on Kody (UTC or Europe/Warsaw). Payments time is 08:00 in the repo, 10:00 expected | **to confirm** |
 | Legacy Kody secrets to delete (Owner) | open |

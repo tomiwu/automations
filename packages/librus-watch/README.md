@@ -11,7 +11,7 @@ The Librus Watcher, the `lessons` and `upcoming` exports, and the Morning report
 - The Items of one Child at one Watcher have the scope `<watcher>:<child id>`. The first run of a scope is a silent Baseline. The record `__baseline__` marks a scope as baselined, also when Librus gave no Item.
 - A new or updated Item queues one Notification for each Recipient that has the Child in `child_ids`. The text is rendered from the pl/en catalogs in the language of the Recipient. The Outbox key is `<watcher>:<child id>:<item>:<chat id>`.
 - A failed Watcher queues one failure Notification a day for each Recipient of the Child. The other Watchers still run.
-- On weekdays at 07:00 local time the run also queues the Morning report (`report:<child id>:<day>:<chat id>`). The optional port `afterSchool` adds the after-school section.
+- On weekdays the 04:30 UTC run also queues the Morning report (`report:<child id>:<day>:<chat id>`). The optional port `afterSchool` adds the after-school section.
 - At the end, `deliverPending` sends the Outbox through the `Messenger` port. A failed chat does not block the other chats.
 - Each run reads the config, so each run is also the keepalive read of Supabase (`loadConfig` reads the `families` table). The runs are at least twice a day.
 
@@ -33,7 +33,7 @@ The Supabase URL and the Family ID are plain config set with `./configure` (`{ s
 ## Not in this package
 
 The Telegram bot commands (`/librus_*`), the pause state and the `grades` and `messages` exports are not ported.
-The schedule is in `package.json` (`kody.jobs`). Its time zone must be the time zone of the Family.
+The schedule is in `package.json` (`kody.jobs`). Cron is in UTC: `scheduled-check` runs at 04:30 and 12:30 UTC, `daily-purge` at 03:30 UTC.
 
 ## Telegram update router
 

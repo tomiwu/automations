@@ -33,7 +33,7 @@
         "entry": "./src/entry/scheduled.ts",
         "schedule": {
           "type": "cron",
-          "expression": "0 7,18 * * *"
+          "expression": "30 4,12 * * *"
         }
       },
       "daily-purge": {

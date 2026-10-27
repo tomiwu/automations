@@ -5,9 +5,9 @@ import { CHILD1, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtur
 import { upcoming } from "./upcoming.ts";
 
 const child = { id: CHILD1, name: "Child One" };
-const MONDAY_7 = new Date("2026-01-05T07:10:00Z");
+const MONDAY_0430Z = new Date("2026-01-05T04:30:00Z");
 
-function setup(now = MONDAY_7) {
+function setup(now = MONDAY_0430Z) {
   const config = testConfig();
   const storage = createMemoryStorage();
   const source = fakeSource();
@@ -64,11 +64,16 @@ describe("formatMorningReport", () => {
 });
 
 describe("isMorningReportRun", () => {
-  it("is true on a weekday at 07:00 local time only", () => {
-    expect(isMorningReportRun(MONDAY_7, "UTC")).toBe(true);
-    expect(isMorningReportRun(new Date("2026-01-05T18:00:00Z"), "UTC")).toBe(false);
-    expect(isMorningReportRun(new Date("2026-01-10T07:00:00Z"), "UTC")).toBe(false);
-    expect(isMorningReportRun(MONDAY_7, "America/New_York")).toBe(false);
+  it("is true on a weekday at 04:00 UTC hour only", () => {
+    expect(isMorningReportRun(MONDAY_0430Z, "UTC")).toBe(true);
+    expect(isMorningReportRun(new Date("2026-01-05T12:30:00Z"), "UTC")).toBe(false);
+    expect(isMorningReportRun(new Date("2026-01-10T04:30:00Z"), "UTC")).toBe(false);
+  });
+
+  it("uses the UTC hour and the weekday of the family time zone", () => {
+    expect(isMorningReportRun(MONDAY_0430Z, "Europe/Warsaw")).toBe(true);
+    expect(isMorningReportRun(new Date("2026-01-05T12:30:00Z"), "Europe/Warsaw")).toBe(false);
+    expect(isMorningReportRun(new Date("2026-07-06T04:30:00Z"), "Europe/Warsaw")).toBe(true);
   });
 });
 
@@ -85,7 +90,7 @@ describe("runMorningReport", () => {
   });
 
   it("does nothing outside a report run", async () => {
-    const { storage, deps } = setup(new Date("2026-01-05T18:00:00Z"));
+    const { storage, deps } = setup(new Date("2026-01-05T12:30:00Z"));
     expect(await runMorningReport(deps)).toBe(false);
     expect(await storage.pendingNotifications(FAMILY_ID)).toEqual([]);
   });
