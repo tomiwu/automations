@@ -137,7 +137,7 @@ export class LibrusSession {
 
   private async loginFormUrl(): Promise<string> {
     const portal = await this.request(PORTAL_URL, { headers: { referer: PORTAL_REFERER } });
-    const source = (await portal.response.text()).match(/id="caLoginIframe"[\s\S]*?src="([^"]+)"/)?.[1];
+    const source = loginIframeSource(await portal.response.text());
     if (!source) throw new Error("Librus: login iframe not found (portal changed?)");
     return (await this.request(source, { headers: { referer: "https://portal.librus.pl/" } })).url;
   }
@@ -187,6 +187,15 @@ export class LibrusSession {
     if (!/^\s*[{[]/.test(text)) throw new Error(`Librus: unexpected response (HTTP ${response.status})`);
     return text;
   }
+}
+
+/** Finds the login iframe of the portal page: the old one has an id, the new one is told by its src. */
+export function loginIframeSource(html: string): string | undefined {
+  for (const [tag] of html.matchAll(/<iframe\b[^>]*>/g)) {
+    const src = tag.match(/\ssrc="([^"]+)"/)?.[1];
+    if (src && (/id="caLoginIframe"/.test(tag) || /\/loguj\//.test(src))) return src.replaceAll("&amp;", "&");
+  }
+  return undefined;
 }
 
 /** Reads the answer of the login form. It returns the landing URL, or throws. */

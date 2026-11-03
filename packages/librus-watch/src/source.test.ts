@@ -1,7 +1,7 @@
 import { fakeRuntime } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import { createLibrusSource, fingerprint, lessonItem, timetableWeeks } from "./source.ts";
-import { landingUrl, LibrusTimeoutError } from "./session.ts";
+import { landingUrl, LibrusTimeoutError, loginIframeSource } from "./session.ts";
 import { lesson } from "./test-fixtures.ts";
 
 const ORIGIN = "https://school.example.org";
@@ -188,5 +188,21 @@ describe("helpers", () => {
     expect(landingUrl('{"status":"ok","goTo":"/x"}', 200, "https://a.example/form")).toBe("https://a.example/x");
     expect(() => landingUrl("nope", 500, "https://a.example/")).toThrow("HTTP 500");
     expect(() => landingUrl('{"status":"error"}', 200, "https://a.example/")).toThrow("login rejected");
+  });
+});
+
+describe("loginIframeSource", () => {
+  it("finds the iframe of the current portal by its src and decodes the ampersand", () => {
+    const html =
+      '<iframe title="Zaloguj do Synergii - formularz" class="x__iframe " src="https://synergia.librus.pl/loguj/portalRodzina?layout_version=2&amp;v=1793712592" allow="publickey-credentials-get"></iframe>';
+    expect(loginIframeSource(html)).toBe("https://synergia.librus.pl/loguj/portalRodzina?layout_version=2&v=1793712592");
+  });
+
+  it("still finds the old iframe by its id", () => {
+    expect(loginIframeSource('<iframe id="caLoginIframe" src="https://api.librus.pl/form"></iframe>')).toBe("https://api.librus.pl/form");
+  });
+
+  it("ignores other iframes and returns nothing without a login iframe", () => {
+    expect(loginIframeSource('<iframe src="https://ads.example.com/banner"></iframe>')).toBeUndefined();
   });
 });
