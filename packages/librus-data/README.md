@@ -10,8 +10,10 @@
 | `enqueueNotification(entry)` | `true` if inserted, `false` if the `key` exists |
 | `pendingNotifications(familyId)` | Undelivered Outbox entries, oldest first |
 | `markDelivered(key)` | Sets `deliveredAt` |
+| `enqueueNotifications(entries)` | Like `enqueueNotification` for many entries in one request. Returns the number of new entries |
+| `markDeliveredMany(keys)` | Like `markDelivered` for many keys in one request |
 | `purgeDelivered(olderThanDays)` | Number of removed Outbox entries |
-| `loadConfig(familyId)` | `Config` of the Family |
+| `loadConfig(familyId)` | `Config` of the Family, read in one request |
 | `listFees(familyId)` | Fees of the Family. The Watcher cannot change them |
 | `upsertPayment(payment)` | Makes a `pending` Payment and returns it. A Payment for the same Fee and month is returned as it is |
 | `listPayments(familyId)` | Payments of the Family, oldest first |

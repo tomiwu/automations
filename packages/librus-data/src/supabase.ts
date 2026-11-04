@@ -133,21 +133,27 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
   const listItems = async (familyId: string, watcher: string): Promise<StoredItem[]> =>
     (await select("items", itemQuery(familyId, watcher))).map(toItem);
 
+  /** One request: the Family with its Children, Accounts, Activities and Recipients embedded. */
   async function loadConfig(familyId: string): Promise<Config> {
-    const family = (await select("families", filter("id", "eq", familyId)))[0];
+    const embed = "select=*,children(*),accounts(*),activities(*),recipients(*)";
+    const family = (await select("families", `${embed}&${filter("id", "eq", familyId)}`))[0];
     if (!family) throw new Error(`Family ${familyId} has no config`);
-    const byFamily = filter("family_id", "eq", familyId);
-    const [children, accounts, activities, recipients] = await Promise.all(
-      ["children", "accounts", "activities", "recipients"].map((table) => select(table, byFamily)),
-    );
+    const { children, accounts, activities, recipients, ...own } = family;
     return {
-      family,
+      family: own,
       children,
       accounts,
-      activities: (activities ?? []).map(toActivity),
+      activities: ((activities as Row[] | undefined) ?? []).map(toActivity),
       recipients,
     } as unknown as Config;
   }
+
+  const outboxRow = (entry: NewNotification): Row => ({
+    key: entry.key,
+    family_id: entry.familyId,
+    chat_id: entry.chatId,
+    text: entry.text,
+  });
 
   async function upsertPayment(payment: NewPayment): Promise<Payment> {
     const [added] = await insertNew("payments", "fee_id,month", [toPaymentRow(payment)]);
@@ -170,9 +176,11 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const rows = unique.map((id) => ({ family_id: familyId, watcher, id }));
       return (await insertNew("items", "family_id,watcher,id", rows)).length;
     },
-    enqueueNotification: async (entry: NewNotification) => {
-      const row = { key: entry.key, family_id: entry.familyId, chat_id: entry.chatId, text: entry.text };
-      return (await insertNew("outbox", "key", [row])).length > 0;
+    enqueueNotification: async (entry: NewNotification) => (await insertNew("outbox", "key", [outboxRow(entry)])).length > 0,
+    enqueueNotifications: async (entries) => {
+      const unique = [...new Map(entries.map((entry) => [entry.key, entry])).values()];
+      if (unique.length === 0) return 0;
+      return (await insertNew("outbox", "key", unique.map(outboxRow))).length;
     },
     pendingNotifications: async (familyId) =>
       (await select("outbox", `${filter("family_id", "eq", familyId)}&delivered_at=is.null&order=queued_at.asc`)).map(
@@ -181,6 +189,12 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     markDelivered: async (key) => {
       const init = { headers: headers(JSON_HEADERS), body: JSON.stringify({ delivered_at: now().toISOString() }) };
       await request("PATCH", "outbox", `${filter("key", "eq", key)}&delivered_at=is.null`, init);
+    },
+    markDeliveredMany: async (keys) => {
+      if (keys.length === 0) return;
+      const list = keys.map((key) => `"${key.replace(/(["\\])/g, "\\$1")}"`).join(",");
+      const init = { headers: headers(JSON_HEADERS), body: JSON.stringify({ delivered_at: now().toISOString() }) };
+      await request("PATCH", "outbox", `key=in.(${encodeURIComponent(list)})&delivered_at=is.null`, init);
     },
     purgeDelivered: async (olderThanDays) => {
       const limit = new Date(now().getTime() - olderThanDays * DAY_MS).toISOString();

@@ -25,10 +25,20 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./upcoming` | `{ childId?, days? }`. Homework and tests with the Lesson they fall on. |
 | `./lessons` | `{ childId? }`. The Lessons of the next 14 days. |
 | `./purge` | The daily job. It calls `purgeDelivered(30)` and returns `{ ok, removed }`. It takes no input. |
+| `./calendar` | `{ childId? }`. The Lessons of the next 14 days and the homework and tests of the same days, in one read with one Librus login. Use it instead of `lessons` plus `upcoming`. |
 | `./children` | No input. `{ children }`: `id`, `name` and `calendar_id` of every Child. |
 
 Both exports include `childId` and the name of the Child. Without `childId` the Family must have one Child with Librus.
 The Supabase URL and the Family ID are plain config set with `./configure` (`{ supabaseUrl, familyId }`). The secret `SUPABASE_KEY` gives access to the storage.
+
+## Fetch budget
+
+The Kody free plan allows 2500 outbound fetches in a UTC week. This package keeps its use low:
+
+- **Count.** `entryDeps` wraps the fetch of the runtime in `countFetches`. Each scheduled run, purge run and export logs `fetches total=N <host>=n ...` and returns `fetches: { total, hosts }`. The Telegram sends go through the `telegram` package and are not in the count.
+- **Name cache.** The names behind Librus IDs (`Users`, `Subjects`, `HomeWorks/Categories`) are kept in the package storage, one entry for each Account (`librus-names:<account id>`), for 7 days. A second run with the same IDs makes no name fetch.
+- **One config read.** `loadConfig` reads the Family and its Children, Accounts, Activities and Recipients in one request. The credentials of the Family load in one request on the first `runtime.secret` call. A run needs 2 Supabase requests for config and credentials.
+- **Batched writes.** `enqueueNotifications` and `markDeliveredMany` write many Outbox entries in one request. Delivery marks the sent entries once at the end of the run.
 
 ## Not in this package
 

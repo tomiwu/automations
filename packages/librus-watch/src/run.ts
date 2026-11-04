@@ -1,9 +1,11 @@
 import {
+  formatFetchCount,
   localDate,
   validateConfig,
   type Account,
   type Child,
   type Config,
+  type FetchCounter,
   type RawConfig,
   type Recipient,
   type Runtime,
@@ -12,6 +14,7 @@ import type { StorageAdapter } from "@automations/librus-data";
 import { deliverPending, redactSecretPlaceholders, type Messenger } from "./deliver.ts";
 import { runChildCheck, type ChildCheck } from "./engine.ts";
 import { formatAccountError, formatLoginError } from "./format.ts";
+import { nameOptionsFor, type NameStore } from "./names-cache.ts";
 import { runMorningReport, type AfterSchool } from "./morning-report.ts";
 import { createLibrusSource } from "./source.ts";
 import type { LibrusSource } from "./types.ts";
@@ -26,6 +29,10 @@ export interface RunDeps {
   /** Makes the source of one Account. The default reads Librus. The tests replace it. */
   createSource?: (account: Account, timezone: string) => LibrusSource;
   afterSchool?: AfterSchool;
+  /** Keeps the Librus names between runs (7 days). Without it each run fetches the names again. */
+  nameStore?: NameStore;
+  /** Counts the fetches of the run. With it the run logs `fetches total=N <host>=n` at the end. */
+  counter?: FetchCounter;
 }
 
 /** One Librus Account with its Child and the Recipients of that Child. */
@@ -58,21 +65,26 @@ function failureText(failures: string[]): { login: boolean; reason: string } {
 /** Queues one failure Notification for each Recipient of the Child. The key has the day, so it is sent once a day. */
 async function notifyFailure(deps: RunDeps, target: LibrusTarget, failures: string[], day: string): Promise<void> {
   const { login, reason } = failureText(failures);
-  for (const recipient of target.recipients) {
+  const entries = target.recipients.map((recipient) => {
     const context = { language: recipient.language, child: target.child.name };
-    await deps.storage.enqueueNotification({
+    return {
       key: `failure:${target.account.id}:${day}:${recipient.telegram_chat_id}`,
       familyId: deps.familyId,
       chatId: recipient.telegram_chat_id,
       text: login ? formatLoginError(context) : formatAccountError(context, reason),
-    });
-  }
+    };
+  });
+  await deps.storage.enqueueNotifications(entries);
 }
 
 async function runTarget(deps: RunDeps, config: Config, target: LibrusTarget): Promise<string[]> {
   const { runtime, storage, familyId } = deps;
   const timezone = config.family.timezone;
-  const source = deps.createSource?.(target.account, timezone) ?? createLibrusSource(runtime, target.account, { timezone });
+  const source = deps.createSource?.(target.account, timezone) ??
+    createLibrusSource(runtime, target.account, {
+      timezone,
+      names: nameOptionsFor(deps.nameStore, target.account.id),
+    });
   const log = (message: string) => runtime.log("info", `account ${target.account.id}: ${message}`);
   const check: ChildCheck = { familyId, child: target.child, recipients: target.recipients, storage, source, log };
   const failures = await runChildCheck(check);
@@ -95,6 +107,22 @@ async function runTarget(deps: RunDeps, config: Config, target: LibrusTarget): P
   return failures.map((failure) => `${target.child.name}: ${failure}`);
 }
 
+/** Delivers the Outbox to the Recipients. Returns the failure text, or no text. */
+async function deliverAll(deps: RunDeps, config: Config): Promise<string[]> {
+  try {
+    await deliverPending({
+      storage: deps.storage,
+      familyId: deps.familyId,
+      messenger: deps.messenger,
+      chatIds: config.recipients.map((recipient) => recipient.telegram_chat_id),
+      log: (message) => deps.runtime.log("info", message),
+    });
+    return [];
+  } catch (error) {
+    return [`deliver: ${error instanceof Error ? error.message : String(error)}`];
+  }
+}
+
 /**
  * Runs one scheduled pass. It loads the config from storage, runs the Watchers of each Librus Account,
  * queues the Morning report on report runs, and delivers the Outbox. A bad Account gives one error and the
@@ -105,18 +133,8 @@ export async function runLibrusWatch(deps: RunDeps): Promise<string[]> {
   const { targets, errors } = librusTargets(config);
   const failures = [...errors];
   for (const target of targets) failures.push(...(await runTarget(deps, config, target)));
-  const chatIds = config.recipients.map((recipient) => recipient.telegram_chat_id);
-  try {
-    await deliverPending({
-      storage: deps.storage,
-      familyId: deps.familyId,
-      messenger: deps.messenger,
-      chatIds,
-      log: (message) => deps.runtime.log("info", message),
-    });
-  } catch (error) {
-    failures.push(`deliver: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  failures.push(...(await deliverAll(deps, config)));
   for (const failure of failures) deps.runtime.log("error", redactSecretPlaceholders(failure));
+  if (deps.counter) deps.runtime.log("info", formatFetchCount(deps.counter.count()));
   return failures;
 }

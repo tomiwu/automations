@@ -3,25 +3,34 @@ import { describe, expect, it } from "vitest";
 import { createCredentialResolver, createSupabaseCredentialStore } from "./credentials.ts";
 
 describe("createSupabaseCredentialStore", () => {
-  it("selects one ciphertext by Family and name with the key in the headers", async () => {
+  it("loads all ciphertexts of the Family in one request with the key in the headers", async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
     const store = createSupabaseCredentialStore({
       url: "https://x.supabase.co/",
       key: "{{secret:SUPABASE_KEY}}",
       fetch: async (url, init) => {
         calls.push({ url, init });
-        return new Response(JSON.stringify(url.includes("name=eq.SET") ? [{ ciphertext: "v1.a.b" }] : []));
+        return new Response(JSON.stringify([{ name: "SET", ciphertext: "v1.a.b" }, { name: "OTHER", ciphertext: "v1.c.d" }]));
       },
     });
     await expect(store.ciphertext("f 1", "SET")).resolves.toBe("v1.a.b");
-    await expect(store.ciphertext("f", "NONE")).resolves.toBeUndefined();
-    expect(calls[0]?.url).toBe("https://x.supabase.co/rest/v1/credentials?select=ciphertext&family_id=eq.f%201&name=eq.SET");
+    await expect(store.ciphertext("f 1", "OTHER")).resolves.toBe("v1.c.d");
+    await expect(store.ciphertext("f 1", "NONE")).resolves.toBeUndefined();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://x.supabase.co/rest/v1/credentials?select=name,ciphertext&family_id=eq.f%201");
     expect(calls[0]?.init?.headers).toEqual({ apikey: "{{secret:SUPABASE_KEY}}", authorization: "Bearer {{secret:SUPABASE_KEY}}" });
   });
 
-  it("throws on an error status without the body", async () => {
-    const store = createSupabaseCredentialStore({ url: "https://x", key: "k", fetch: async () => new Response("detail", { status: 401 }) });
+  it("throws on an error status without the body, and reads again after the error", async () => {
+    let status = 401;
+    const store = createSupabaseCredentialStore({
+      url: "https://x",
+      key: "k",
+      fetch: async () => new Response(status === 200 ? '[{"name":"N","ciphertext":"c"}]' : "detail", { status }),
+    });
     await expect(store.ciphertext("f", "N")).rejects.toThrow("Supabase GET credentials failed: 401");
+    status = 200;
+    await expect(store.ciphertext("f", "N")).resolves.toBe("c");
   });
 });
 

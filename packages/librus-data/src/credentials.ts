@@ -12,20 +12,35 @@ export interface SupabaseCredentialStoreOptions {
   fetch: FetchFn;
 }
 
-/** Reads `credentials` through PostgREST (the watcher role may only select it). */
+/**
+ * Reads `credentials` through PostgREST (the watcher role may only select it). The first read of a Family loads all
+ * its ciphertexts in one request. Later reads use that answer, so a run makes one request for all credentials.
+ */
 export function createSupabaseCredentialStore(options: SupabaseCredentialStoreOptions): CredentialStore {
   const base = `${options.url.replace(/\/+$/, "")}/rest/v1/credentials`;
+  const loaded = new Map<string, Promise<Map<string, string>>>();
+
+  async function loadAll(familyId: string): Promise<Map<string, string>> {
+    const query = `select=name,ciphertext&family_id=eq.${encodeURIComponent(familyId)}`;
+    const response = await options.fetch(`${base}?${query}`, {
+      method: "GET",
+      headers: { apikey: options.key, authorization: `Bearer ${options.key}` },
+    });
+    if (!response.ok) throw new Error(`Supabase GET credentials failed: ${response.status}`);
+    const rows = (await response.json()) as { name?: unknown; ciphertext?: unknown }[];
+    const sealed = new Map<string, string>();
+    for (const { name, ciphertext } of rows) {
+      if (typeof name === "string" && typeof ciphertext === "string") sealed.set(name, ciphertext);
+    }
+    return sealed;
+  }
+
   return {
     async ciphertext(familyId, name) {
-      const query = `select=ciphertext&family_id=eq.${encodeURIComponent(familyId)}&name=eq.${encodeURIComponent(name)}`;
-      const response = await options.fetch(`${base}?${query}`, {
-        method: "GET",
-        headers: { apikey: options.key, authorization: `Bearer ${options.key}` },
-      });
-      if (!response.ok) throw new Error(`Supabase GET credentials failed: ${response.status}`);
-      const rows = (await response.json()) as { ciphertext?: unknown }[];
-      const value = rows[0]?.ciphertext;
-      return typeof value === "string" ? value : undefined;
+      const pending = loaded.get(familyId) ?? loadAll(familyId);
+      loaded.set(familyId, pending);
+      pending.catch(() => loaded.delete(familyId));
+      return (await pending).get(name);
     },
   };
 }

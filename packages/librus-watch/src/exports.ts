@@ -1,5 +1,7 @@
-import { localDate, type Account, type Runtime } from "@automations/shared";
+import { formatFetchCount, localDate, type Account, type FetchCount, type FetchCounter, type Runtime } from "@automations/shared";
 import type { StorageAdapter } from "@automations/librus-data";
+import { readCalendar, type CalendarResult } from "./calendar.ts";
+import { nameOptionsFor, type NameStore } from "./names-cache.ts";
 import { readLessons, type LessonsResult } from "./lessons.ts";
 import { librusTargets, type LibrusTarget } from "./run.ts";
 import { createLibrusSource } from "./source.ts";
@@ -14,6 +16,18 @@ export interface ExportDeps {
   familyId: string;
   /** Makes the source of one Account. The default reads Librus. The tests replace it. */
   createSource?: (account: Account, timezone: string) => LibrusSource;
+  /** Keeps the Librus names between runs. Without it each export fetches the names again. */
+  nameStore?: NameStore;
+  /** Counts the fetches of the run. With it the export logs the count and returns it as `fetches`. */
+  counter?: FetchCounter;
+}
+
+/** Logs the fetch count of the export and adds it to the result. Without a counter the result is as it is. */
+export function withFetches<T extends object>(deps: ExportDeps, result: T): T & { fetches?: FetchCount } {
+  if (!deps.counter) return result;
+  const fetches = deps.counter.count();
+  deps.runtime.log("info", formatFetchCount(fetches));
+  return { ...result, fetches };
 }
 
 interface ExportInput {
@@ -72,7 +86,11 @@ async function openTarget(deps: ExportDeps, childId: string | undefined) {
   const target = pickTarget(librusTargets(config).targets, childId);
   const timezone = config.family.timezone;
   const source =
-    deps.createSource?.(target.account, timezone) ?? createLibrusSource(deps.runtime, target.account, { timezone });
+    deps.createSource?.(target.account, timezone) ??
+    createLibrusSource(deps.runtime, target.account, {
+      timezone,
+      names: nameOptionsFor(deps.nameStore, target.account.id),
+    });
   return { target, source, timezone };
 }
 
@@ -87,12 +105,12 @@ export interface UpcomingExport {
 }
 
 /** Read-only export: upcoming homework and tests of one Child, each with the first Lesson of its subject that day. */
-export async function upcomingExport(deps: ExportDeps, input: unknown = {}): Promise<UpcomingExport> {
+export async function upcomingExport(deps: ExportDeps, input: unknown = {}): Promise<UpcomingExport & { fetches?: FetchCount }> {
   const { childId, days } = parseExportInput(input, ["childId", "days"]);
   const { target, source, timezone } = await openTarget(deps, childId);
   const from = localDate(deps.runtime.now(), timezone);
   const { entries, to, timetableOk } = await upcoming(source, { child: target.child, from, days });
-  return { childId: target.child.id, child: target.child.name, timezone, from, to, timetableOk, entries };
+  return withFetches(deps, { childId: target.child.id, child: target.child.name, timezone, from, to, timetableOk, entries });
 }
 
 export interface LessonsExport extends LessonsResult {
@@ -102,11 +120,28 @@ export interface LessonsExport extends LessonsResult {
 }
 
 /** Read-only export: the Lessons of one Child for the next 14 days. */
-export async function lessonsExport(deps: ExportDeps, input: unknown = {}): Promise<LessonsExport> {
+export async function lessonsExport(deps: ExportDeps, input: unknown = {}): Promise<LessonsExport & { fetches?: FetchCount }> {
   const { childId } = parseExportInput(input, ["childId"]);
   const { target, source, timezone } = await openTarget(deps, childId);
   const result = await readLessons(source, target.child);
-  return { childId: target.child.id, child: target.child.name, timezone, ...result };
+  return withFetches(deps, { childId: target.child.id, child: target.child.name, timezone, ...result });
+}
+
+export interface CalendarExport extends CalendarResult {
+  childId: string;
+  child: string;
+  timezone: string;
+}
+
+/**
+ * Read-only export: the Lessons of the next 14 days and the homework and tests of the same days, in one read
+ * with one Librus login. It replaces a `lessons` call plus an `upcoming` call.
+ */
+export async function calendarExport(deps: ExportDeps, input: unknown = {}): Promise<CalendarExport & { fetches?: FetchCount }> {
+  const { childId } = parseExportInput(input, ["childId"]);
+  const { target, source, timezone } = await openTarget(deps, childId);
+  const result = await readCalendar(source, target.child, localDate(deps.runtime.now(), timezone));
+  return withFetches(deps, { childId: target.child.id, child: target.child.name, timezone, ...result });
 }
 
 export interface ChildrenExport {
@@ -114,8 +149,8 @@ export interface ChildrenExport {
 }
 
 /** Read-only export: every Child of the Family, so a calendar agent finds the calendars. */
-export async function childrenExport(deps: ExportDeps, input: unknown = {}): Promise<ChildrenExport> {
+export async function childrenExport(deps: ExportDeps, input: unknown = {}): Promise<ChildrenExport & { fetches?: FetchCount }> {
   checkKeys(inputObject(input), []);
   const config = await deps.storage.loadConfig(deps.familyId);
-  return { children: config.children.map(({ id, name, calendar_id }) => ({ id, name, calendar_id })) };
+  return withFetches(deps, { children: config.children.map(({ id, name, calendar_id }) => ({ id, name, calendar_id })) });
 }

@@ -14,6 +14,7 @@ import {
   type RawHomework,
   type RawSubstitution,
 } from "./parse.ts";
+import { createNameCache, type NameCache, type NameCacheOptions } from "./names-cache.ts";
 import { LibrusSession, LibrusTimeoutError, type SessionOptions } from "./session.ts";
 import type {
   AbsenceItem,
@@ -49,20 +50,30 @@ const NAME_ENDPOINTS: Record<NameKind, { path: (id: string) => string; name: (js
   Categories: { path: (id) => `HomeWorks/Categories/${id}`, name: (json) => json.Category?.Name },
 };
 
-/** Resolves the name behind an ID. Each ID is fetched once. A failed lookup is not cached. */
-function createNameLookup(session: LibrusSession): NameLookup {
+async function fetchName(session: LibrusSession, kind: NameKind, id: string, saved?: NameCache): Promise<string> {
+  const key = `${kind}/${id}`;
+  const stored = await saved?.find(key);
+  if (stored !== undefined) return stored;
+  const { path, name } = NAME_ENDPOINTS[kind];
+  const found = name(JSON.parse(await session.json(path(id))));
+  if (!found) throw new Error(`Librus: no name for ${key}`);
+  const cleaned = clean(found);
+  await saved?.save(key, cleaned);
+  return cleaned;
+}
+
+/**
+ * Resolves the name behind an ID. Each ID is fetched once in a run. A failed lookup is not cached. With a
+ * `saved` cache, a name that is less than 7 days old costs no fetch.
+ */
+function createNameLookup(session: LibrusSession, saved?: NameCache): NameLookup {
   const cache = new Map<string, Promise<string>>();
   return (kind, id) => {
     if (id === "") return Promise.resolve("");
     const key = `${kind}/${id}`;
     const cached = cache.get(key);
     if (cached) return cached;
-    const { path, name } = NAME_ENDPOINTS[kind];
-    const lookup = session.json(path(id)).then((json) => {
-      const found = name(JSON.parse(json));
-      if (!found) throw new Error(`Librus: no name for ${key}`);
-      return clean(found);
-    });
+    const lookup = fetchName(session, kind, id, saved);
     cache.set(key, lookup);
     lookup.catch(() => cache.delete(key));
     return lookup;
@@ -148,6 +159,8 @@ export function lessonItem(lesson: Lesson): LessonItem {
 export interface LibrusSourceOptions extends SessionOptions {
   /** IANA time zone of the Family. Dates count in this zone. */
   timezone: string;
+  /** Where the names of Users, Subjects and Categories are kept between runs. Without it each run fetches them. */
+  names?: NameCacheOptions;
 }
 
 /**
@@ -160,7 +173,8 @@ export function createLibrusSource(
   options: LibrusSourceOptions,
 ): LibrusSource {
   const session = new LibrusSession(runtime, account, options);
-  const names = createNameLookup(session);
+  const saved = options.names && createNameCache(options.names, () => runtime.now());
+  const names = createNameLookup(session, saved);
   let loggedIn: Promise<void> | undefined;
   let unreachable: LibrusTimeoutError | undefined;
   const today = () => localDate(runtime.now(), options.timezone);
@@ -193,7 +207,9 @@ export function createLibrusSource(
   const fetched = async <W extends FetchedWatcher>(watcher: W, since?: string): Promise<ItemsByWatcher[W]> => {
     await ensureLogin();
     const fetcher = FETCHERS[watcher] as Fetcher<W>;
-    return fetcher(session, since ?? addDays(today(), -WINDOW_DAYS), names).catch(noteTimeout);
+    return fetcher(session, since ?? addDays(today(), -WINDOW_DAYS), names)
+      .catch(noteTimeout)
+      .finally(() => saved?.flush());
   };
 
   return {

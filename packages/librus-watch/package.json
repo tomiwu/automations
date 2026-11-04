@@ -10,6 +10,7 @@
     "./scheduled": "./src/entry/scheduled.ts",
     "./upcoming": "./src/entry/upcoming.ts",
     "./lessons": "./src/entry/lessons.ts",
+    "./calendar": "./src/entry/calendar.ts",
     "./children": "./src/entry/children.ts",
     "./purge": "./src/entry/purge.ts",
     "./configure": "./src/entry/configure.ts"

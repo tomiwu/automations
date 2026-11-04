@@ -61,13 +61,13 @@ export interface DeliveryOptions {
 }
 
 async function sendEntry(options: DeliveryOptions, entry: OutboxEntry): Promise<void> {
-  const { storage, messenger, sendTimeoutMs = SEND_TIMEOUT_MS } = options;
+  const { messenger, sendTimeoutMs = SEND_TIMEOUT_MS } = options;
   await withTimeout(messenger.send(entry.chatId, redactSecretPlaceholders(entry.text)), sendTimeoutMs, "telegram send");
-  await storage.markDelivered(entry.key);
 }
 
 interface DeliveryRun {
-  sent: number;
+  /** Keys of the sent entries. They are marked delivered in one write at the end. */
+  sentKeys: string[];
   failures: unknown[];
   /** Chats that had a failed send. Their later entries stay queued, so the order is kept. */
   blocked: Set<string>;
@@ -76,7 +76,7 @@ interface DeliveryRun {
 async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: DeliveryRun): Promise<void> {
   try {
     await sendEntry(options, entry);
-    run.sent += 1;
+    run.sentKeys.push(entry.key);
   } catch (error) {
     run.blocked.add(entry.chatId);
     run.failures.push(error);
@@ -85,17 +85,21 @@ async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: Deliv
 
 /**
  * The Notifier of this package. It delivers the Outbox in order. An entry is marked delivered only after
- * its send succeeded. A failed send holds back only its own chat. When all chats are tried, it rejects
- * with the first failure. The log gets counts only, never texts.
+ * its send succeeded. The sent entries are marked in one write at the end. A failed send holds back only
+ * its own chat. When all chats are tried, it rejects with the first failure. The log gets counts only, never texts.
  */
 export async function deliverPending(options: DeliveryOptions): Promise<void> {
   const { storage, familyId, chatIds, log = () => {}, clock = Date.now, budgetMs = DELIVERY_BUDGET_MS } = options;
   const start = clock();
   const queue = (await storage.pendingNotifications(familyId)).filter((entry) => chatIds.includes(entry.chatId));
-  const run: DeliveryRun = { sent: 0, failures: [], blocked: new Set() };
-  for (const entry of queue) {
-    if (!run.blocked.has(entry.chatId) && clock() - start < budgetMs) await tryEntry(options, entry, run);
+  const run: DeliveryRun = { sentKeys: [], failures: [], blocked: new Set() };
+  try {
+    for (const entry of queue) {
+      if (!run.blocked.has(entry.chatId) && clock() - start < budgetMs) await tryEntry(options, entry, run);
+    }
+  } finally {
+    await storage.markDeliveredMany(run.sentKeys);
   }
-  log(`deliver: queued=${queue.length} sent=${run.sent} failed=${run.failures.length}`);
+  log(`deliver: queued=${queue.length} sent=${run.sentKeys.length} failed=${run.failures.length}`);
   if (run.failures.length > 0) throw run.failures[0];
 }

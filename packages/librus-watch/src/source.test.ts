@@ -85,6 +85,48 @@ describe("LibrusSource", () => {
     expect(runtime.requests.filter((r) => r.input.includes("/Users/4"))).toHaveLength(1);
   });
 
+  describe("name cache", () => {
+    const handlers = (): Handler[] => [
+      (url) => (url.pathname.endsWith("/HomeWorks") ? json({ HomeWorks: [{ Id: 1, Content: "Read", Date: "2026-01-09", Category: { Id: 2 }, Subject: { Id: 3 }, CreatedBy: { Id: 4 } }] }) : undefined),
+      (url) => (url.pathname.endsWith("/Users/4") ? json({ User: { FirstName: "Teacher", LastName: "One" } }) : undefined),
+      (url) => (url.pathname.endsWith("/Subjects/3") ? json({ Subject: { Name: "Math" } }) : undefined),
+      (url) => (url.pathname.endsWith("/HomeWorks/Categories/2") ? json({ Category: { Name: "Test" } }) : undefined),
+    ];
+    const lookups = (runtime: ReturnType<typeof librus>) =>
+      runtime.requests.filter((r) => /\/(Users|Subjects)\/\d|Categories\/\d/.test(r.input)).length;
+
+    function memoryStore() {
+      const data = new Map<string, string>();
+      return { data, get: async (key: string) => data.get(key), set: async (key: string, value: string) => void data.set(key, value) };
+    }
+
+    it("makes 0 name fetches in the second run with the same IDs", async () => {
+      const store = memoryStore();
+      const names = { store, key: "librus-names:a1" };
+      const first = librus(handlers());
+      const one = await createLibrusSource(first, account, { timezone: "UTC", names }).currentItems("homework");
+      expect(lookups(first)).toBe(3);
+      const second = librus(handlers());
+      const two = await createLibrusSource(second, account, { timezone: "UTC", names }).currentItems("homework");
+      expect(lookups(second)).toBe(0);
+      expect(two).toEqual(one);
+    });
+
+    it("fetches a name again after the TTL", async () => {
+      const store = memoryStore();
+      const names = { store, key: "k", ttlMs: 7 * 86_400_000 };
+      await createLibrusSource(librus(handlers()), account, { timezone: "UTC", names }).currentItems("homework");
+      const soon = librus(handlers());
+      soon.setNow(new Date("2026-01-13T10:00:00Z"));
+      await createLibrusSource(soon, account, { timezone: "UTC", names }).currentItems("homework");
+      expect(lookups(soon)).toBe(0);
+      const late = librus(handlers());
+      late.setNow(new Date("2026-01-14T10:00:01Z"));
+      await createLibrusSource(late, account, { timezone: "UTC", names }).currentItems("homework");
+      expect(lookups(late)).toBe(3);
+    });
+  });
+
   it("reads trips, absences and substitutions", async () => {
     const runtime = librus([
       (url) => (url.pathname.endsWith("/SchoolTrips") ? json({ Data: [{ id: 1, termFrom: "2026-01-10" }] }) : undefined),

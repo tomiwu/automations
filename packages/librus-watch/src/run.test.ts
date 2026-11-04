@@ -40,6 +40,17 @@ describe("librusTargets", () => {
 });
 
 describe("runLibrusWatch", () => {
+  it("queues the Notifications of one Watcher with one storage call", async () => {
+    const { deps, storage, source } = setup();
+    await runLibrusWatch(deps);
+    const sizes: number[] = [];
+    const enqueue = storage.enqueueNotifications;
+    storage.enqueueNotifications = async (entries) => (sizes.push(entries.length), enqueue(entries));
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5" }, { id: "2", subject: "Art", grade: "4" }];
+    await runLibrusWatch(deps);
+    expect(sizes).toContain(4);
+  });
+
   it("baselines on the first run, then delivers a new grade in each language", async () => {
     const { deps, source, sent } = setup();
     expect(await runLibrusWatch(deps)).toEqual([]);

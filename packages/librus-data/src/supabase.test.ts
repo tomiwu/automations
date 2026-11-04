@@ -88,6 +88,35 @@ describe("createSupabaseStorage", () => {
   });
 });
 
+describe("batched requests", () => {
+  it("loads the whole config in one request", async () => {
+    const { server, storage } = setup();
+    server.seedConfig(exampleConfig());
+    await storage.loadConfig(FAMILY_ID);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it("enqueues many entries in one request and skips the known keys", async () => {
+    const { server, storage } = setup();
+    const entry = (key: string) => ({ key, familyId: FAMILY_ID, chatId: "1000001", text: "Hello" });
+    expect(await storage.enqueueNotifications([entry("a"), entry("a"), entry("b")])).toBe(2);
+    expect(await storage.enqueueNotifications([entry("a"), entry("c")])).toBe(1);
+    expect(await storage.enqueueNotifications([])).toBe(0);
+    expect(server.requests).toHaveLength(2);
+  });
+
+  it("marks many entries delivered in one request, also keys with special characters", async () => {
+    const { server, storage } = setup();
+    const entry = (key: string) => ({ key, familyId: FAMILY_ID, chatId: "1000001", text: "Hello" });
+    await storage.enqueueNotifications([entry("a,b"), entry('q"x'), entry("c")]);
+    server.requests.length = 0;
+    await storage.markDeliveredMany(["a,b", 'q"x']);
+    await storage.markDeliveredMany([]);
+    expect(server.requests).toHaveLength(1);
+    expect((await storage.pendingNotifications(FAMILY_ID)).map((item) => item.key)).toEqual(["c"]);
+  });
+});
+
 describe("loadConfig as keepalive", () => {
   it("starts with a read of the families table, so each Watcher run is a keepalive read", async () => {
     const { server, storage } = setup();
