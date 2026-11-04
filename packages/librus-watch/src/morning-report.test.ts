@@ -1,6 +1,6 @@
-import { createMemoryStorage } from "@automations/librus-data";
+import { createMemoryStorage, type ItemKind, type NewItemDetail } from "@automations/librus-data";
 import { describe, expect, it } from "vitest";
-import { formatMorningReport, isMorningReportRun, runMorningReport, type MorningReportDeps } from "./morning-report.ts";
+import { formatMorningReport, isMorningReportRun, newItemsSince, runMorningReport, type MorningReportDeps } from "./morning-report.ts";
 import { CHILD1, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
 import { upcoming } from "./upcoming.ts";
 
@@ -117,5 +117,89 @@ describe("runMorningReport", () => {
     expect(texts[0]).toContain("After school: the activities could not be fetched.");
     expect(texts[1]).toContain("Po szkole: nie udało się pobrać zajęć.");
     expect(lines[0]).toBe("after-school section failed: down");
+  });
+});
+
+const KINDS: ItemKind[] = ["meeting", "dayOff", "trip", "terminarz", "announcement", "message", "grade"];
+
+function detailRow(kind: ItemKind, extra: Partial<NewItemDetail> = {}): NewItemDetail {
+  return {
+    familyId: FAMILY_ID,
+    scope: `${kind}:${CHILD1}`,
+    kind,
+    childId: CHILD1,
+    sourceId: `${kind}-1`,
+    date: "2026-01-05",
+    startTime: null,
+    endTime: null,
+    title: `Title of ${kind}`,
+    text: "Body",
+    sender: null,
+    subject: null,
+    category: null,
+    sourceUpdatedAt: null,
+    ...extra,
+  };
+}
+
+describe("newItemsSince", () => {
+  it("is 24 hours before the run, or 72 hours on Monday", () => {
+    expect(newItemsSince(MONDAY_0430Z, "UTC").toISOString()).toBe("2026-01-02T04:30:00.000Z");
+    expect(newItemsSince(new Date("2026-01-06T04:30:00Z"), "UTC").toISOString()).toBe("2026-01-05T04:30:00.000Z");
+  });
+});
+
+describe("the New section", () => {
+  async function reportText(rows: NewItemDetail[], language: "en" | "pl" = "en"): Promise<string> {
+    const { storage, deps } = setup();
+    await storage.recordDetails(rows);
+    await runMorningReport(deps);
+    const pending = await storage.pendingNotifications(FAMILY_ID);
+    return (language === "en" ? pending[0] : pending[1])?.text ?? "";
+  }
+
+  it("is left out when there are no new Items", async () => {
+    expect(await reportText([])).not.toContain("New:");
+  });
+
+  it("is left out when the Items are older than the window or belong to another Child", async () => {
+    const old = createMemoryStorage({ now: () => new Date("2025-12-20T00:00:00Z") });
+    const { deps } = setup();
+    await old.recordDetails([detailRow("message")]);
+    await runMorningReport({ ...deps, storage: old });
+    const text = (await old.pendingNotifications(FAMILY_ID))[0]?.text ?? "";
+    expect(text).not.toContain("New:");
+    expect(await reportText([detailRow("message", { childId: "other" })])).not.toContain("New:");
+  });
+
+  it("has one line for each Item of each kind", async () => {
+    const rows = KINDS.map((kind) =>
+      kind === "grade" ? detailRow(kind, { title: "Math", text: "5" }) : detailRow(kind),
+    );
+    const text = await reportText(rows);
+    const lines = text.slice(text.indexOf("New:")).split("\n");
+    expect(lines).toEqual([
+      "New:",
+      "• Parent meeting, 2026-01-05: Title of meeting",
+      "• Day off, 2026-01-05: Title of dayOff",
+      "• Trip, 2026-01-05: Title of trip",
+      "• Calendar, 2026-01-05: Title of terminarz",
+      "• Announcement, 2026-01-05: Title of announcement",
+      "• Message, 2026-01-05: Title of message",
+      "• Grade, 2026-01-05: Math, 5",
+    ]);
+  });
+
+  it("cuts a long title to one line and handles a missing date", async () => {
+    const text = await reportText([
+      detailRow("message", { title: `First\nsecond ${"x".repeat(100)}`, date: null }),
+      detailRow("grade", { title: "Art", text: "4", date: null }),
+    ]);
+    expect(text).toContain(`• Message: First second ${"x".repeat(80 - "First second ".length)}…\n• Grade: Art, 4`);
+  });
+
+  it("is in Polish for a Polish Recipient", async () => {
+    const text = await reportText([detailRow("trip")], "pl");
+    expect(text).toContain("Nowe:\n• Wycieczka, 2026-01-05: Title of trip");
   });
 });
