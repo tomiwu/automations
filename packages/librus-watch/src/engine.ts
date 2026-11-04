@@ -176,10 +176,10 @@ function detailsOf(
 }
 
 /**
- * Runs one Watcher for one Child. The first run of a scope is a silent Baseline: it records the Items and
- * queues nothing and stores no content. Later runs store the content of each new or updated Item, queue one
- * Notification for each Item and each Recipient, then record the Items. The Notification is queued first and its key is the recorded ID, so a crash between
- * the two steps neither loses nor repeats it.
+ * Runs one Watcher for one Child. The first run of a scope is a silent Baseline: it records the Items,
+ * queues nothing and stores no content. Later runs store the content of each new or updated Item, queue
+ * one Notification for each Item and each Recipient, then record the Items. The Notification is queued
+ * first and its key is the recorded ID, so a crash between the two steps neither loses nor repeats it.
  */
 export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promise<void> {
   const scope = scopeOf(watcher, check.child);
