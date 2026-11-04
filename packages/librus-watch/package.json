@@ -12,6 +12,7 @@
     "./lessons": "./src/entry/lessons.ts",
     "./calendar": "./src/entry/calendar.ts",
     "./children": "./src/entry/children.ts",
+    "./events": "./src/entry/events.ts",
     "./purge": "./src/entry/purge.ts",
     "./configure": "./src/entry/configure.ts"
   },

@@ -13,6 +13,7 @@ export type {
   StorageAdapter,
   StoredItem,
 } from "./storage.ts";
+export { detailHash } from "./details.ts";
 export { createMemoryStorage } from "./memory.ts";
 export type { MemoryStorage, MemoryStorageOptions } from "./memory.ts";
 export { createSupabaseStorage, supabaseStorageFromRuntime } from "./supabase.ts";

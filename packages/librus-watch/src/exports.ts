@@ -1,5 +1,6 @@
 import { formatFetchCount, localDate, type Account, type FetchCount, type FetchCounter, type Runtime } from "@automations/shared";
 import type { StorageAdapter } from "@automations/librus-data";
+import { checkDay, checkSince, sortEvents, toEvent, type CalendarEvent } from "./events.ts";
 import { readCalendar, type CalendarResult } from "./calendar.ts";
 import { nameOptionsFor, type NameStore } from "./names-cache.ts";
 import { readLessons, type LessonsResult } from "./lessons.ts";
@@ -153,4 +154,31 @@ export async function childrenExport(deps: ExportDeps, input: unknown = {}): Pro
   checkKeys(inputObject(input), []);
   const config = await deps.storage.loadConfig(deps.familyId);
   return withFetches(deps, { children: config.children.map(({ id, name, calendar_id }) => ({ id, name, calendar_id })) });
+}
+
+export interface EventsExport {
+  childId: string;
+  child: string;
+  from: string | null;
+  to: string | null;
+  since: string;
+  events: CalendarEvent[];
+}
+
+/**
+ * Read-only export: the stored content of the Items of one Child (meetings, days off, trips, Terminarz entries,
+ * announcements, messages, grades). It reads Supabase only: no Librus login. The calendar routine places the events.
+ */
+export async function eventsExport(deps: ExportDeps, input: unknown = {}): Promise<EventsExport & { fetches?: FetchCount }> {
+  const object = inputObject(input);
+  checkKeys(object, ["childId", "from", "to", "since"]);
+  const childId = checkChildId(object.childId);
+  const from = checkDay("from", object.from);
+  const to = checkDay("to", object.to);
+  const since = checkSince(object.since, deps.runtime.now());
+  const config = await deps.storage.loadConfig(deps.familyId);
+  const { child } = pickTarget(librusTargets(config).targets, childId);
+  const details = await deps.storage.listDetails(deps.familyId, { childId: child.id, from, to, since });
+  const events = sortEvents(await Promise.all(details.map((detail) => toEvent(detail, config.family.timezone))));
+  return withFetches(deps, { childId: child.id, child: child.name, from: from ?? null, to: to ?? null, since: since.toISOString(), events });
 }
