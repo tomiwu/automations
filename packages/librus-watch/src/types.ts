@@ -15,6 +15,12 @@ export interface GradeItem {
   id: string;
   subject: string;
   grade: string;
+  /** The `Data` value of the grade link, "YYYY-MM-DD", or an empty string. */
+  date: string;
+  /** The `Kategoria` value, or an empty string. */
+  category: string;
+  /** The `Nauczyciel` value, or an empty string. */
+  teacher: string;
 }
 
 export interface MessageItem {

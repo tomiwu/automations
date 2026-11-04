@@ -45,7 +45,7 @@ describe("LibrusSource", () => {
   it("logs in with the secrets of the Account and reads grades", async () => {
     const runtime = librus([(url) => (url.pathname === "/przegladaj_oceny/uczen" ? new Response('<table><tr><td></td><td>Math</td><td><a class="ocena" href="/szczegoly/5">5</a></td></tr></table>') : undefined)]);
     const source = createLibrusSource(runtime, account, { timezone: "UTC" });
-    expect(await source.currentItems("grades")).toEqual([{ id: "5", subject: "Math", grade: "5" }]);
+    expect(await source.currentItems("grades")).toEqual([{ id: "5", subject: "Math", grade: "5", date: "", category: "", teacher: "" }]);
     const post = runtime.requests.find((r) => r.init?.method === "POST");
     expect(String(post?.init?.body)).toBe("action=login&login=login-value&pass=password-value");
     expect((post?.init?.headers as Record<string, string>)["x-baner"]).toBeTruthy();

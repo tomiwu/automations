@@ -46,7 +46,7 @@ describe("runLibrusWatch", () => {
     const sizes: number[] = [];
     const enqueue = storage.enqueueNotifications;
     storage.enqueueNotifications = async (entries) => (sizes.push(entries.length), enqueue(entries));
-    source.items.grades = [{ id: "1", subject: "Math", grade: "5" }, { id: "2", subject: "Art", grade: "4" }];
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" }, { id: "2", subject: "Art", grade: "4", date: "", category: "", teacher: "" }];
     await runLibrusWatch(deps);
     expect(sizes).toContain(4);
   });
@@ -56,7 +56,7 @@ describe("runLibrusWatch", () => {
     expect(await runLibrusWatch(deps)).toEqual([]);
     expect(sent.map((s) => s.split("\n")[0])).toEqual(["1000001|Morning report for Child One, Monday 05.01", "1000002|Raport poranny dla Child One, poniedziałek 05.01"]);
     sent.length = 0;
-    source.items.grades = [{ id: "1", subject: "Math", grade: "5" }];
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" }];
     expect(await runLibrusWatch(deps)).toEqual([]);
     expect(sent).toEqual(["1000001|New grade for Child One: Math, 5", "1000002|Nowa ocena dla Child One: Math, 5"]);
   });

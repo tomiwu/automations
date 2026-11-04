@@ -19,8 +19,17 @@ const gradesHtml = `<table><tr><td>1</td><td> Math </td><td><a class="ocena" hre
 <tr><td>2</td><td></td><td><a class="ocena" href="/szczegoly/102">4</a></td></tr></table>`;
 
 describe("html parsers", () => {
+  it("reads date, category and teacher from the grade link title", () => {
+    const title = "Kategoria: Test<br/>Data: 2026-01-05 (pon.)<br />Nauczyciel: Teacher One<br>Waga: 3";
+    const html = `<table><tr><td>1</td><td>Math</td><td><a class="ocena" href="/szczegoly/201" title="${title}">5</a><a class="ocena" href="/szczegoly/202" title="Data: bad">4</a></td></tr></table>`;
+    expect(parseGrades(html)).toEqual([
+      { id: "201", subject: "Math", grade: "5", date: "2026-01-05", category: "Test", teacher: "Teacher One" },
+      { id: "202", subject: "Math", grade: "4", date: "", category: "", teacher: "" },
+    ]);
+  });
+
   it("parses grades, skips template rows, duplicates and rows without subject", () => {
-    expect(parseGrades(gradesHtml)).toEqual([{ id: "101", subject: "Math", grade: "5" }]);
+    expect(parseGrades(gradesHtml)).toEqual([{ id: "101", subject: "Math", grade: "5", date: "", category: "", teacher: "" }]);
   });
 
   it("parses the message list and skips rows without an ID", () => {
