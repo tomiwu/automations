@@ -18,7 +18,7 @@ const quote = (value: unknown): string => `'${JSON.stringify(value).replaceAll("
 /** The contract tests against a real PostgREST server on a Postgres database. They never use a real Supabase project. */
 describe.skipIf(!enabled)("PostgREST server", () => {
   runStorageContract("supabase (PostgREST and Postgres)", async () => {
-    sql("truncate payments, fees, outbox, items, recipients, activities, accounts, children, families cascade");
+    sql("truncate item_details, payments, fees, outbox, items, recipients, activities, accounts, children, families cascade");
     return {
       storage: createSupabaseStorage({ url: url ?? "", key: key ?? "", fetch: (input, init) => fetch(input, init) }),
       seedConfig: async (config) => {
@@ -55,7 +55,7 @@ describe.skipIf(!enabled)("PostgREST server", () => {
         sql(`insert into fees select * from json_populate_recordset(null::fees, ${quote([row])});`);
       },
       advanceDays: async (days) => {
-        sql(`update outbox set queued_at = queued_at - interval '${days} days', delivered_at = delivered_at - interval '${days} days'`);
+        sql(`update outbox set queued_at = queued_at - interval '${days} days', delivered_at = delivered_at - interval '${days} days'; update item_details set first_seen = first_seen - interval '${days} days'`);
       },
     };
   });

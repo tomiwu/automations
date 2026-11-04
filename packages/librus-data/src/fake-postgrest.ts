@@ -11,6 +11,7 @@ const PRIMARY_KEYS: Record<string, readonly string[]> = {
   items: ["family_id", "watcher", "id"],
   outbox: ["key"],
   payments: ["fee_id", "month"],
+  item_details: ["family_id", "scope", "source_id", "content_hash"],
 };
 
 const json = (body: unknown, status = 200): Response =>
@@ -27,6 +28,8 @@ const OPERATORS: Record<string, (column: string, operand: string) => Predicate> 
   eq: (column, operand) => (row) => String(row[column]) === operand,
   is: (column) => (row) => row[column] === null,
   in: inPredicate,
+  gte: (column, operand) => (row) => typeof row[column] === "string" && row[column] >= operand,
+  lte: (column, operand) => (row) => typeof row[column] === "string" && row[column] <= operand,
   lt: (column, operand) => (row) => typeof row[column] === "string" && row[column] < operand,
 };
 

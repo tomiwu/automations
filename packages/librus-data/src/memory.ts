@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Config } from "@automations/shared";
-import type { Fee, NewNotification, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
+import { matchesFilter, uniqueDetails } from "./details.ts";
+import type { Fee, ItemDetail, NewNotification, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 
@@ -18,6 +19,7 @@ export interface MemoryStorage extends StorageAdapter {
 export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryStorage {
   const now = options.now ?? (() => new Date());
   const items = new Map<string, StoredItem>();
+  const details = new Map<string, ItemDetail>();
   const outbox = new Map<string, OutboxEntry>();
   /** Queues the entry unless its key exists. Returns true if the entry is new. */
   const enqueue = (entry: NewNotification): boolean => {
@@ -57,6 +59,20 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       }
       return added;
     },
+    recordDetails: async (rows) => {
+      let added = 0;
+      for (const { row, hash } of await uniqueDetails(rows)) {
+        const slot = JSON.stringify([row.familyId, row.scope, row.sourceId, hash]);
+        if (details.has(slot)) continue;
+        details.set(slot, { ...row, firstSeen: now() });
+        added += 1;
+      }
+      return added;
+    },
+    listDetails: async (familyId, filter = {}) =>
+      [...details.values()]
+        .filter((detail) => detail.familyId === familyId && matchesFilter(detail, filter))
+        .map((detail) => ({ ...detail })),
     enqueueNotification: async (entry: NewNotification) => enqueue(entry),
     enqueueNotifications: async (entries) => entries.filter(enqueue).length,
     pendingNotifications: async (familyId) =>

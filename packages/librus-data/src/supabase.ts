@@ -1,5 +1,6 @@
 import type { Config, FetchFn, Runtime } from "@automations/shared";
-import type { Fee, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
+import { DETAIL_BATCH_SIZE, uniqueDetails } from "./details.ts";
+import type { DetailFilter, Fee, ItemDetail, NewItemDetail, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -64,6 +65,58 @@ function toFee(row: Row): Fee {
     accountId: row.account_id === null ? null : String(row.account_id),
     enabled: Boolean(row.enabled),
   };
+}
+
+const orNull = (value: unknown): string | null => (value === null ? null : String(value));
+
+function toDetail(row: Row): ItemDetail {
+  const time = (value: unknown): string | null => (value === null ? null : String(value).slice(0, 5));
+  return {
+    familyId: String(row.family_id),
+    scope: String(row.scope),
+    kind: row.kind as ItemDetail["kind"],
+    childId: String(row.child_id),
+    sourceId: String(row.source_id),
+    date: orNull(row.date),
+    startTime: time(row.start_time),
+    endTime: time(row.end_time),
+    title: String(row.title),
+    text: String(row.text),
+    sender: orNull(row.sender),
+    subject: orNull(row.subject),
+    category: orNull(row.category),
+    sourceUpdatedAt: row.source_updated_at === null ? null : new Date(String(row.source_updated_at)),
+    firstSeen: new Date(String(row.first_seen)),
+  };
+}
+
+function toDetailRow(detail: NewItemDetail, hash: string): Row {
+  return {
+    family_id: detail.familyId,
+    scope: detail.scope,
+    kind: detail.kind,
+    child_id: detail.childId,
+    source_id: detail.sourceId,
+    content_hash: hash,
+    date: detail.date,
+    start_time: detail.startTime,
+    end_time: detail.endTime,
+    title: detail.title,
+    text: detail.text,
+    sender: detail.sender,
+    subject: detail.subject,
+    category: detail.category,
+    source_updated_at: detail.sourceUpdatedAt?.toISOString() ?? null,
+  };
+}
+
+function detailQuery(familyId: string, where: DetailFilter): string {
+  const parts = [filter("family_id", "eq", familyId)];
+  if (where.childId !== undefined) parts.push(filter("child_id", "eq", where.childId));
+  if (where.from !== undefined) parts.push(filter("date", "gte", where.from));
+  if (where.to !== undefined) parts.push(filter("date", "lte", where.to));
+  if (where.since !== undefined) parts.push(filter("first_seen", "gte", where.since.toISOString()));
+  return `${parts.join("&")}&order=first_seen.asc`;
 }
 
 const toDate = (value: unknown): Date | null => (value === null ? null : new Date(String(value)));
@@ -176,6 +229,17 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const rows = unique.map((id) => ({ family_id: familyId, watcher, id }));
       return (await insertNew("items", "family_id,watcher,id", rows)).length;
     },
+    recordDetails: async (rows) => {
+      const unique = await uniqueDetails(rows);
+      let added = 0;
+      for (let start = 0; start < unique.length; start += DETAIL_BATCH_SIZE) {
+        const batch = unique.slice(start, start + DETAIL_BATCH_SIZE).map(({ row, hash }) => toDetailRow(row, hash));
+        added += (await insertNew("item_details", "family_id,scope,source_id,content_hash", batch)).length;
+      }
+      return added;
+    },
+    listDetails: async (familyId, where = {}) =>
+      (await select("item_details", detailQuery(familyId, where))).map(toDetail),
     enqueueNotification: async (entry: NewNotification) => (await insertNew("outbox", "key", [outboxRow(entry)])).length > 0,
     enqueueNotifications: async (entries) => {
       const unique = [...new Map(entries.map((entry) => [entry.key, entry])).values()];

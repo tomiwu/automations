@@ -22,6 +22,34 @@ describe("runPurge", () => {
     expect(await runPurge({ storage, runtime })).toBe(0);
   });
 
+  it("keeps every Item detail", async () => {
+    let current = new Date("2026-01-01T00:00:00Z");
+    const storage = createMemoryStorage({ now: () => current });
+    await storage.recordDetails([
+      {
+        familyId: "f1",
+        scope: "messages:child-one",
+        kind: "message",
+        childId: "c1",
+        sourceId: "m1",
+        date: null,
+        startTime: null,
+        endTime: null,
+        title: "Example message",
+        text: "Example text",
+        sender: "Teacher One",
+        subject: null,
+        category: null,
+        sourceUpdatedAt: null,
+      },
+    ]);
+    await storage.enqueueNotification({ key: "old", familyId: "f1", chatId: "1000001", text: "Hello" });
+    await storage.markDelivered("old");
+    current = new Date(current.getTime() + 400 * DAY_MS);
+    expect(await runPurge({ storage, runtime: fakeRuntime() })).toBe(1);
+    expect(await storage.listDetails("f1")).toHaveLength(1);
+  });
+
   it("logs the fetch count when it has a counter", async () => {
     const counter = countFetches(async () => new Response(""));
     await counter.fetch("https://project.example.test/rest/v1/outbox");
