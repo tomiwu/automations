@@ -39,6 +39,8 @@ describe("html parsers", () => {
     expect(rest).toEqual([]);
     expect(item?.id).toBe("2026-01-05|Notice");
     expect(item?.summary).toHaveLength(141);
+    expect(item?.text).toBe("x".repeat(150));
+    expect(item?.publishedAt).toBe("2026-01-05");
   });
 });
 

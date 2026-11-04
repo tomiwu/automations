@@ -1,5 +1,5 @@
 import type { Child, Language, Recipient } from "@automations/shared";
-import type { NewNotification, StorageAdapter } from "@automations/librus-data";
+import type { NewItemDetail, NewNotification, StorageAdapter } from "@automations/librus-data";
 import {
   formatAbsence,
   formatAnnouncement,
@@ -12,6 +12,7 @@ import {
   type FormatContext,
   type ItemChange,
 } from "./format.ts";
+import { detailOf } from "./details.ts";
 import type { ItemsByWatcher, LibrusSource, SubstitutionItem, WatcherName } from "./types.ts";
 
 /** The first record of each Watcher scope. It marks the scope as baselined, even when Librus gave no Item. */
@@ -46,6 +47,15 @@ interface Changed<I> {
 interface Announcement {
   key: string;
   text: (context: FormatContext) => string;
+  /** The ID of the Item, and the message body when the announcer read it. */
+  itemId?: string;
+  body?: string;
+}
+
+/** The text renderer of one Item. A message also gives its body, so the engine can store it. */
+interface Rendered {
+  text: Announcement["text"];
+  body?: string;
 }
 
 type Announce<I> = (changes: Changed<I>[], source: LibrusSource) => Promise<Announcement[]>;
@@ -82,20 +92,21 @@ function changesOf<I extends HashedItem>(current: I[], known: Set<string>): Chan
 
 /** Announces each change on its own. The key is the recorded ID. */
 const perItem =
-  <I extends HashedItem>(render: (item: I, change: ItemChange, source: LibrusSource) => Promise<Announcement["text"]>): Announce<I> =>
+  <I extends HashedItem>(render: (item: I, change: ItemChange, source: LibrusSource) => Promise<Rendered>): Announce<I> =>
   async (changes, source) => {
     const announcements: Announcement[] = [];
     for (const { item, change } of changes) {
-      announcements.push({ key: storedId(item), text: await render(item, change, source) });
+      const { text, body } = await render(item, change, source);
+      announcements.push({ key: storedId(item), text, itemId: item.id, body });
     }
     return announcements;
   };
 
 const sync =
   <I,>(render: (context: FormatContext, item: I, change: ItemChange) => string) =>
-  async (item: I, change: ItemChange): Promise<Announcement["text"]> =>
-  (context) =>
-    render(context, item, change);
+  async (item: I, change: ItemChange): Promise<Rendered> => ({
+    text: (context) => render(context, item, change),
+  });
 
 /** All new substitutions of one date become one Notification. The key has the date and the Item IDs. */
 const substitutionsPerDay: Announce<SubstitutionItem> = async (changes) => {
@@ -122,7 +133,7 @@ const ANNOUNCERS: Record<WatcherName, AnyAnnounce> = {
   messages: asAny(
     perItem<ItemsByWatcher["messages"][number]>(async (message, _change, source) => {
       const body = await source.messageBody(message.id);
-      return (context) => formatMessage(context, message, body);
+      return { text: (context) => formatMessage(context, message, body), body };
     }),
   ),
   announcements: asAny(perItem(sync(formatAnnouncement))),
@@ -148,10 +159,26 @@ function notificationsFor(check: ChildCheck, scope: string, announcement: Announ
   });
 }
 
+/** The content rows of the changed Items. A message row needs the body that its announcer read. */
+function detailsOf(
+  check: ChildCheck,
+  watcher: WatcherName,
+  scope: string,
+  changes: Changed<HashedItem>[],
+  announcements: Announcement[],
+): NewItemDetail[] {
+  const bodies = new Map(announcements.map((a) => [a.itemId, a.body]));
+  const context = { familyId: check.familyId, scope, childId: check.child.id };
+  return changes.flatMap(({ item }) => {
+    const detail = detailOf(watcher, context, item as never, bodies.get(item.id));
+    return detail === undefined ? [] : [detail];
+  });
+}
+
 /**
  * Runs one Watcher for one Child. The first run of a scope is a silent Baseline: it records the Items and
- * queues nothing. Later runs queue one Notification for each new or updated Item and each Recipient, then
- * record the Items. The Notification is queued first and its key is the recorded ID, so a crash between
+ * queues nothing and stores no content. Later runs store the content of each new or updated Item, queue one
+ * Notification for each Item and each Recipient, then record the Items. The Notification is queued first and its key is the recorded ID, so a crash between
  * the two steps neither loses nor repeats it.
  */
 export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promise<void> {
@@ -161,6 +188,7 @@ export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promi
   if (known.size > 0) {
     const changes = changesOf(current, known);
     const announcements = await (ANNOUNCERS[watcher] as Announce<HashedItem>)(changes, check.source);
+    await check.storage.recordDetails(detailsOf(check, watcher, scope, changes, announcements));
     await check.storage.enqueueNotifications(announcements.flatMap((a) => notificationsFor(check, scope, a)));
   }
   await check.storage.recordItems(check.familyId, scope, [BASELINE_ID, ...current.map(storedId)]);
