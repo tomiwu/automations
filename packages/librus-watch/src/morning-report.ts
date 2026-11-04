@@ -8,7 +8,7 @@ import {
   type MessageKey,
   type Recipient,
 } from "@automations/shared";
-import type { StorageAdapter } from "@automations/librus-data";
+import type { NewNotification, StorageAdapter } from "@automations/librus-data";
 import { upcoming, type ChildRef, type Upcoming, type UpcomingEntry } from "./upcoming.ts";
 import type { LibrusSource } from "./types.ts";
 
@@ -119,17 +119,19 @@ export async function runMorningReport(deps: MorningReportDeps): Promise<boolean
   if (!isMorningReportRun(deps.now, deps.timezone)) return false;
   const today = localDate(deps.now, deps.timezone);
   const data = await upcoming(deps.source, { child: deps.child, from: today, days: WEEK_DAYS });
+  const entries: NewNotification[] = [];
   for (const recipient of deps.recipients) {
     const language = recipient.language;
     const sections = await afterSchoolSection(deps, today, language);
     const text = [formatMorningReport(language, deps.child.name, today, data), ...sections].join("\n\n");
-    await deps.storage.enqueueNotification({
+    entries.push({
       key: `report:${deps.child.id}:${today}:${recipient.telegram_chat_id}`,
       familyId: deps.familyId,
       chatId: recipient.telegram_chat_id,
       text,
     });
   }
+  await deps.storage.enqueueNotifications(entries);
   deps.log?.(`morning report: ${data.entries.length} entries, queued for ${deps.recipients.length} recipients`);
   return true;
 }

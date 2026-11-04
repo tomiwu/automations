@@ -52,11 +52,26 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       outbox.set(entry.key, { ...entry, queuedAt: now(), deliveredAt: null });
       return true;
     },
+    enqueueNotifications: async (entries) => {
+      let added = 0;
+      for (const entry of entries) {
+        if (outbox.has(entry.key)) continue;
+        outbox.set(entry.key, { ...entry, queuedAt: now(), deliveredAt: null });
+        added += 1;
+      }
+      return added;
+    },
     pendingNotifications: async (familyId) =>
       [...outbox.values()].filter((entry) => entry.familyId === familyId && entry.deliveredAt === null),
     markDelivered: async (key) => {
       const entry = outbox.get(key);
       if (entry && entry.deliveredAt === null) entry.deliveredAt = now();
+    },
+    markDeliveredMany: async (keys) => {
+      for (const key of keys) {
+        const entry = outbox.get(key);
+        if (entry && entry.deliveredAt === null) entry.deliveredAt = now();
+      }
     },
     purgeDelivered: async (olderThanDays) => {
       const limit = now().getTime() - olderThanDays * DAY_MS;

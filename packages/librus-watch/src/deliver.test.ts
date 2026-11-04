@@ -27,6 +27,21 @@ describe("deliverPending", () => {
     expect(await storage.pendingNotifications(FAMILY_ID)).toEqual([]);
   });
 
+  it("marks all sent entries in one write, also when a send failed", async () => {
+    const storage = createMemoryStorage();
+    const batches: (readonly string[])[] = [];
+    const markMany = storage.markDeliveredMany;
+    storage.markDeliveredMany = async (keys) => {
+      batches.push(keys);
+      await markMany(keys);
+    };
+    await storage.enqueueNotifications([entry("a", "1000001"), entry("b", "1000002"), entry("c", "1000001")]);
+    const { m } = messenger(["1000002"]);
+    await expect(deliverPending({ storage, familyId: FAMILY_ID, messenger: m, chatIds: ["1000001", "1000002"] })).rejects.toThrow();
+    expect(batches).toEqual([["a", "c"]]);
+    expect((await storage.pendingNotifications(FAMILY_ID)).map((e) => e.key)).toEqual(["b"]);
+  });
+
   it("holds back only the chat that failed, then rejects", async () => {
     const storage = createMemoryStorage();
     await storage.enqueueNotification(entry("a", "1000001"));

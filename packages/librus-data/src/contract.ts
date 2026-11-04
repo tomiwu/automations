@@ -50,6 +50,14 @@ function outboxTests(create: () => Promise<ContractHarness>): void {
     expect(pending.map((item) => item.text)).toEqual(["Hello"]);
   });
 
+  it("enqueues and marks many entries at once", async () => {
+    const { storage } = await create();
+    expect(await storage.enqueueNotifications([entry("k1"), entry("k2"), entry("k1")])).toBe(2);
+    expect(await storage.enqueueNotifications([entry("k2"), entry("k3")])).toBe(1);
+    await storage.markDeliveredMany(["k1", "k3"]);
+    expect((await storage.pendingNotifications(FAMILY_ID)).map((item) => item.key)).toEqual(["k2"]);
+  });
+
   it("lists only pending entries of the Family", async () => {
     const { storage } = await create();
     await storage.enqueueNotification(entry("k1"));

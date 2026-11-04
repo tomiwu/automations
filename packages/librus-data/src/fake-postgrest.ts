@@ -16,14 +16,25 @@ const PRIMARY_KEYS: Record<string, readonly string[]> = {
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
+/** Reads `("a","b")` or `(a,b)`: a quoted value may hold commas, quotes and backslashes. */
+function inPredicate(column: string, operand: string): Predicate {
+  const members = operand.slice(1, -1).match(/"(?:[^"\\]|\\.)*"|[^,]+/g) ?? [];
+  const values = members.map((member) => member.replace(/^"|"$/g, "").replace(/\\(.)/g, "$1"));
+  return (row) => values.includes(String(row[column]));
+}
+
+const OPERATORS: Record<string, (column: string, operand: string) => Predicate> = {
+  eq: (column, operand) => (row) => String(row[column]) === operand,
+  is: (column) => (row) => row[column] === null,
+  in: inPredicate,
+  lt: (column, operand) => (row) => typeof row[column] === "string" && row[column] < operand,
+};
+
 function predicateFor(column: string, filter: string): Predicate {
   const dot = filter.indexOf(".");
-  const operator = filter.slice(0, dot);
-  const operand = filter.slice(dot + 1);
-  if (operator === "eq") return (row) => String(row[column]) === operand;
-  if (operator === "is" && operand === "null") return (row) => row[column] === null;
-  if (operator === "lt") return (row) => typeof row[column] === "string" && row[column] < operand;
-  throw new Error(`Filter ${filter} is not supported`);
+  const build = OPERATORS[filter.slice(0, dot)];
+  if (!build) throw new Error(`Filter ${filter} is not supported`);
+  return build(column, filter.slice(dot + 1));
 }
 
 function predicatesOf(params: URLSearchParams): Predicate[] {
@@ -82,11 +93,23 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
     return added;
   };
 
+  const EMBEDS: Record<string, readonly string[]> = { families: ["children", "accounts", "activities", "recipients"] };
+
+  /** Supports the embedded selects of a Family: `children(*)` adds the rows whose `family_id` is the ID. */
+  const embed = (rows: Row[], name: string, select: string | null): Row[] => {
+    const wanted = (EMBEDS[name] ?? []).filter((child) => select?.includes(`${child}(*)`));
+    return rows.map((row) => {
+      const copy = { ...row };
+      for (const child of wanted) copy[child] = table(child).filter((other) => other.family_id === row.id);
+      return copy;
+    });
+  };
+
   const handle = (method: string, name: string, params: URLSearchParams, init?: RequestInit): Response => {
     const matches = predicatesOf(params);
     const selected = table(name).filter((row) => matches.every((test) => test(row)));
     const prefer = new Headers(init?.headers).get("prefer") ?? "";
-    if (method === "GET") return json(sortRows(selected, params.get("order")));
+    if (method === "GET") return json(embed(sortRows(selected, params.get("order")), name, params.get("select")));
     if (method === "POST") {
       const added = insert(name, JSON.parse(String(init?.body)) as Row[], prefer.includes("ignore-duplicates"));
       return prefer.includes("return=representation") ? json(added, 201) : new Response(null, { status: 201 });

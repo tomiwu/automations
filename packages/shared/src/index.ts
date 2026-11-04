@@ -30,3 +30,5 @@ export { CATALOGS, languageFor, t } from "./i18n.ts";
 export type { Catalog, MessageKey, MessageParams } from "./i18n.ts";
 export { decryptCredential, encryptCredential, importCredentialKey, newCredentialKey } from "./credentials.ts";
 export { isValidNip, isValidNrb } from "./checksums.ts";
+export { countFetches, formatFetchCount } from "./fetch-counter.ts";
+export type { FetchCount, FetchCounter } from "./fetch-counter.ts";

@@ -1,5 +1,5 @@
 import { createMemoryStorage } from "@automations/librus-data";
-import { fakeRuntime } from "@automations/shared";
+import { countFetches, fakeRuntime } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import { PURGE_AFTER_DAYS, runPurge } from "./purge.ts";
 
@@ -20,6 +20,14 @@ describe("runPurge", () => {
     expect(await runPurge({ storage, runtime })).toBe(1);
     expect(runtime.logs).toEqual([{ level: "info", message: "purged 1 delivered Outbox entries" }]);
     expect(await runPurge({ storage, runtime })).toBe(0);
+  });
+
+  it("logs the fetch count when it has a counter", async () => {
+    const counter = countFetches(async () => new Response(""));
+    await counter.fetch("https://project.example.test/rest/v1/outbox");
+    const runtime = fakeRuntime();
+    await runPurge({ storage: createMemoryStorage(), runtime, counter });
+    expect(runtime.logs.at(-1)?.message).toBe("fetches total=1 project.example.test=1");
   });
 
   it("uses a limit of 30 days", () => {

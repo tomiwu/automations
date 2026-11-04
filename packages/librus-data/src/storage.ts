@@ -73,8 +73,12 @@ export interface StorageAdapter {
   recordItems(familyId: string, watcher: string, ids: readonly string[]): Promise<number>;
   /** Idempotent on `key`. Returns true if the entry is new. */
   enqueueNotification(entry: NewNotification): Promise<boolean>;
+  /** Like `enqueueNotification` for many entries in one request. Returns the number of new entries. */
+  enqueueNotifications(entries: readonly NewNotification[]): Promise<number>;
   pendingNotifications(familyId: string): Promise<OutboxEntry[]>;
   markDelivered(key: string): Promise<void>;
+  /** Like `markDelivered` for many keys in one request. */
+  markDeliveredMany(keys: readonly string[]): Promise<void>;
   /** Removes entries delivered more than `olderThanDays` days ago. Returns the number removed. */
   purgeDelivered(olderThanDays: number): Promise<number>;
   loadConfig(familyId: string): Promise<Config>;

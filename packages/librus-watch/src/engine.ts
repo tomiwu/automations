@@ -1,5 +1,5 @@
 import type { Child, Language, Recipient } from "@automations/shared";
-import type { StorageAdapter } from "@automations/librus-data";
+import type { NewNotification, StorageAdapter } from "@automations/librus-data";
 import {
   formatAbsence,
   formatAnnouncement,
@@ -135,17 +135,17 @@ const ANNOUNCERS: Record<WatcherName, AnyAnnounce> = {
   ),
 };
 
-/** Queues the Notification for each Recipient. The key has the chat ID, so each queue is idempotent. */
-async function enqueueFor(check: ChildCheck, scope: string, announcement: Announcement): Promise<void> {
-  for (const recipient of check.recipients) {
+/** Makes the Notification for each Recipient. The key has the chat ID, so each queue is idempotent. */
+function notificationsFor(check: ChildCheck, scope: string, announcement: Announcement): NewNotification[] {
+  return check.recipients.map((recipient) => {
     const context: FormatContext = { language: recipient.language as Language, child: check.child.name };
-    await check.storage.enqueueNotification({
+    return {
       key: `${scope}:${announcement.key}:${recipient.telegram_chat_id}`,
       familyId: check.familyId,
       chatId: recipient.telegram_chat_id,
       text: announcement.text(context),
-    });
-  }
+    };
+  });
 }
 
 /**
@@ -160,9 +160,8 @@ export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promi
   const known = await check.storage.knownItemIds(check.familyId, scope);
   if (known.size > 0) {
     const changes = changesOf(current, known);
-    for (const announcement of await (ANNOUNCERS[watcher] as Announce<HashedItem>)(changes, check.source)) {
-      await enqueueFor(check, scope, announcement);
-    }
+    const announcements = await (ANNOUNCERS[watcher] as Announce<HashedItem>)(changes, check.source);
+    await check.storage.enqueueNotifications(announcements.flatMap((a) => notificationsFor(check, scope, a)));
   }
   await check.storage.recordItems(check.familyId, scope, [BASELINE_ID, ...current.map(storedId)]);
 }

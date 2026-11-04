@@ -14,6 +14,7 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 | --- | --- | --- | --- |
 | `./children` | none | `{ children: { id, name, calendar_id }[] }` | none (read-only) |
 | `./lessons` | `{ childId? }` | Lessons of the next 14 days | logs in to Librus, read-only |
+| `./calendar` | `{ childId? }` | Lessons and upcoming homework and tests of the next 14 days, one login | logs in to Librus, read-only |
 | `./upcoming` | `{ childId?, days? }` | homework and tests with their Lesson | logs in to Librus, read-only |
 | `./scheduled` | none | `{ ok: true }` | runs the Watchers, writes Items and the Outbox, sends Telegram messages |
 | `./purge` | none | `{ ok: true, removed }` | deletes delivered Outbox rows older than 30 days |
