@@ -1,5 +1,5 @@
 import type { ItemKind, NewItemDetail } from "@automations/librus-data";
-import type { AnnouncementItem, HomeworkItem, ItemsByWatcher, MessageItem, TripItem, WatcherName } from "./types.ts";
+import type { AnnouncementItem, DayOffItem, HomeworkItem, MeetingItem, ItemsByWatcher, MessageItem, TripItem, WatcherName } from "./types.ts";
 
 /** Where a detail belongs: the Family, the scope of the Watcher and the Child. */
 export interface DetailContext {
@@ -86,6 +86,29 @@ export function terminarzDetail(context: DetailContext, entry: HomeworkItem): Ne
   };
 }
 
+/** The content of a meeting: date, times, topic, room and teacher. */
+export function meetingDetail(context: DetailContext, meeting: MeetingItem): NewItemDetail {
+  return {
+    ...emptyDetail(context, "meeting", meeting.id),
+    date: orNull(meeting.date),
+    startTime: orNull(meeting.start),
+    endTime: orNull(meeting.end),
+    title: meeting.topic,
+    text: [meeting.topic, meeting.room, meeting.teacher].filter((part) => part !== "").join("\n"),
+    sender: orNull(meeting.teacher),
+  };
+}
+
+/** The content of a day off. The date is the first day. The text has the name and the date range. */
+export function dayOffDetail(context: DetailContext, dayOff: DayOffItem): NewItemDetail {
+  return {
+    ...emptyDetail(context, "dayOff", dayOff.id),
+    date: orNull(dayOff.from),
+    title: dayOff.name,
+    text: [dayOff.name, `${dayOff.from} - ${dayOff.to}`].filter((part) => part !== "").join("\n"),
+  };
+}
+
 /**
  * The content of one Item of a Watcher. A message needs its `body`. Returns undefined when the
  * Watcher has no stored content.
@@ -105,6 +128,11 @@ export function detailOf(
       return tripDetail(context, item as TripItem);
     case "homework":
       return terminarzDetail(context, item as HomeworkItem);
+    case "meetings":
+      return meetingDetail(context, item as MeetingItem);
+    case "schoolFreeDays":
+    case "classFreeDays":
+      return dayOffDetail(context, item as DayOffItem);
     default:
       return undefined;
   }

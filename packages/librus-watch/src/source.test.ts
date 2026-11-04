@@ -247,4 +247,34 @@ describe("loginIframeSource", () => {
   it("ignores other iframes and returns nothing without a login iframe", () => {
     expect(loginIframeSource('<iframe src="https://ads.example.com/banner"></iframe>')).toBeUndefined();
   });
+
+  it("reads meetings and days off with one fetch each, and keeps only current ones", async () => {
+    const runtime = librus([
+      (url) => (url.pathname.endsWith("/ParentTeacherConferences") ? json({ ParentTeacherConferences: [
+        { Id: 1, Date: "2026-01-20", Time: "17:00", Topic: "Open day", Room: "5", Teacher: { Id: 4 } },
+        { Id: 2, Date: "2025-12-01", Topic: "Old" },
+      ] }) : undefined),
+      (url) => (url.pathname.endsWith("/SchoolFreeDays") ? json({ SchoolFreeDays: [{ Id: 1, DateFrom: "2026-02-10", DateTo: "2026-02-14", Name: "Break" }, { Id: 2, DateFrom: "2025-12-01", DateTo: "2025-12-02" }] }) : undefined),
+      (url) => (url.pathname.endsWith("/ClassFreeDays") ? json({ ClassFreeDays: [{ Id: 3, DateFrom: "2026-01-12", Name: "Trip day" }] }) : undefined),
+      (url) => (url.pathname.endsWith("/Users/4") ? json({ User: { FirstName: "Teacher", LastName: "One" } }) : undefined),
+    ]);
+    const source = createLibrusSource(runtime, account, { timezone: "UTC" });
+    const before = runtime.requests.length;
+    expect(await source.currentItems("meetings")).toEqual([
+      expect.objectContaining({ id: "1", date: "2026-01-20", start: "17:00", topic: "Open day", room: "5", teacher: "Teacher One" }),
+    ]);
+    expect(await source.currentItems("schoolFreeDays")).toEqual([expect.objectContaining({ id: "1", from: "2026-02-10", to: "2026-02-14", name: "Break" })]);
+    expect(await source.currentItems("classFreeDays")).toEqual([expect.objectContaining({ id: "3", from: "2026-01-12", to: "2026-01-12" })]);
+    const paths = runtime.requests.slice(before).map((r) => new URL(r.input).pathname.split("/").pop());
+    expect(paths.filter((p) => ["ParentTeacherConferences", "SchoolFreeDays", "ClassFreeDays"].includes(p ?? ""))).toHaveLength(3);
+  });
+
+  it("changes the hash of a meeting when its date changes", async () => {
+    const row = (date: string) => ({ ParentTeacherConferences: [{ Id: 1, Date: date, Topic: "Open day" }] });
+    const hashOf = async (date: string) => {
+      const runtime = librus([(url) => (url.pathname.endsWith("/ParentTeacherConferences") ? json(row(date)) : undefined)]);
+      return (await createLibrusSource(runtime, account, { timezone: "UTC" }).currentItems("meetings"))[0]?.hash;
+    };
+    expect(await hashOf("2026-01-20")).not.toBe(await hashOf("2026-01-21"));
+  });
 });

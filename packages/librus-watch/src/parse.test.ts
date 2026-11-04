@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   parseAbsences,
   parseAnnouncements,
+  parseClassFreeDays,
   parseGrades,
   parseHomeworks,
   parseMessageBody,
   parseMessages,
+  parseParentTeacherConferences,
+  parseSchoolFreeDays,
   parseSubstitutions,
   parseTimetable,
   parseTrips,
@@ -93,5 +96,37 @@ describe("json parsers", () => {
       [4, "substitution", "Teacher One", "Teacher Two"],
     ]);
     expect(lessons[0]).toMatchObject({ subject: "Math", room: "5", start: "08:00", end: "08:45" });
+  });
+});
+
+describe("meeting and day-off parsers", () => {
+  it("parses parent-teacher conferences and accepts missing fields", () => {
+    const json = JSON.stringify({
+      ParentTeacherConferences: [
+        { Id: 7, Date: "2026-02-03", Time: "17:30:00", Topic: " Open  day ", Room: "12", Teacher: { Id: 4 } },
+        { Id: 8 },
+      ],
+    });
+    expect(parseParentTeacherConferences(json)).toEqual([
+      { id: "7", date: "2026-02-03", start: "17:30", end: "", topic: "Open day", room: "12", teacherId: "4" },
+      { id: "8", date: "", start: "", end: "", topic: "", room: "", teacherId: "" },
+    ]);
+  });
+
+  it("parses school days off and defaults the end to the start", () => {
+    const json = JSON.stringify({ SchoolFreeDays: [{ Id: 1, DateFrom: "2026-02-10", DateTo: "2026-02-14", Name: "Winter break" }, { Id: 2, DateFrom: "2026-03-02" }] });
+    expect(parseSchoolFreeDays(json)).toEqual([
+      { id: "1", from: "2026-02-10", to: "2026-02-14", name: "Winter break" },
+      { id: "2", from: "2026-03-02", to: "2026-03-02", name: "" },
+    ]);
+  });
+
+  it("parses class days off", () => {
+    const json = JSON.stringify({ ClassFreeDays: [{ Id: 3, DateFrom: "2026-04-01", DateTo: "2026-04-01", Name: "Trip day" }] });
+    expect(parseClassFreeDays(json)).toEqual([{ id: "3", from: "2026-04-01", to: "2026-04-01", name: "Trip day" }]);
+  });
+
+  it("rejects an answer without the array", () => {
+    expect(() => parseClassFreeDays("{}")).toThrow("no ClassFreeDays array");
   });
 });

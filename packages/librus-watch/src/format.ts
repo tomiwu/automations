@@ -2,9 +2,11 @@ import { t, type Language } from "@automations/shared";
 import type {
   AbsenceItem,
   AnnouncementItem,
+  DayOffItem,
   GradeItem,
   HomeworkItem,
   LessonItem,
+  MeetingItem,
   MessageItem,
   SubstitutionItem,
   TripItem,
@@ -120,4 +122,17 @@ export function formatAccountError({ language, child }: FormatContext, reason: s
 
 export function formatLoginError({ language, child }: FormatContext): string {
   return t(language, "error.login", { child });
+}
+
+/** One short line for a parent-teacher meeting, for the morning report. */
+export function formatMeetingLine(language: Language, meeting: MeetingItem): string {
+  const span = meeting.end === "" ? meeting.start : `${meeting.start}-${meeting.end}`;
+  const when = [meeting.date, span].filter((part) => part !== "").join(" ");
+  const details = [meeting.room, meeting.teacher].filter((part) => part !== "").join(", ");
+  return t(language, "meeting.line", { when, topic: meeting.topic, details: inBrackets(details) });
+}
+
+/** One short line for a day off of the school or the class, for the morning report. */
+export function formatDayOffLine(language: Language, dayOff: DayOffItem): string {
+  return t(language, "dayoff.line", { dates: rangeText(dayOff.from, dayOff.to), name: dayOff.name });
 }

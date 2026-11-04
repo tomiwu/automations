@@ -234,3 +234,46 @@ export function parseTimetable(json: string): Lesson[] {
     (periods as Json[][]).flat().map((lesson) => lessonOf(date, lesson)),
   );
 }
+
+/** A parent-teacher meeting as Librus sends it: the teacher is still an ID. */
+export interface RawMeeting {
+  id: string;
+  date: string;
+  start: string;
+  end: string;
+  topic: string;
+  room: string;
+  teacherId: string;
+}
+
+/** Meetings from a `ParentTeacherConferences` answer. Missing fields become empty text. */
+export function parseParentTeacherConferences(json: string): RawMeeting[] {
+  return arrayAt(json, "ParentTeacherConferences").map((entry) => ({
+    id: String(entry.Id),
+    date: day(entry.Date),
+    start: time(entry.Time ?? entry.TimeFrom),
+    end: time(entry.TimeTo),
+    topic: text(entry.Topic ?? entry.Name),
+    room: text(entry.Room),
+    teacherId: idOf(entry.Teacher),
+  }));
+}
+
+/** A day off as Librus sends it. The name can be missing. */
+export interface RawDayOff {
+  id: string;
+  from: string;
+  to: string;
+  name: string;
+}
+
+function dayOffOf(entry: Json): RawDayOff {
+  const from = day(entry.DateFrom);
+  return { id: String(entry.Id), from, to: day(entry.DateTo) || from, name: text(entry.Name) };
+}
+
+/** Days off of the whole school from a `SchoolFreeDays` answer. */
+export const parseSchoolFreeDays = (json: string): RawDayOff[] => arrayAt(json, "SchoolFreeDays").map(dayOffOf);
+
+/** Days off of the class from a `ClassFreeDays` answer. */
+export const parseClassFreeDays = (json: string): RawDayOff[] => arrayAt(json, "ClassFreeDays").map(dayOffOf);
