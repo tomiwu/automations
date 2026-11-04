@@ -95,6 +95,8 @@ export function parseAnnouncements(html: string): AnnouncementItem[] {
       id: `${fields["Czas publikacji"] ?? ""}|${title}`,
       title,
       summary: body.length > 140 ? `${body.slice(0, 140)}…` : body,
+      text: body,
+      publishedAt: fields["Czas publikacji"] ?? "",
     });
   });
   return items;

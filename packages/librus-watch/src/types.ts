@@ -24,7 +24,12 @@ export interface MessageItem {
 export interface AnnouncementItem {
   id: string;
   title: string;
+  /** The start of the text, for Telegram. */
   summary: string;
+  /** The whole `Treść` text. */
+  text: string;
+  /** The `Czas publikacji` value, for example "2026-01-05 10:30:00". */
+  publishedAt: string;
 }
 
 /** One school trip from the Terminarz. Dates are "YYYY-MM-DD". */

@@ -119,7 +119,7 @@ describe("runChildCheck", () => {
     await runChildCheck(check);
     source.items.trips = [{ id: "t1", destination: "Museum", route: "Town", transport: "", from: "2026-01-09", to: "2026-01-10", coordinator: "Teacher One" }];
     source.items.absences = [{ id: "a1", hash: "x", teacher: "Teacher One", from: "2026-01-09", to: "2026-01-09", timeFrom: "08:00", timeTo: "10:00", addedAt: "2026-01-08" }];
-    source.items.announcements = [{ id: "n1", title: "Notice", summary: "Line one\nLine two" }];
+    source.items.announcements = [{ id: "n1", title: "Notice", summary: "Line one\nLine two", text: "Line one\nLine two", publishedAt: "2026-01-05 10:30:00" }];
     await runChildCheck(check);
     const all = (await texts()).filter((t) => t.startsWith("1000001"));
     expect(all).toContain("1000001|New trip for Child One, 2026-01-09 - 2026-01-10: Museum\nRoute: Town\nCoordinator: Teacher One");
@@ -146,5 +146,49 @@ describe("runChildCheck", () => {
     await runChildCheck(check);
     const other = { ...check.child, id: "other" };
     expect((await storage.knownItemIds(FAMILY_ID, scopeOf("grades", other))).size).toBe(0);
+  });
+
+  describe("stored content", () => {
+    const details = (storage: ReturnType<typeof setup>["storage"]) => storage.listDetails(FAMILY_ID);
+
+    it("stores the whole body of a new message once and opens it once", async () => {
+      const { source, check, storage } = setup();
+      source.items.messages = [{ id: "m1", sender: "Teacher One", subject: "Hello", sentAt: "2026-01-05 10:30:00" }];
+      await runChildCheck(check);
+      source.items.messages = [...source.items.messages, { id: "m2", sender: "Teacher Two", subject: "Trip", sentAt: "2026-01-06 08:00:00" }];
+      await runChildCheck(check);
+      await runChildCheck(check);
+      expect(source.bodies).toEqual(["m2"]);
+      const rows = await details(storage);
+      expect(rows.map((r) => [r.kind, r.sourceId, r.text])).toEqual([["message", "m2", "Body of m2"]]);
+    });
+
+    it("stores no detail in the Baseline run", async () => {
+      const { source, check, storage } = setup();
+      source.items.messages = [{ id: "m1", sender: "Teacher One", subject: "Hello", sentAt: "2026-01-05" }];
+      source.items.trips = [{ id: "t1", destination: "Museum", route: "", transport: "", from: "2026-02-01", to: "2026-02-01", coordinator: "" }];
+      await runChildCheck(check);
+      expect(await details(storage)).toEqual([]);
+    });
+
+    it("adds a row for an updated Terminarz entry and keeps the old row", async () => {
+      const { source, check, storage } = setup();
+      await runChildCheck(check);
+      const entry = { id: "h1", hash: "a", category: "Test", date: "2026-01-09", content: "Chapter 1", subject: "Math", teacher: "Teacher One" };
+      source.items.homework = [entry];
+      await runChildCheck(check);
+      source.items.homework = [{ ...entry, hash: "b", content: "Chapter 2" }];
+      await runChildCheck(check);
+      expect((await details(storage)).map((r) => r.text)).toEqual(["Chapter 1", "Chapter 2"]);
+    });
+
+    it("stores announcements and trips", async () => {
+      const { source, check, storage } = setup();
+      await runChildCheck(check);
+      source.items.announcements = [{ id: "n1", title: "Notice", summary: "Sh", text: "Whole text", publishedAt: "2026-01-05" }];
+      source.items.trips = [{ id: "t1", destination: "Museum", route: "A", transport: "Bus", from: "2026-02-01", to: "2026-02-02", coordinator: "Teacher One" }];
+      await runChildCheck(check);
+      expect((await details(storage)).map((r) => r.kind).sort()).toEqual(["announcement", "trip"]);
+    });
   });
 });
