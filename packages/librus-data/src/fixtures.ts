@@ -3,6 +3,7 @@ import type { Fee } from "./storage.ts";
 
 export const FAMILY_ID = "00000000-0000-4000-8000-000000000001";
 export const OTHER_FAMILY_ID = "00000000-0000-4000-8000-000000000002";
+export const CHILD_ID = "00000000-0000-4000-8000-0000000000c1";
 export const FEE_ID = "00000000-0000-4000-8000-0000000000f1";
 
 /** Invented Fee for tests. */

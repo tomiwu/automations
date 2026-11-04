@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { exampleConfig, exampleFee, FAMILY_ID, OTHER_FAMILY_ID } from "./fixtures.ts";
-import type { Fee, NewPayment, StorageAdapter } from "./storage.ts";
+import { CHILD_ID, exampleConfig, exampleFee, FAMILY_ID, OTHER_FAMILY_ID } from "./fixtures.ts";
+import type { Fee, NewItemDetail, NewPayment, StorageAdapter } from "./storage.ts";
 import type { Config } from "@automations/shared";
 
 /** What the contract suite needs from one adapter under test. */
@@ -38,6 +38,97 @@ function itemTests(create: () => Promise<ContractHarness>): void {
     await storage.recordItems(FAMILY_ID, "librus", ["a"]);
     expect((await storage.knownItemIds(FAMILY_ID, "mondo")).size).toBe(0);
     expect((await storage.knownItemIds(OTHER_FAMILY_ID, "librus")).size).toBe(0);
+  });
+}
+
+const OTHER_CHILD_ID = "00000000-0000-4000-8000-0000000000c2";
+
+const detail = (overrides: Partial<NewItemDetail> = {}): NewItemDetail => ({
+  familyId: FAMILY_ID,
+  scope: "messages:child-one",
+  kind: "message",
+  childId: CHILD_ID,
+  sourceId: "m1",
+  date: "2025-01-10",
+  startTime: "09:30",
+  endTime: null,
+  title: "Trip fee",
+  text: "Please pay the fee for the trip.\nThank you.",
+  sender: "Teacher One",
+  subject: "Trip",
+  category: null,
+  sourceUpdatedAt: new Date("2025-01-09T08:00:00Z"),
+  ...overrides,
+});
+
+/** The real database needs the Family of each row. */
+async function detailHarness(create: () => Promise<ContractHarness>): Promise<ContractHarness> {
+  const harness = await create();
+  await harness.seedConfig(exampleConfig());
+  await harness.seedConfig({ ...exampleConfig(OTHER_FAMILY_ID), children: [], accounts: [], recipients: [] });
+  return harness;
+}
+
+function detailTests(create: () => Promise<ContractHarness>): void {
+  it("stores the content of an Item and lists it", async () => {
+    const { storage } = await detailHarness(create);
+    expect(await storage.recordDetails([detail()])).toBe(1);
+    const [stored] = await storage.listDetails(FAMILY_ID);
+    expect(stored).toMatchObject(detail());
+    expect(stored?.firstSeen).toBeInstanceOf(Date);
+  });
+
+  it("does not store the same content twice", async () => {
+    const { storage } = await detailHarness(create);
+    expect(await storage.recordDetails([detail(), detail()])).toBe(1);
+    expect(await storage.recordDetails([detail(), detail({ sourceId: "m2" })])).toBe(1);
+    expect(await storage.recordDetails([])).toBe(0);
+    expect((await storage.listDetails(FAMILY_ID)).length).toBe(2);
+  });
+
+  it("keeps the old row when the content of an Item changes", async () => {
+    const { storage } = await detailHarness(create);
+    await storage.recordDetails([detail()]);
+    expect(await storage.recordDetails([detail({ text: "Changed text." })])).toBe(1);
+    const texts = (await storage.listDetails(FAMILY_ID)).map((row) => row.text);
+    expect(texts).toHaveLength(2);
+    expect(texts).toContain("Changed text.");
+  });
+
+  it("stores many rows in batches", async () => {
+    const { storage } = await detailHarness(create);
+    const rows = Array.from({ length: 250 }, (_, index) => detail({ sourceId: `m${index}` }));
+    expect(await storage.recordDetails(rows)).toBe(250);
+    expect((await storage.listDetails(FAMILY_ID)).length).toBe(250);
+  });
+
+  it("filters by Child, day range and first-seen time", async () => {
+    const { storage, advanceDays } = await detailHarness(create);
+    await storage.recordDetails([
+      detail({ sourceId: "a", date: "2025-01-05" }),
+      detail({ sourceId: "b", date: "2025-01-10", childId: OTHER_CHILD_ID }),
+      detail({ sourceId: "c", date: null }),
+      detail({ sourceId: "d", date: "2025-01-20" }),
+    ]);
+    await advanceDays(2);
+    await storage.recordDetails([detail({ sourceId: "e", date: "2025-01-12" })]);
+    const ids = async (filter: Parameters<typeof storage.listDetails>[1]): Promise<string[]> =>
+      (await storage.listDetails(FAMILY_ID, filter)).map((row) => row.sourceId).sort();
+    expect(await ids({})).toEqual(["a", "b", "c", "d", "e"]);
+    expect(await ids({ childId: OTHER_CHILD_ID })).toEqual(["b"]);
+    expect(await ids({ from: "2025-01-10", to: "2025-01-20" })).toEqual(["b", "d", "e"]);
+    expect(await ids({ from: "2025-01-11" })).toEqual(["d", "e"]);
+    expect(await ids({ to: "2025-01-10" })).toEqual(["a", "b"]);
+    expect(await ids({ since: new Date("2025-01-02T00:00:00Z") })).toEqual(["e"]);
+  });
+
+  it("keeps details apart per Family and keeps them after a purge", async () => {
+    const { storage, advanceDays } = await detailHarness(create);
+    await storage.recordDetails([detail(), detail({ familyId: OTHER_FAMILY_ID })]);
+    await advanceDays(400);
+    await storage.purgeDelivered(30);
+    expect((await storage.listDetails(FAMILY_ID)).length).toBe(1);
+    expect((await storage.listDetails(OTHER_FAMILY_ID)).length).toBe(1);
   });
 }
 
@@ -102,7 +193,6 @@ const newPayment = (overrides: Partial<NewPayment> = {}): NewPayment => ({
   ...overrides,
 });
 
-const OTHER_CHILD_ID = "00000000-0000-4000-8000-0000000000c2";
 const OTHER_FEE_ID = "00000000-0000-4000-8000-0000000000f2";
 
 /** Seeds the Family, its Child and one Fee, and the same for the other Family. */
@@ -187,6 +277,7 @@ function paymentTests(create: () => Promise<ContractHarness>): void {
 export function runStorageContract(name: string, create: () => Promise<ContractHarness>): void {
   describe(`StorageAdapter contract: ${name}`, () => {
     itemTests(create);
+    detailTests(create);
     outboxTests(create);
     purgeTests(create);
     configTests(create);

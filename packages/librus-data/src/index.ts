@@ -1,6 +1,10 @@
 export type {
   AmountSource,
+  DetailFilter,
   Fee,
+  ItemDetail,
+  ItemKind,
+  NewItemDetail,
   NewNotification,
   NewPayment,
   OutboxEntry,

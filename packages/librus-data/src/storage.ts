@@ -8,6 +8,44 @@ export interface StoredItem {
   firstSeen: Date;
 }
 
+export type ItemKind = "meeting" | "dayOff" | "trip" | "terminarz" | "announcement" | "message" | "grade";
+
+/** The content of one Item. `scope` is the Watcher name of the Item, for example `messages:<childId>`. */
+export interface NewItemDetail {
+  familyId: string;
+  scope: string;
+  kind: ItemKind;
+  childId: string;
+  sourceId: string;
+  /** `YYYY-MM-DD`. */
+  date: string | null;
+  /** `HH:MM`. */
+  startTime: string | null;
+  endTime: string | null;
+  title: string;
+  /** The whole text. */
+  text: string;
+  sender: string | null;
+  subject: string | null;
+  category: string | null;
+  sourceUpdatedAt: Date | null;
+}
+
+/** A stored `NewItemDetail`. It is kept forever. */
+export interface ItemDetail extends NewItemDetail {
+  firstSeen: Date;
+}
+
+export interface DetailFilter {
+  childId?: string;
+  /** First day, `YYYY-MM-DD`, included. */
+  from?: string;
+  /** Last day, `YYYY-MM-DD`, included. */
+  to?: string;
+  /** Only rows that were first seen at or after this time. */
+  since?: Date;
+}
+
 /** One Notification for one Recipient. The `key` includes the chat ID. */
 export interface NewNotification {
   key: string;
@@ -71,6 +109,13 @@ export interface StorageAdapter {
   listItems(familyId: string, watcher: string): Promise<StoredItem[]>;
   /** Records the IDs that are new. Returns the number of new Items. */
   recordItems(familyId: string, watcher: string, ids: readonly string[]): Promise<number>;
+  /**
+   * Stores the content of Items. A row with the same Family, scope, source ID and content is not stored again.
+   * Changed content adds a new row; the old row stays. Returns the number of new rows.
+   */
+  recordDetails(rows: readonly NewItemDetail[]): Promise<number>;
+  /** Details of the Family, oldest first. */
+  listDetails(familyId: string, filter?: DetailFilter): Promise<ItemDetail[]>;
   /** Idempotent on `key`. Returns true if the entry is new. */
   enqueueNotification(entry: NewNotification): Promise<boolean>;
   /** Like `enqueueNotification` for many entries in one request. Returns the number of new entries. */
