@@ -39,10 +39,21 @@ export async function uniqueDetails(
   return [...unique.values()];
 }
 
+/** True if the date is not before the optional lower bound. */
+const notBefore = (date: string | null, from?: string): boolean =>
+  from === undefined || (date !== null && date >= from);
+
+/** True if the date is not after the optional upper bound. */
+const notAfter = (date: string | null, to?: string): boolean =>
+  to === undefined || (date !== null && date <= to);
+
+/** True if the detail date is inside the optional from and to bounds. */
+const dateMatches = (detail: ItemDetail, filter: DetailFilter): boolean =>
+  notBefore(detail.date, filter.from) && notAfter(detail.date, filter.to);
+
 /** True if the detail passes the filter. */
 export function matchesFilter(detail: ItemDetail, filter: DetailFilter): boolean {
   if (filter.childId !== undefined && detail.childId !== filter.childId) return false;
-  if (filter.from !== undefined && (detail.date === null || detail.date < filter.from)) return false;
-  if (filter.to !== undefined && (detail.date === null || detail.date > filter.to)) return false;
+  if (!dateMatches(detail, filter)) return false;
   return filter.since === undefined || detail.firstSeen.getTime() >= filter.since.getTime();
 }
