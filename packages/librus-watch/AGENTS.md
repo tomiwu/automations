@@ -1,6 +1,6 @@
 # Agent notes: @tomiwu/librus-watch
 
-Watches Librus Synergia for one Family and sends new Items (grades, messages, announcements, trips, homework, absences, substitutions, lessons) to the Recipients on Telegram. The config lives in Supabase.
+Watches Librus Synergia for one Family and sends new Items (grades, messages, announcements, trips, homework, absences, substitutions, lessons, parent meetings, school days off, class days off) to the Recipients on Telegram. The config lives in Supabase.
 
 ## Imports
 
@@ -16,10 +16,15 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 | `./lessons` | `{ childId? }` | Lessons of the next 14 days | logs in to Librus, read-only |
 | `./calendar` | `{ childId? }` | Lessons and upcoming homework and tests of the next 14 days, one login | logs in to Librus, read-only |
 | `./upcoming` | `{ childId?, days? }` | homework and tests with their Lesson | logs in to Librus, read-only |
+| `./events` | `{ childId?, from?, to?, since? }` | `{ childId, child, from, to, since, events }`. Each event: `id`, `kind`, `date`, `endDate`, `start`, `end`, `title`, `text`, `sender`, `subject`, `category`, `sourceUpdatedAt`, `firstSeen` | none (reads Supabase only, no Librus login) |
 | `./scheduled` | none | `{ ok: true }` | runs the Watchers, writes Items and the Outbox, sends Telegram messages |
 | `./purge` | none | `{ ok: true, removed }` | deletes delivered Outbox rows older than 30 days |
 
 `./scheduled` and `./purge` are the jobs in `package.json` (`kody.jobs`). Do not call them as a test: `./scheduled` can send real messages.
+
+## Stored content
+
+The Watchers store the full content of each new Item in the Supabase table `item_details`. The meetings and days-off Watchers send no Notification; the Morning report lists them. `./events` reads this table. `from` and `to` are `YYYY-MM-DD`; `since` is an ISO time for `firstSeen` (default 7 days ago). Data is kept forever: `./purge` removes only delivered Outbox rows, never `item_details`. Changed content adds a new row with a new event `id`.
 
 ## Config
 
@@ -34,6 +39,7 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 1. `children` with `{}`: returns at least one Child. This proves the config and `SUPABASE_KEY`.
 2. `lessons` with `{ childId }` from step 1: returns Lessons. This proves the Librus login. Do not pass `days`; `lessons` rejects it.
 3. `upcoming` with `{ childId, days: 7 }`.
+4. `events` with `{ childId }`: returns `events` (can be empty). It needs no Librus login.
 
 ## Edge cases
 

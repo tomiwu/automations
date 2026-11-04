@@ -32,6 +32,22 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 Both exports include `childId` and the name of the Child. Without `childId` the Family must have one Child with Librus.
 The Supabase URL and the Family ID are plain config set with `./configure` (`{ supabaseUrl, familyId }`). The secret `SUPABASE_KEY` gives access to the storage.
 
+## Stored content (`item_details`)
+
+- The Watchers for messages, announcements, trips, Terminarz entries, meetings, days off and grades store the full content of each new Item in the table `item_details` (migration `0006_item_details.sql`). A row has `kind`, `source_id`, `date`, `start_time`, `end_time`, `title`, `text`, `sender`, `subject`, `category`, `source_updated_at` and `first_seen`.
+- An Item with changed content adds a new row (another `content_hash`). The old row stays.
+- The role `automations_watcher` can only read and insert `item_details`. It cannot update or delete.
+- **Data is kept forever.** `daily-purge` removes only delivered Outbox rows older than 30 days. It never touches `item_details` or `items`.
+
+## The `./events` export
+
+- **Input:** `{ childId?, from?, to?, since? }`. `from` and `to` are `YYYY-MM-DD` and filter on the event date. `since` is an ISO time and filters on `firstSeen` (default: 7 days ago). Other keys are rejected.
+- **Output:** `{ childId, child, from, to, since, events, fetches? }`. Each event has `id`, `kind`, `date`, `endDate`, `start`, `end`, `title`, `text`, `sender`, `subject`, `category`, `sourceUpdatedAt` and `firstSeen`.
+- `id` is `<kind>:<source id>@<content hash>`. It changes when the content changes.
+- `endDate` is set for trips and days off that cover a range of days. `date` of an announcement or a message without a date is the local day of `firstSeen`.
+- Events are sorted by `firstSeen`, then by `date`.
+- The export reads Supabase only (config and `item_details`). It makes no Librus login.
+
 ## Fetch budget
 
 The Kody free plan allows 2500 outbound fetches in a UTC week. This package keeps its use low:
@@ -39,6 +55,7 @@ The Kody free plan allows 2500 outbound fetches in a UTC week. This package keep
 - **Count.** `entryDeps` wraps the fetch of the runtime in `countFetches`. Each scheduled run, purge run and export logs `fetches total=N <host>=n ...` and returns `fetches: { total, hosts }`. The Telegram sends go through the `telegram` package and are not in the count.
 - **Name cache.** The names behind Librus IDs (`Users`, `Subjects`, `HomeWorks/Categories`) are kept in the package storage, one entry for each Account (`librus-names:<account id>`), for 7 days. A second run with the same IDs makes no name fetch.
 - **One config read.** `loadConfig` reads the Family and its Children, Accounts, Activities and Recipients in one request. The credentials of the Family load in one request on the first `runtime.secret` call. A run needs 2 Supabase requests for config and credentials.
+- **Per run.** A scheduled run needs about 2 Supabase requests for config and credentials, plus the Librus pages of each enabled Watcher, plus batched Supabase writes. `./events` needs only Supabase requests. The counter in the log shows the real numbers.
 - **Batched writes.** `enqueueNotifications` and `markDeliveredMany` write many Outbox entries in one request. Delivery marks the sent entries once at the end of the run.
 
 ## Not in this package

@@ -62,7 +62,7 @@ A database leak alone gives only ciphertext. A package config leak alone gives a
 | Package / job | Cron (`package.json`) | What it does |
 | --- | --- | --- |
 | librus-watch `scheduled-check` | `30 4,12 * * *` | New Librus items to Telegram |
-| librus-watch `daily-purge` | `30 3 * * *` | Removes old stored items |
+| librus-watch `daily-purge` | `30 3 * * *` | Removes delivered Outbox rows older than 30 days. Stored content stays |
 | activities-watch `scheduled-check` | `30 4,12 * * *` | Cancelled or moved after-school classes to Telegram |
 | payments-watch `scheduled-check` | `0 8 * * *` | Due fees to Telegram with a ZBP QR code |
 | payments-watch webhook `telegram-update` | Owner taps Paid / Skip | Marks the fee in Supabase |
@@ -93,6 +93,21 @@ Kody reads the cron expressions in UTC. The jobs set no cron time zone. The tabl
 | Grades | In the lesson description |
 | Teacher message | In that teacher's next lesson, or its own event |
 | Recurring events without a sync key | Never delete them |
+
+Where each kind of `./events` event goes in the calendar:
+
+| Kind | Calendar |
+| --- | --- |
+| `meeting`, `trip`, `terminarz` (dated) | Dated event on its `date` (and `endDate` for a range) |
+| `dayOff` (school or class) | Dated event, all-day for the range. No popup |
+| `announcement`, `message` without a date | All-day event on the local day of `firstSeen` |
+| `message` from a teacher | Also a note in the next lesson of that teacher |
+| `grade` | In the description of the lesson on its `date` |
+| `meeting`, `trip` | Popup at 16:00 on the day before |
+
+Data in `item_details` is kept forever. `daily-purge` removes only delivered Outbox rows.
+
+Fetch budget: the Kody free plan allows 2500 outbound fetches in a UTC week. Each run logs its fetch count. Names are cached for 7 days, config loads in one request and writes are batched (`packages/librus-watch/README.md`). `./events` reads Supabase only.
 
 Routines only read from Kody. The Owner hears only about changes or failures. The routines live in the assistant, not in this repository.
 
