@@ -22,7 +22,7 @@ function setup() {
 describe("runChildCheck", () => {
   it("records a silent Baseline on the first run", async () => {
     const { source, check, texts } = setup();
-    source.items.grades = [{ id: "1", subject: "Math", grade: "5" }];
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" }];
     expect(await runChildCheck(check)).toEqual([]);
     expect(await texts()).toEqual([]);
   });
@@ -30,16 +30,27 @@ describe("runChildCheck", () => {
   it("marks an empty scope as baselined", async () => {
     const { source, check, texts, storage } = setup();
     await runChildCheck(check);
-    source.items.grades = [{ id: "1", subject: "Math", grade: "5" }];
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" }];
     await runChildCheck(check);
     expect(await texts()).toHaveLength(2);
     expect((await storage.knownItemIds(FAMILY_ID, scopeOf("grades", check.child))).has("1")).toBe(true);
   });
 
+  it("does not announce a known grade again when it gains date, category and teacher", async () => {
+    const { source, check, texts } = setup();
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" }];
+    await runChildCheck(check);
+    await runChildCheck(check);
+    const before = (await texts()).length;
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "2026-01-05", category: "Test", teacher: "Teacher One" }];
+    await runChildCheck(check);
+    expect(await texts()).toHaveLength(before);
+  });
+
   it("renders each Notification in the language of its Recipient and only for the Recipients of the Child", async () => {
     const { source, check, texts } = setup();
     await runChildCheck(check);
-    source.items.grades = [{ id: "1", subject: "Math", grade: "5" }];
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" }];
     await runChildCheck(check);
     expect(await texts()).toEqual([
       "1000001|New grade for Child One: Math, 5",
@@ -50,7 +61,7 @@ describe("runChildCheck", () => {
   it("does not repeat a Notification on the next run", async () => {
     const { source, check, texts } = setup();
     await runChildCheck(check);
-    source.items.grades = [{ id: "1", subject: "Math", grade: "5" }];
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" }];
     await runChildCheck(check);
     await runChildCheck(check);
     expect(await texts()).toHaveLength(2);
@@ -142,7 +153,7 @@ describe("runChildCheck", () => {
 
   it("keeps Items of two Children apart", async () => {
     const { check, source, storage } = setup();
-    source.items.grades = [{ id: "1", subject: "Math", grade: "5" }];
+    source.items.grades = [{ id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" }];
     await runChildCheck(check);
     const other = { ...check.child, id: "other" };
     expect((await storage.knownItemIds(FAMILY_ID, scopeOf("grades", other))).size).toBe(0);

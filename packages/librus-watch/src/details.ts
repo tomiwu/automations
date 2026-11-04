@@ -2,6 +2,7 @@ import type { ItemKind, NewItemDetail } from "@automations/librus-data";
 import type {
   AnnouncementItem,
   DayOffItem,
+  GradeItem,
   HomeworkItem,
   MeetingItem,
   ItemsByWatcher,
@@ -154,6 +155,22 @@ export function dayOffDetail(
   };
 }
 
+/** The content of a grade: subject, date, category and teacher. The text is the grade value. */
+export function gradeDetail(
+  context: DetailContext,
+  grade: GradeItem,
+): NewItemDetail {
+  return {
+    ...emptyDetail(context, "grade", grade.id),
+    date: orNull(grade.date),
+    title: grade.subject,
+    text: grade.grade,
+    sender: orNull(grade.teacher),
+    subject: orNull(grade.subject),
+    category: orNull(grade.category),
+  };
+}
+
 type DetailBuilder = (
   context: DetailContext,
   item: never,
@@ -161,6 +178,7 @@ type DetailBuilder = (
 ) => NewItemDetail | undefined;
 
 const DETAIL_BUILDERS: Partial<Record<WatcherName, DetailBuilder>> = {
+  grades: gradeDetail,
   messages: messageDetail,
   announcements: announcementDetail,
   trips: tripDetail,

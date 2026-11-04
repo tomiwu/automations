@@ -50,8 +50,14 @@ describe("detail mapping", () => {
     expect(detail).toMatchObject({ date: null, sender: null, subject: null, category: null, title: "" });
   });
 
-  it("gives no detail for a grade", () => {
-    expect(detailOf("grades", context, { id: "1", subject: "Math", grade: "5" })).toBeUndefined();
+  it("gives the content of a grade", () => {
+    const grade = { id: "1", subject: "Math", grade: "5", date: "2026-01-05", category: "Test", teacher: "Teacher One" };
+    expect(detailOf("grades", context, grade)).toMatchObject({ kind: "grade", sourceId: "1", date: "2026-01-05", subject: "Math", category: "Test", sender: "Teacher One", title: "Math", text: "5" });
+  });
+
+  it("gives empty fields as null for a grade", () => {
+    const grade = { id: "1", subject: "Math", grade: "5", date: "", category: "", teacher: "" };
+    expect(detailOf("grades", context, grade)).toMatchObject({ date: null, category: null, sender: null });
   });
 
   it("maps a meeting and a day off", () => {

@@ -25,6 +25,16 @@ function arrayAt(json: string, field: string): Json[] {
   return data as Json[];
 }
 
+/** Reads the `Label: value` lines of the `title` attribute of a grade link. Lines are split by `<br>`. */
+function gradeTitleFields(title: string | undefined): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const line of (title ?? "").split(/<br\s*\/?>/i)) {
+    const [label, ...value] = cheerio.load(line).text().split(":");
+    if (label !== undefined && value.length > 0) fields[clean(label)] = clean(value.join(":"));
+  }
+  return fields;
+}
+
 export function parseGrades(html: string): GradeItem[] {
   const $ = cheerio.load(html);
   const byId = new Map<string, GradeItem>();
@@ -32,7 +42,15 @@ export function parseGrades(html: string): GradeItem[] {
     const id = $(link).attr("href")?.match(/szczegoly\/(\d+)/)?.[1];
     if (!id || /^0+$/.test(id) || byId.has(id)) return;
     const subject = clean($(link).closest("tr").children("td").eq(1).text());
-    byId.set(id, { id, subject, grade: clean($(link).text()) });
+    const fields = gradeTitleFields($(link).attr("title"));
+    byId.set(id, {
+      id,
+      subject,
+      grade: clean($(link).text()),
+      date: fields["Data"]?.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? "",
+      category: fields["Kategoria"] ?? "",
+      teacher: fields["Nauczyciel"] ?? "",
+    });
   });
   return [...byId.values()].filter((grade) => grade.subject !== "");
 }
