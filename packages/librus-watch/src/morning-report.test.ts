@@ -166,10 +166,8 @@ describe("the New section", () => {
     const old = createMemoryStorage({ now: () => new Date("2025-12-20T00:00:00Z") });
     const { deps } = setup();
     await old.recordDetails([detailRow("message")]);
-    const text = await (async () => {
-      await runMorningReport({ ...deps, storage: old });
-      return (await old.pendingNotifications(FAMILY_ID))[0]?.text ?? "";
-    })();
+    await runMorningReport({ ...deps, storage: old });
+    const text = (await old.pendingNotifications(FAMILY_ID))[0]?.text ?? "";
     expect(text).not.toContain("New:");
     expect(await reportText([detailRow("message", { childId: "other" })])).not.toContain("New:");
   });
