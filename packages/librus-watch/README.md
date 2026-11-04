@@ -27,6 +27,7 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./purge` | The daily job. It calls `purgeDelivered(30)` and returns `{ ok, removed }`. It takes no input. |
 | `./calendar` | `{ childId? }`. The Lessons of the next 14 days and the homework and tests of the same days, in one read with one Librus login. Use it instead of `lessons` plus `upcoming`. |
 | `./children` | No input. `{ children }`: `id`, `name` and `calendar_id` of every Child. |
+| `./events` | `{ childId?, from?, to?, since? }`. The stored content of the Items (meetings, days off, trips, Terminarz entries, announcements, messages, grades) as `events`. `from` and `to` are `YYYY-MM-DD`; `since` is an ISO time for `firstSeen` (default 7 days ago). It reads Supabase only: no Librus login. |
 
 Both exports include `childId` and the name of the Child. Without `childId` the Family must have one Child with Librus.
 The Supabase URL and the Family ID are plain config set with `./configure` (`{ supabaseUrl, familyId }`). The secret `SUPABASE_KEY` gives access to the storage.
