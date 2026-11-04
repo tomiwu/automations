@@ -31,6 +31,9 @@ export const WATCHERS_IN_ORDER: readonly WatcherName[] = [
   "absences",
   "substitutions",
   "lessons",
+  "meetings",
+  "schoolFreeDays",
+  "classFreeDays",
 ];
 
 interface HashedItem {
@@ -127,6 +130,9 @@ const lessonChanges = (changes: Changed<ItemsByWatcher["lessons"][number]>[]) =>
 type AnyAnnounce = Announce<never>;
 const asAny = <I,>(announce: Announce<I>): AnyAnnounce => announce as unknown as AnyAnnounce;
 
+/** Stored, never announced: the morning report shows these Items. */
+const silent: AnyAnnounce = async () => [];
+
 const ANNOUNCERS: Record<WatcherName, AnyAnnounce> = {
   grades: asAny(perItem(sync(formatGrade))),
   // Opening a message marks it read in Librus. Only a new message is opened.
@@ -144,6 +150,9 @@ const ANNOUNCERS: Record<WatcherName, AnyAnnounce> = {
   lessons: asAny((changes, source) =>
     perItem(sync(formatLesson))(lessonChanges(changes as never) as never, source),
   ),
+  meetings: silent,
+  schoolFreeDays: silent,
+  classFreeDays: silent,
 };
 
 /** Makes the Notification for each Recipient. The key has the chat ID, so each queue is idempotent. */

@@ -7,7 +7,7 @@ The Librus Watcher, the `lessons` and `upcoming` exports, and the Morning report
 - `runLibrusWatch` loads the config with `loadConfig`. It validates it with `validateConfig`.
 - It runs each enabled `librus` Account of each Child with `has_librus`. A bad Account gives one error. The other Accounts still run.
 - Secret values come from `Runtime.secret(account.login_secret)` and `Runtime.secret(account.password_secret)`.
-- The Watchers are: grades, messages, announcements, trips, homework, absences, substitutions, lessons.
+- The Watchers are: grades, messages, announcements, trips, homework, absences, substitutions, lessons, meetings, schoolFreeDays, classFreeDays. The last three (parent meetings, school days off, class days off) read one API 2.0 endpoint each, store their content in `item_details` (kinds `meeting`, `dayOff`) and send no Notification: the Morning report shows them.
 - The Items of one Child at one Watcher have the scope `<watcher>:<child id>`. The first run of a scope is a silent Baseline. The record `__baseline__` marks a scope as baselined, also when Librus gave no Item.
 - A new or updated Item queues one Notification for each Recipient that has the Child in `child_ids`. The text is rendered from the pl/en catalogs in the language of the Recipient. The Outbox key is `<watcher>:<child id>:<item>:<chat id>`.
 - A failed Watcher queues one failure Notification a day for each Recipient of the Child. The other Watchers still run.

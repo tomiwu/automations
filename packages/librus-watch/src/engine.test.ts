@@ -191,4 +191,40 @@ describe("runChildCheck", () => {
       expect((await details(storage)).map((r) => r.kind).sort()).toEqual(["announcement", "trip"]);
     });
   });
+
+  describe("meetings and days off", () => {
+    const meeting = (date: string) => ({ id: "m1", hash: `h-${date}`, date, start: "17:00", end: "", topic: "Open day", room: "5", teacher: "Teacher One" });
+
+    it("stores a changed meeting as a new detail row and sends no Notification", async () => {
+      const { source, check, texts, storage } = setup();
+      source.items.meetings = [meeting("2026-01-20")];
+      await runChildCheck(check, ["meetings"]);
+      source.items.meetings = [meeting("2026-01-21")];
+      expect(await runChildCheck(check, ["meetings"])).toEqual([]);
+      expect(await texts()).toEqual([]);
+      const rows = await storage.listDetails(FAMILY_ID, { childId: CHILD1 });
+      expect(rows.map((r) => [r.kind, r.sourceId, r.date])).toEqual([["meeting", "m1", "2026-01-21"]]);
+    });
+
+    it("stores new days off with the kind dayOff after a silent Baseline", async () => {
+      const { source, check, texts, storage } = setup();
+      await runChildCheck(check, ["schoolFreeDays", "classFreeDays"]);
+      source.items.schoolFreeDays = [{ id: "1", hash: "a", from: "2026-02-10", to: "2026-02-14", name: "Break" }];
+      source.items.classFreeDays = [{ id: "2", hash: "b", from: "2026-03-02", to: "2026-03-02", name: "Trip day" }];
+      await runChildCheck(check, ["schoolFreeDays", "classFreeDays"]);
+      expect(await texts()).toEqual([]);
+      const rows = await storage.listDetails(FAMILY_ID, { childId: CHILD1 });
+      expect(rows.map((r) => [r.kind, r.sourceId]).sort()).toEqual([["dayOff", "1"], ["dayOff", "2"]]);
+    });
+
+    it("fails only the watcher whose endpoint fails", async () => {
+      const { source, check } = setup();
+      const original = source.currentItems.bind(source);
+      source.currentItems = (async (watcher: never, since?: string) => {
+        if (watcher === "meetings") throw new Error("HTTP 500");
+        return original(watcher, since);
+      }) as never;
+      expect(await runChildCheck(check, ["meetings", "schoolFreeDays", "classFreeDays"])).toEqual(["meetings: HTTP 500"]);
+    });
+  });
 });

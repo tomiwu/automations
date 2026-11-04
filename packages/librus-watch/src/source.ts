@@ -3,14 +3,19 @@ import {
   clean,
   parseAbsences,
   parseAnnouncements,
+  parseClassFreeDays,
   parseGrades,
   parseHomeworks,
   parseMessageBody,
   parseMessages,
+  parseParentTeacherConferences,
+  parseSchoolFreeDays,
   parseSubstitutions,
   parseTimetable,
   parseTrips,
   type RawAbsence,
+  type RawDayOff,
+  type RawMeeting,
   type RawHomework,
   type RawSubstitution,
 } from "./parse.ts";
@@ -18,11 +23,13 @@ import { createNameCache, type NameCache, type NameCacheOptions } from "./names-
 import { LibrusSession, LibrusTimeoutError, type SessionOptions } from "./session.ts";
 import type {
   AbsenceItem,
+  DayOffItem,
   HomeworkItem,
   ItemsByWatcher,
   Lesson,
   LessonItem,
   LibrusSource,
+  MeetingItem,
   SubstitutionItem,
   TimetableResult,
   WatcherName,
@@ -114,6 +121,16 @@ async function resolveSubstitution(raw: RawSubstitution, names: NameLookup): Pro
   return { id, date, lessonNo, orgSubject, orgTeacher, subject, teacher, classroom, cancelled };
 }
 
+async function resolveMeeting(raw: RawMeeting, names: NameLookup): Promise<MeetingItem> {
+  const hash = fingerprint([raw.date, raw.start, raw.end, raw.topic, raw.room, raw.teacherId].join("\u0000"));
+  const { teacherId, ...rest } = raw;
+  return { ...rest, hash, teacher: await names("Users", teacherId) };
+}
+
+function dayOffItem(raw: RawDayOff): DayOffItem {
+  return { ...raw, hash: fingerprint([raw.from, raw.to, raw.name].join("\u0000")) };
+}
+
 const resolveAll = <R, I>(rows: R[], resolve: (row: R, names: NameLookup) => Promise<I>, names: NameLookup) =>
   Promise.all(rows.map((row) => resolve(row, names)));
 
@@ -136,6 +153,14 @@ const FETCHERS: { [W in FetchedWatcher]: Fetcher<W> } = {
     const rows = parseSubstitutions(await session.json("Calendars/Substitutions")).filter((s) => s.date >= since);
     return resolveAll(rows, resolveSubstitution, names);
   },
+  meetings: async (session, since, names) => {
+    const rows = parseParentTeacherConferences(await session.json("ParentTeacherConferences")).filter((m) => m.date >= since);
+    return resolveAll(rows, resolveMeeting, names);
+  },
+  schoolFreeDays: async (session, since) =>
+    parseSchoolFreeDays(await session.json("SchoolFreeDays")).filter((d) => d.to >= since).map(dayOffItem),
+  classFreeDays: async (session, since) =>
+    parseClassFreeDays(await session.json("ClassFreeDays")).filter((d) => d.to >= since).map(dayOffItem),
 };
 
 /** Returns the Monday of each week that has a day between `from` and `to`. */

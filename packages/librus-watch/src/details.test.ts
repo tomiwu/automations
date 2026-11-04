@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { announcementDetail, detailOf, messageDetail, terminarzDetail, tripDetail } from "./details.ts";
+import { announcementDetail, dayOffDetail, detailOf, meetingDetail, messageDetail, terminarzDetail, tripDetail } from "./details.ts";
 
 const context = { familyId: "f1", scope: "x:c1", childId: "c1" };
 
@@ -52,5 +52,14 @@ describe("detail mapping", () => {
 
   it("gives no detail for a grade", () => {
     expect(detailOf("grades", context, { id: "1", subject: "Math", grade: "5" })).toBeUndefined();
+  });
+
+  it("maps a meeting and a day off", () => {
+    const meeting = meetingDetail(context, { id: "m1", hash: "h", date: "2026-02-03", start: "17:00", end: "", topic: "Open day", room: "5", teacher: "Teacher One" });
+    expect(meeting).toMatchObject({ kind: "meeting", date: "2026-02-03", startTime: "17:00", endTime: null, title: "Open day", sender: "Teacher One" });
+    expect(meeting.text).toBe("Open day\n5\nTeacher One");
+    const dayOff = dayOffDetail(context, { id: "d1", hash: "h", from: "2026-02-10", to: "2026-02-14", name: "Break" });
+    expect(dayOff).toMatchObject({ kind: "dayOff", date: "2026-02-10", title: "Break", text: "Break\n2026-02-10 - 2026-02-14" });
+    expect(detailOf("classFreeDays", context, { id: "d1", hash: "h", from: "", to: "", name: "" })).toMatchObject({ kind: "dayOff", date: null });
   });
 });

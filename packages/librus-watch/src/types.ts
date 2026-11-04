@@ -6,7 +6,10 @@ export type WatcherName =
   | "homework"
   | "absences"
   | "substitutions"
-  | "lessons";
+  | "lessons"
+  | "meetings"
+  | "schoolFreeDays"
+  | "classFreeDays";
 
 export interface GradeItem {
   id: string;
@@ -80,6 +83,28 @@ export interface SubstitutionItem {
   cancelled: boolean;
 }
 
+/** One parent-teacher meeting. Date is "YYYY-MM-DD", times are "HH:MM" or empty when Librus gave none. */
+export interface MeetingItem {
+  id: string;
+  /** Fingerprint of the meaningful fields. A changed hash makes the meeting an updated Item. */
+  hash: string;
+  date: string;
+  start: string;
+  end: string;
+  topic: string;
+  room: string;
+  teacher: string;
+}
+
+/** One day off, for the whole school or for the class: a date range. Dates are "YYYY-MM-DD". */
+export interface DayOffItem {
+  id: string;
+  hash: string;
+  from: string;
+  to: string;
+  name: string;
+}
+
 /** One period of the timetable. */
 export interface Lesson {
   date: string;
@@ -115,6 +140,9 @@ export interface ItemsByWatcher {
   absences: AbsenceItem[];
   substitutions: SubstitutionItem[];
   lessons: LessonItem[];
+  meetings: MeetingItem[];
+  schoolFreeDays: DayOffItem[];
+  classFreeDays: DayOffItem[];
 }
 
 export interface LibrusSource {
