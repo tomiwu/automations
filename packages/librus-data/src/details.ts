@@ -22,6 +22,10 @@ export async function detailHash(row: NewItemDetail): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** The identity of a stored detail: Family, scope, source ID and content hash. */
+export const detailSlot = (row: NewItemDetail, hash: string): string =>
+  JSON.stringify([row.familyId, row.scope, row.sourceId, hash]);
+
 /** The rows without repeats, in the first-seen order. A repeat has the same Family, scope, source ID and hash. */
 export async function uniqueDetails(
   rows: readonly NewItemDetail[],
@@ -29,7 +33,7 @@ export async function uniqueDetails(
   const unique = new Map<string, { row: NewItemDetail; hash: string }>();
   for (const row of rows) {
     const hash = await detailHash(row);
-    const slot = JSON.stringify([row.familyId, row.scope, row.sourceId, hash]);
+    const slot = detailSlot(row, hash);
     if (!unique.has(slot)) unique.set(slot, { row, hash });
   }
   return [...unique.values()];

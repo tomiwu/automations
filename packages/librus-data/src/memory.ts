@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Config } from "@automations/shared";
-import { matchesFilter, uniqueDetails } from "./details.ts";
+import { detailSlot, matchesFilter, uniqueDetails } from "./details.ts";
 import type { Fee, ItemDetail, NewNotification, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
@@ -62,7 +62,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
     recordDetails: async (rows) => {
       let added = 0;
       for (const { row, hash } of await uniqueDetails(rows)) {
-        const slot = JSON.stringify([row.familyId, row.scope, row.sourceId, hash]);
+        const slot = detailSlot(row, hash);
         if (details.has(slot)) continue;
         details.set(slot, { ...row, firstSeen: now() });
         added += 1;
