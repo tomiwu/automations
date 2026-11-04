@@ -85,8 +85,8 @@ async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: Deliv
 
 /**
  * The Notifier of this package. It delivers the Outbox in order. An entry is marked delivered only after
- * its send succeeded. The sent entries are marked in one write at the end. A failed send holds back only its own chat. When all chats are tried, it rejects
- * with the first failure. The log gets counts only, never texts.
+ * its send succeeded. The sent entries are marked in one write at the end. A failed send holds back only
+ * its own chat. When all chats are tried, it rejects with the first failure. The log gets counts only, never texts.
  */
 export async function deliverPending(options: DeliveryOptions): Promise<void> {
   const { storage, familyId, chatIds, log = () => {}, clock = Date.now, budgetMs = DELIVERY_BUDGET_MS } = options;
