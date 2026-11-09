@@ -23,6 +23,29 @@ jobs:
         run: npm test
       - name: Check the CRAP score (fails if a function has CRAP >= 6)
         run: npm run crap
+  sql:
+    name: SQL migration tests (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install the dependencies
+        run: npm ci
+      - name: Run the SQL tests against Postgres
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: npm test -w @automations/sql-tests
   secrets:
     name: gitleaks and deny-list
     runs-on: ubuntu-latest
