@@ -46,7 +46,7 @@ export interface DetailFilter {
   since?: Date;
 }
 
-export type JournalKind = "lesson" | "homework" | "session" | "check" | ItemKind;
+export type JournalKind = "lesson" | "homework" | "session" | "check" | "payment" | ItemKind;
 
 /** One Journal event to append. The payload is the full new state of the entity. */
 export interface NewJournalEvent {

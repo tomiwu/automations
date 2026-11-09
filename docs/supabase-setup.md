@@ -30,6 +30,8 @@ The migrations 0007 to 0009 add the event journal (ADR 0006):
 
 Each of them can run more than once. A second run of the copy adds no row.
 
+Migration `0011_journal_payment_kind.sql` replaces the check constraint on `journal_events.kind`, so the kind `payment` is allowed. It changes no row.
+
 The migrations make the tables, the RLS policies and the role `automations_watcher`. The role can:
 
 - read the config tables (`families`, `children`, `accounts`, `activities`, `recipients`);
