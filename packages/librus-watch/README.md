@@ -29,6 +29,7 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./children` | No input. `{ children }`: `id`, `name` and `calendar_id` of every Child. |
 | `./events` | `{ childId?, from?, to?, since? }`. The stored content of the Items (meetings, days off, trips, Terminarz entries, announcements, messages, grades) as `events`. `from` and `to` are `YYYY-MM-DD`; `since` is an ISO time for `firstSeen` (default 7 days ago). It reads Supabase only: no Librus login. |
 | `./stored-lessons` | `{ childId?, from?, to? }`. The Lessons and homework as the Journal stores them, with `lastSavedAt` and `lastCheck`. `from` defaults to today, `to` to `from` + 13 (at most 60 days). Vanished entries stay with `vanished: true`. It reads Supabase only (3 fetches at most): no Librus login. |
+| `./stream-history` | `{ stream }` (text, at most 300 characters). The Journal events of one stream, oldest first, and the state they give (`null` for an unknown stream). Works for `lesson:`, `homework:`, `session:`, `item:` and `check:` streams. It reads Supabase only (1 fetch). |
 
 Both exports include `childId` and the name of the Child. Without `childId` the Family must have one Child with Librus.
 The Supabase URL and the Family ID are plain config set with `./configure` (`{ supabaseUrl, familyId }`). The secret `SUPABASE_KEY` gives access to the storage.

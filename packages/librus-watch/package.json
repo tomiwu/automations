@@ -14,6 +14,7 @@
     "./children": "./src/entry/children.ts",
     "./events": "./src/entry/events.ts",
     "./stored-lessons": "./src/entry/stored-lessons.ts",
+    "./stream-history": "./src/entry/stream-history.ts",
     "./purge": "./src/entry/purge.ts",
     "./configure": "./src/entry/configure.ts"
   },
