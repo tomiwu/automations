@@ -35,10 +35,12 @@ describe.skipIf(!url)("0003_kradziejka.sql", () => {
 
   it("lets the watcher insert and update a bot, and not delete it", () => {
     const insert = `insert into kradziejka_bots (family_id, slug, name, description, webhook_url, webhook_key_ciphertext) values ('${family}', 'hub', 'Hub', 'Chooses an agent.', '${webhook}', '${sealed}')`;
-    expect(asWatcher(db, insert).ok).toBe(true);
-    expect(asWatcher(db, `update kradziejka_bots set name = 'Hub bot' where family_id = '${family}'`).ok).toBe(true);
-    expect(asWatcher(db, `delete from kradziejka_bots where family_id = '${family}'`).ok).toBe(false);
-    expect(asWatcher(db, `select name from kradziejka_bots where family_id = '${family}'`).output).toContain("Hub bot");
+    const update = `update kradziejka_bots set name = 'Hub bot' where family_id = '${family}'`;
+    const read = `select name from kradziejka_bots where family_id = '${family}'`;
+    const result = asWatcher(db, `${insert}; ${update}; ${read}`);
+    expect(result.ok).toBe(true);
+    expect(result.output).toContain("Hub bot");
+    expect(asWatcher(db, `${insert}; delete from kradziejka_bots where family_id = '${family}'`).ok).toBe(false);
   });
 
   it("rejects plaintext keys, the reserved slug, and a non-Cursor URL", () => {
