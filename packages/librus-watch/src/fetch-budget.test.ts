@@ -126,4 +126,30 @@ describe("fetch budget", () => {
     const lines = (run.runtime as unknown as ReturnType<typeof fakeRuntime>).logs.map((l) => l.message);
     expect(lines.at(-1)).toMatch(/^fetches total=\d+ /);
   });
+
+  it("a scheduled pass with the journal makes no Librus fetch for it and at most 4 Supabase fetches", async () => {
+    const parts = await setup();
+    const journal = { librus: 0, supabase: 0, calls: 0 };
+    const counted = <A extends unknown[], R>(call: (...args: A) => Promise<R>) =>
+      async (...args: A): Promise<R> => {
+        const before = parts.counter.count().hosts;
+        const result = await call(...args);
+        const after = parts.counter.count().hosts;
+        for (const host of Object.keys(after)) {
+          const delta = (after[host] ?? 0) - (before[host] ?? 0);
+          if (host === "project.example.test") journal.supabase += delta;
+          else journal.librus += delta;
+        }
+        journal.calls += 1;
+        return result;
+      };
+    parts.storage.listHeads = counted(parts.storage.listHeads.bind(parts.storage));
+    parts.storage.appendEvents = counted(parts.storage.appendEvents.bind(parts.storage));
+    const run = () => runLibrusWatch({ runtime: parts.runtime, storage: parts.storage, familyId: FAMILY_ID, messenger: { send: async () => {} }, nameStore: memoryStore() });
+    const failures = await run();
+    expect(failures.some((f) => f.includes("journal:"))).toBe(false);
+    expect(journal).toEqual({ librus: 0, supabase: 3, calls: 3 });
+    const events = await parts.storage.listEvents(FAMILY_ID);
+    expect(events.map((e) => e.eventType).sort()).toEqual(["CheckCompleted", "HomeworkAdded"]);
+  });
 });

@@ -170,6 +170,18 @@ describe("LibrusSource", () => {
     expect(lessons.map((l) => l.date)).toEqual(["2026-01-07", "2026-01-20"]);
   });
 
+  it("reads each timetable range once in a run", async () => {
+    const runtime = librus([(url) => (url.pathname.endsWith("/Timetables") ? json({ Timetable: {} }) : undefined)]);
+    const source = createLibrusSource(runtime, account, { timezone: "UTC" });
+    const first = source.fullTimetable();
+    expect(source.fullTimetable()).toBe(first);
+    await first;
+    const count = runtime.requests.length;
+    await source.fullTimetable();
+    await source.timetable("2026-01-07", "2026-01-07");
+    expect(runtime.requests.length).toBe(count + 1);
+  });
+
   it("gives an empty timetable and the reason when Librus fails", async () => {
     const runtime = librus([], { reject: true });
     const result = await createLibrusSource(runtime, account, { timezone: "UTC" }).fullTimetable();

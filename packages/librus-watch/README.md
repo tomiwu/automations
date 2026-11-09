@@ -39,6 +39,13 @@ The Supabase URL and the Family ID are plain config set with `./configure` (`{ s
 - The role `automations_watcher` can only read and insert `item_details`. It cannot update or delete.
 - **Data is kept forever.** `daily-purge` removes only delivered Outbox rows older than 30 days. It never touches `item_details` or `items`.
 
+## Journal events (`scheduled-check`)
+
+- After the Watchers, `scheduled-check` appends Lesson and homework events to `journal_events` (ADR 0006). It uses only data that the run read already: the timetable is memoized in the source, and the `homework` Watcher gives its Items. It makes no new Librus request.
+- Streams: `lesson:<childId>:<date>:<period>`, `homework:<childId>:<librus id>` and `check:librus-watch:<childId>`. Each pass appends one `CheckCompleted` event when a part ran.
+- A failed timetable gives no Lesson event and no `LessonVanished`. A failed `homework` Watcher gives no homework event. A journal failure is reported as `journal: <message>`, and the Morning report still runs.
+- `daily-purge` never touches `journal_events`.
+
 ## The `./events` export
 
 - **Input:** `{ childId?, from?, to?, since? }`. `from` and `to` are `YYYY-MM-DD` and filter on the event date. `since` is an ISO time and filters on `firstSeen` (default: 7 days ago). Other keys are rejected.

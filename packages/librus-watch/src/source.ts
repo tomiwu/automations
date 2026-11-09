@@ -218,13 +218,22 @@ export function createLibrusSource(
     return loggedIn;
   };
 
-  const timetable = async (from: string, to: string): Promise<TimetableResult> => {
+  const readOnce = async (from: string, to: string): Promise<TimetableResult> => {
     try {
       await ensureLogin();
       return { lessons: await readTimetable(session, from, to) };
     } catch (error) {
       return { lessons: [], error: error instanceof Error ? error.message : String(error) };
     }
+  };
+
+  const timetables = new Map<string, Promise<TimetableResult>>();
+  /** One read for each range in the life of the source. A second call with the same range makes no fetch. */
+  const timetable = (from: string, to: string): Promise<TimetableResult> => {
+    const key = `${from}|${to}`;
+    const known = timetables.get(key) ?? readOnce(from, to);
+    timetables.set(key, known);
+    return known;
   };
 
   const fullTimetable = (): Promise<TimetableResult> => timetable(today(), addDays(today(), TIMETABLE_DAYS - 1));

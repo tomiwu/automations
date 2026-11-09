@@ -12,12 +12,13 @@ import {
 } from "@automations/shared";
 import type { StorageAdapter } from "@automations/librus-data";
 import { deliverPending, redactSecretPlaceholders, type Messenger } from "./deliver.ts";
-import { runChildCheck, type ChildCheck } from "./engine.ts";
+import { checkChild, type ChildCheck } from "./engine.ts";
+import { appendLibrusJournal } from "./journal-librus.ts";
 import { formatAccountError, formatLoginError } from "./format.ts";
 import { nameOptionsFor, type NameStore } from "./names-cache.ts";
 import { runMorningReport, type AfterSchool } from "./morning-report.ts";
 import { createLibrusSource } from "./source.ts";
-import type { LibrusSource } from "./types.ts";
+import type { HomeworkItem, LibrusSource } from "./types.ts";
 
 const FAILURE_DETAIL_MAX = 300;
 
@@ -77,6 +78,32 @@ async function notifyFailure(deps: RunDeps, target: LibrusTarget, failures: stri
   await deps.storage.enqueueNotifications(entries);
 }
 
+/** Appends the Journal events. Returns the failure text, or no text. */
+async function journalStep(
+  deps: RunDeps,
+  config: Config,
+  target: LibrusTarget,
+  source: LibrusSource,
+  homework: HomeworkItem[] | undefined,
+  log: (message: string) => void,
+): Promise<string[]> {
+  try {
+    await appendLibrusJournal({
+      storage: deps.storage,
+      familyId: deps.familyId,
+      childId: target.child.id,
+      source,
+      timezone: config.family.timezone,
+      now: deps.runtime.now(),
+      homework,
+      log,
+    });
+    return [];
+  } catch (error) {
+    return [`journal: ${error instanceof Error ? error.message : String(error)}`];
+  }
+}
+
 async function runTarget(deps: RunDeps, config: Config, target: LibrusTarget): Promise<string[]> {
   const { runtime, storage, familyId } = deps;
   const timezone = config.family.timezone;
@@ -87,7 +114,8 @@ async function runTarget(deps: RunDeps, config: Config, target: LibrusTarget): P
     });
   const log = (message: string) => runtime.log("info", `account ${target.account.id}: ${message}`);
   const check: ChildCheck = { familyId, child: target.child, recipients: target.recipients, storage, source, log };
-  const failures = await runChildCheck(check);
+  const { failures, homework } = await checkChild(check);
+  failures.push(...(await journalStep(deps, config, target, source, homework, log)));
   if (failures.length > 0) await notifyFailure(deps, target, failures, localDate(runtime.now(), timezone));
   try {
     await runMorningReport({

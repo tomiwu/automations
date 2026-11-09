@@ -1,6 +1,6 @@
 import { createMemoryStorage } from "@automations/librus-data";
 import { describe, expect, it } from "vitest";
-import { runChildCheck, scopeOf, type ChildCheck } from "./engine.ts";
+import { checkChild, runChildCheck, scopeOf, type ChildCheck } from "./engine.ts";
 import { CHILD1, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
 
 function setup() {
@@ -18,6 +18,27 @@ function setup() {
   const texts = async () => (await storage.pendingNotifications(FAMILY_ID)).map((e) => `${e.chatId}|${e.text}`);
   return { storage, source, check, texts };
 }
+
+describe("checkChild", () => {
+  it("returns the homework Items of the run", async () => {
+    const { source, check } = setup();
+    source.items.homework = [{ id: "7", hash: "h", category: "Homework", date: "2026-01-08", content: "Unit 3", subject: "Math", teacher: "Teacher One" }];
+    const result = await checkChild(check);
+    expect(result.failures).toEqual([]);
+    expect(result.homework?.map((h) => h.id)).toEqual(["7"]);
+  });
+
+  it("returns no homework Items when the homework Watcher failed", async () => {
+    const { source, check } = setup();
+    source.currentItems = async (watcher) => {
+      if (watcher === "homework") throw new Error("Librus: no access");
+      return [] as never;
+    };
+    const result = await checkChild(check);
+    expect(result.failures).toEqual(["homework: Librus: no access"]);
+    expect(result.homework).toBeUndefined();
+  });
+});
 
 describe("runChildCheck", () => {
   it("records a silent Baseline on the first run", async () => {

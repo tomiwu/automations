@@ -33,7 +33,7 @@ export interface LessonsResult {
   error?: string;
 }
 
-const TEST_CATEGORY = /sprawdzian|kartk[oó]wk|praca klasowa|\btest\b|quiz|klask[oó]wk/i;
+export const TEST_CATEGORY = /sprawdzian|kartk[oó]wk|praca klasowa|\btest\b|quiz|klask[oó]wk/i;
 
 const isTest = (homework: HomeworkItem): boolean => TEST_CATEGORY.test(homework.category);
 const sameSubject = (homework: HomeworkItem, lesson: Lesson): boolean =>
