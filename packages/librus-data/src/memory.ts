@@ -132,6 +132,19 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
     },
     listPayments: async (familyId) =>
       [...payments.values()].filter((payment) => payment.familyId === familyId).map((payment) => ({ ...payment })),
+    updatePendingAmount: async (id, amount, amountSource) => {
+      const payment = payments.get(id);
+      if (!payment || payment.status !== "pending") return false;
+      Object.assign(payment, { amount, amountSource });
+      return true;
+    },
+    markPaymentSent: async (id, which, at) => {
+      const payment = payments.get(id);
+      const field = which === "notified" ? "notifiedAt" : "remindedAt";
+      if (!payment || payment.status !== "pending" || payment[field] !== null) return false;
+      payment[field] = at;
+      return true;
+    },
     setPaymentStatus: async (id, status, decidedBy) => {
       const payment = payments.get(id);
       if (!payment || payment.status !== "pending") return false;

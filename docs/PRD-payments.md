@@ -71,6 +71,14 @@ docs/adr/0005-payments-qr-not-pay.md    why the bot never pays
 4. A `paid` or `skipped` Payment gets no more Notifications.
 5. A Fee with amount 0 or no amount for a month makes no Payment.
 
+#### Journal dual write
+
+- The scheduled pass reads the heads of the `payment:` streams once and appends all events in ONE `appendEvents` call: `PaymentDue` or `PaymentChanged` for each pending Payment, and one `CheckCompleted` for each Child with an enabled Fee when the pass did not fail. It also reads the heads of the check streams.
+- The projection keeps `upsertPayment` for a new Payment. A changed amount updates `amount` and `amount_source` of a `pending` row (`updatePendingAmount`). The pass never changes `fees`.
+- After the delivery, each pending Payment that got its first Notification or its reminder gets a `PaymentChanged` with `notifiedAt` or `remindedAt` and the same amount. The projection gets `notified_at` or `reminded_at` (`markPaymentSent`).
+- The journal never holds QR text, bank account, NIP, title, recipient name or source URL. The QR text is built in the Notifier at send time only.
+- The Outbox keys stay the same, so a repeated pass sends nothing twice.
+
 ### Part D: ZBP QR
 
 1. Content: `NIP|PL|NRB|AMOUNT|RECIPIENT|TITLE|||`.
