@@ -1,5 +1,6 @@
 import type { Fee, Payment, StorageAdapter } from "@automations/librus-data";
 import { t, type Config, type Language, type MessageKey, type Recipient } from "@automations/shared";
+import { decidePayment } from "./decision.ts";
 import type { TelegramClient } from "./notifier.ts";
 
 const PREFIX = "pay:";
@@ -76,15 +77,23 @@ function languageOf(config: Config, query: CallbackQuery): Language {
 
 async function decide(deps: CallbackDeps, query: CallbackQuery, config: Config, parsed: Parsed): Promise<void> {
   const language = languageOf(config, query);
-  const fee = await findFee(deps, await findPayment(deps, parsed.paymentId));
-  if (!fee) return answer(deps, query, language, "payment.callback.unknown");
+  const payment = await findPayment(deps, parsed.paymentId);
+  const fee = await findFee(deps, payment);
+  if (!payment || !fee) return answer(deps, query, language, "payment.callback.unknown");
   const recipient = recipientOf(config, query, fee);
   if (!recipient) return answer(deps, query, language, "payment.callback.denied");
-  return apply(deps, query, recipient, parsed);
+  return apply(deps, query, recipient, parsed, { payment, fee });
 }
 
-async function apply(deps: CallbackDeps, query: CallbackQuery, recipient: Recipient, parsed: Parsed): Promise<void> {
-  if (await deps.storage.setPaymentStatus(parsed.paymentId, parsed.decision, query.chatId)) {
+async function apply(
+  deps: CallbackDeps,
+  query: CallbackQuery,
+  recipient: Recipient,
+  parsed: Parsed,
+  subject: { payment: Payment; fee: Fee },
+): Promise<void> {
+  const { storage, familyId } = deps;
+  if (await decidePayment({ storage, familyId, ...subject, decision: parsed.decision, decidedBy: query.chatId, at: new Date() })) {
     return showStatus(deps, query, recipient, parsed.decision);
   }
   return answer(deps, query, recipient.language, "payment.callback.already");
@@ -92,8 +101,8 @@ async function apply(deps: CallbackDeps, query: CallbackQuery, recipient: Recipi
 
 /**
  * Handles a `pay:<payment id>:paid|skip` button press. Returns false when the data is not a `pay:` callback.
- * Only a Recipient of the Child of the Fee can change the Payment. The first press sets the status, edits the
- * message and removes the buttons. A later press changes nothing.
+ * Only a Recipient of the Child of the Fee can change the Payment. The first press appends the decision event
+ * to the Journal, sets the status, edits the message and removes the buttons. A later press changes nothing.
  */
 export async function handlePaymentCallback(deps: CallbackDeps, query: CallbackQuery): Promise<boolean> {
   if (!query.data.startsWith(PREFIX)) return false;
