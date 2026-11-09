@@ -35,14 +35,14 @@ The owner wants event sourcing, as in the Akka Persistence journal:
    - `session:<childId>:<session id>` (kind `session`; the session ID is stable across moves).
    - `item:<scope>:<source id>` (kind = the Item kind: `meeting`, `dayOff`, `trip`, `terminarz`, `announcement`, `message`, `grade`).
    - `check:<source>:<childId or account id>` (kind `check`): one `CheckCompleted` event for each successful job pass. It gives "last saved at", so a reader can see stale data.
-   - `payment:<feeId>:<month>` (kind `payment`): the Payment of one fee in one month. Migration `0011_journal_payment_kind.sql` allows this kind.
+   - `payment:<childId>:<feeId>:<YYYY-MM>` (kind `payment`): the Payment of one Fee in one month. Migration `0011_journal_payment_kind.sql` allows this kind.
 6. Event types:
    - Lesson: `LessonScheduled`, `LessonChanged`, `LessonCancelled`, `LessonSubstituted`, `LessonRestored`, `LessonVanished`.
    - Homework: `HomeworkAdded`, `HomeworkChanged`, `HomeworkVanished`.
    - Session: `SessionScheduled`, `SessionChanged`, `SessionCancelled`, `SessionMoved`, `SessionRestored`, `SessionVanished`.
    - Item: `ItemRecorded`, `ItemChanged`.
    - Check: `CheckCompleted`.
-   - Payment: `PaymentCreated`, `PaymentDecided`.
+   - Payment: `PaymentDue`, `PaymentChanged`, `PaymentPaid`, `PaymentSkipped`.
 7. The jobs compare the downloaded data with the heads. They append only change events. No change gives no event (only the `CheckCompleted` event). They write in batches (at most 100 rows per request). They use only data that the job downloads already: no new Librus or app request.
 8. An entity that was in the head state inside the read window, but is not in a successful download, gets a `...Vanished` event. A failed download gives no `...Vanished` event.
 9. A conflict on `(family_id, stream, seq)` is an error of that pass (optimistic concurrency). The next pass reads the heads again.
