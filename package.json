@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Generic school and activity watchers that report to Telegram.",
   "license": "MIT",
-  "workspaces": ["packages/*", "tools/*"],
+  "workspaces": ["packages/*", "tools/*", "scripts/sandcastle-loop"],
   "engines": { "node": ">=22" },
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
