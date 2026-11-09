@@ -109,11 +109,15 @@ interface DayOff {
   reason: CancelReason;
 }
 
+function dayOffRange(date: string, text: string | undefined): Pick<DayOff, "from" | "to"> {
+  const end = rangeEnd(text ?? "") ?? date;
+  return { from: date, to: end < date ? date : end };
+}
+
 function dayOffOf(head: StreamState): DayOff | null {
   const { date, text, sourceId } = head.state as { date?: string | null; text?: string; sourceId?: string };
   if (head.vanished || !date || sourceId === undefined) return null;
-  const to = rangeEnd(text ?? "") ?? date;
-  return { from: date, to: to < date ? date : to, reason: { reason: "day_off", sourceStream: head.stream, sourceId: String(sourceId) } };
+  return { ...dayOffRange(date, text), reason: { reason: "day_off", sourceStream: head.stream, sourceId: String(sourceId) } };
 }
 
 /** A Lesson inside a day off of Librus is cancelled. A day off wins over the timetable. The Lesson stays in the list. */
