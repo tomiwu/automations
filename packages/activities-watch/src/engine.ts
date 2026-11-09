@@ -71,13 +71,15 @@ async function enqueueFor(check: WatcherCheck, item: SessionItem): Promise<void>
  * Runs the Watcher of one Account. The first run of a scope is a silent Baseline: it records the Items
  * and queues nothing. Later runs queue one Notification for each cancelled or moved Session and each
  * Recipient, then record the Items. The Notification is queued first and its key is the recorded ID,
- * so a crash between the two steps neither loses nor repeats it.
+ * so a crash between the two steps neither loses nor repeats it. Returns the Sessions that the run read.
  */
-export async function runWatcher(check: WatcherCheck): Promise<void> {
-  const current = (await check.source.sessions()).map(toItem);
+export async function runWatcher(check: WatcherCheck): Promise<Session[]> {
+  const sessions = await check.source.sessions();
+  const current = sessions.map(toItem);
   const known = await check.storage.knownItemIds(check.familyId, check.scope);
   if (known.size > 0) {
     for (const item of announcements(current, known)) await enqueueFor(check, item);
   }
   await check.storage.recordItems(check.familyId, check.scope, [BASELINE_ID, ...current.map(storedId)]);
+  return sessions;
 }

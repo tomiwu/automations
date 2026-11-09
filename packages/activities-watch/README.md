@@ -20,6 +20,11 @@ The ActiveNow, Edusky and Mondo Watchers, the `sessions` export, the after-schoo
 - ActiveNow Sessions are cached per Account in the package storage (`activenow-cache:<account id>`). ActiveNow is fetched at most once in the TTL (default `ACTIVENOW_CACHE_TTL_MS`, 24 hours), counted from the last attempt. Set `activenowCacheHours` with `./configure` to change it. A failed or empty fetch (also a 403 block) keeps the last good Sessions, records the attempt and gives the cached Sessions with the error. The log has one line for each Account: `activenow: fetched` or `activenow: cached (next fetch after <iso>)`.
 - The `sessions` export also gives `accounts`: for each Account `{ accountId, service, cached, fetchedAt }`. `cached: true` means the Sessions come from the cache.
 - A failed Account queues one failure Notification a day for each Recipient of the Child (`failure:<account id>:<day>:<chat id>`).
+- After all Accounts, `appendSessionsJournal` appends the Session Journal events once, from the Sessions that the run read already (no new app request). A failed Account gives no event and no `SessionVanished`. A failure gives the failure text `journal: <message>`.
+  - Stream `session:<child id>:<session id>`, kind `session`, source `activities-watch`. The payload is `{ accountId, service, activity, start, end, place, status, warning }`.
+  - Types: `SessionScheduled`, `SessionCancelled`, `SessionMoved`, `SessionRestored`, `SessionChanged`, `SessionVanished`. The vanish scope is the next 14 days of the Accounts that did not fail.
+  - Each Account that did not fail also gets one `CheckCompleted` event in `check:activities-watch:<account id>`.
+  - Supabase use: two `listHeads` reads and one `appendEvents` call for the whole run. The log has only the counts.
 - At the end, `deliverPending` of `@tomiwu/librus-watch` sends the Outbox through the `Messenger` port.
 - Each run reads the config, so each run is also the keepalive read of Supabase.
 

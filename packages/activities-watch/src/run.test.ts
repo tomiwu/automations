@@ -93,6 +93,36 @@ describe("runActivitiesWatch", () => {
     expect(runtime.logs.map((l) => l.message)).toContain(`account ${NOW_ACCOUNT}: ok`);
   });
 
+  it("appends Session events, fails with journal: when the append fails, and skips a failed Account", async () => {
+    const { deps, sources, storage } = setup();
+    sources.get(NOW_ACCOUNT)!.current = [session()];
+    sources.get(EDUSKY_ACCOUNT)!.error = new Error("down");
+    await runActivitiesWatch(deps);
+    const types = (await storage.listEvents(FAMILY_ID)).map((e) => e.eventType);
+    expect(types.sort()).toEqual(["CheckCompleted", "SessionScheduled"]);
+    storage.appendEvents = async () => Promise.reject(new Error("conflict"));
+    const failures = await runActivitiesWatch(deps);
+    expect(failures).toContain("journal: conflict");
+  });
+
+  it("reads the sources once as before and makes at most 3 Journal calls for the whole run", async () => {
+    const { deps, sources, storage } = setup();
+    let reads = 0;
+    for (const source of sources.values()) {
+      const read = source.sessions.bind(source);
+      source.sessions = async () => (reads++, read());
+    }
+    const calls: string[] = [];
+    const heads = storage.listHeads.bind(storage);
+    const append = storage.appendEvents.bind(storage);
+    storage.listHeads = (...args) => (calls.push("heads"), heads(...args));
+    storage.appendEvents = (...args) => (calls.push("append"), append(...args));
+    sources.get(NOW_ACCOUNT)!.current = [session()];
+    await runActivitiesWatch(deps);
+    expect(reads).toBe(2);
+    expect(calls).toEqual(["heads", "heads", "append"]);
+  });
+
   it("builds the scope from the Service and the Account", () => {
     expect(scopeOf(activityTargets(testConfig()).targets[1]!)).toBe(`edusky:${EDUSKY_ACCOUNT}`);
   });
