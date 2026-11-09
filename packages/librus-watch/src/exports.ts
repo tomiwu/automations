@@ -36,17 +36,17 @@ interface ExportInput {
   days: number;
 }
 
-function inputObject(input: unknown): Record<string, unknown> {
+export function inputObject(input: unknown): Record<string, unknown> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) throw new Error("Input must be an object.");
   return input as Record<string, unknown>;
 }
 
-function checkKeys(object: Record<string, unknown>, allowed: readonly string[]): void {
+export function checkKeys(object: Record<string, unknown>, allowed: readonly string[]): void {
   const unknown = Object.keys(object).filter((key) => !allowed.includes(key));
   if (unknown.length > 0) throw new Error(`Unknown input key(s): ${unknown.join(", ")}.`);
 }
 
-function checkChildId(childId: unknown): string | undefined {
+export function checkChildId(childId: unknown): string | undefined {
   if (childId !== undefined && typeof childId !== "string") throw new Error("childId must be a text.");
   return childId;
 }
