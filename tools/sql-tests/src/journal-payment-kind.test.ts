@@ -35,6 +35,7 @@ describe.skipIf(!url)("0011_journal_payment_kind.sql", () => {
   });
 
   it("still rejects update and delete of a payment row", () => {
+    expect(psql(db, insert("payment", "payment:fee3:2026-01")).ok).toBe(true);
     expect(psql(db, "update journal_events set source = 'x' where kind = 'payment'").output).toContain("append-only");
     expect(psql(db, "delete from journal_events where kind = 'payment'").output).toContain("append-only");
   });
