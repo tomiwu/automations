@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Config } from "@automations/shared";
 import { detailSlot, matchesFilter, uniqueDetails } from "./details.ts";
-import type { Fee, ItemDetail, NewNotification, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
+import { matchesJournalFilter } from "./journal.ts";
+import type { Fee, ItemDetail, JournalEvent, JournalFilter, NewNotification, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 
@@ -20,6 +21,11 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
   const now = options.now ?? (() => new Date());
   const items = new Map<string, StoredItem>();
   const details = new Map<string, ItemDetail>();
+  const journal: JournalEvent[] = [];
+  const journalKey = (event: { familyId: string; stream: string; seq: number }): string =>
+    JSON.stringify([event.familyId, event.stream, event.seq]);
+  const journalOf = (familyId: string, filter: JournalFilter): JournalEvent[] =>
+    journal.filter((event) => event.familyId === familyId && matchesJournalFilter(event, filter));
   const outbox = new Map<string, OutboxEntry>();
   /** Queues the entry unless its key exists. Returns true if the entry is new. */
   const enqueue = (entry: NewNotification): boolean => {
@@ -73,6 +79,28 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       [...details.values()]
         .filter((detail) => detail.familyId === familyId && matchesFilter(detail, filter))
         .map((detail) => ({ ...detail })),
+    appendEvents: async (events) => {
+      const keys = new Set(journal.map(journalKey));
+      for (const event of events) {
+        if (keys.has(journalKey(event))) throw new Error(`Journal event ${event.stream} ${event.seq} exists already`);
+        keys.add(journalKey(event));
+      }
+      const recordedAt = now();
+      journal.push(...events.map((event) => structuredClone({ ...event, recordedAt })));
+      return events.length;
+    },
+    listHeads: async (familyId, filter = {}) => {
+      const last = new Map<string, JournalEvent>();
+      for (const event of journal.filter((other) => other.familyId === familyId)) {
+        const head = last.get(event.stream);
+        if (!head || head.seq < event.seq) last.set(event.stream, event);
+      }
+      return [...last.values()].filter((event) => matchesJournalFilter(event, filter)).map((event) => structuredClone(event));
+    },
+    listEvents: async (familyId, filter = {}) =>
+      journalOf(familyId, filter)
+        .sort((a, b) => (a.stream === b.stream ? a.seq - b.seq : a.stream < b.stream ? -1 : 1))
+        .map((event) => structuredClone(event)),
     enqueueNotification: async (entry: NewNotification) => enqueue(entry),
     enqueueNotifications: async (entries) => entries.filter(enqueue).length,
     pendingNotifications: async (familyId) =>

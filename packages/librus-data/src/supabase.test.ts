@@ -25,6 +25,57 @@ runStorageContract("supabase (fake PostgREST)", async () => {
   return { storage, advanceDays, seedConfig: async (config) => server.seedConfig(config), seedFee: async (fee) => server.seedFee(fee) };
 });
 
+describe("Journal requests", () => {
+  const row = (index: number) => journalSample(1, `s${index}`);
+  const journalRequests = (server: ReturnType<typeof setup>["server"]) =>
+    server.requests.filter((request) => request.url.includes("/journal_events"));
+
+  it("sends 250 events in 3 requests with return=minimal and no duplicate resolution", async () => {
+    const { server, storage } = setup();
+    await storage.appendEvents(Array.from({ length: 250 }, (_, index) => row(index)));
+    const posts = journalRequests(server);
+    expect(posts.map((request) => request.method)).toEqual(["POST", "POST", "POST"]);
+    expect(posts[0]?.headers.get("prefer")).toBe("return=minimal");
+  });
+
+  it("splits the stream filter of heads into requests of at most 100 streams", async () => {
+    const { server, storage } = setup();
+    const streams = Array.from({ length: 250 }, (_, index) => `s${index}`);
+    await storage.listHeads(FAMILY_ID, { streams });
+    expect(server.requests.filter((request) => request.url.includes("/journal_heads")).length).toBe(3);
+  });
+
+  it("never sends PATCH or DELETE to journal_events", async () => {
+    const { server, storage, advanceDays } = setup();
+    await runContractSample(storage, advanceDays);
+    expect(server.requests.some((request) => request.url.includes("journal_events"))).toBe(true);
+    const changing = server.requests.filter((request) => ["PATCH", "DELETE"].includes(request.method));
+    expect(changing.some((request) => request.url.includes("journal_events"))).toBe(false);
+  });
+});
+
+async function runContractSample(storage: ReturnType<typeof setup>["storage"], advanceDays: (days: number) => Promise<void>) {
+  await storage.appendEvents([{ ...journalSample(1), day: "2025-01-10" }]);
+  await storage.appendEvents([journalSample(2)]);
+  await storage.purgeDelivered(30);
+  await advanceDays(40);
+  await storage.listEvents(FAMILY_ID, { from: "2025-01-01" });
+  await storage.listHeads(FAMILY_ID);
+}
+
+const journalSample = (seq: number, stream = "s") => ({
+  familyId: FAMILY_ID,
+  childId: "00000000-0000-4000-8000-0000000000c1",
+  stream,
+  seq,
+  kind: "lesson" as const,
+  day: null,
+  eventType: "LessonScheduled",
+  payload: {},
+  contentHash: "h",
+  source: "librus-watch",
+});
+
 describe("createSupabaseStorage", () => {
   it("sends the key and a trimmed base URL", async () => {
     const server = createFakePostgrest(START, KEY);

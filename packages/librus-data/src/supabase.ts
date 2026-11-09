@@ -1,6 +1,6 @@
 import type { Config, FetchFn, Runtime } from "@automations/shared";
 import { DETAIL_BATCH_SIZE, uniqueDetails } from "./details.ts";
-import type { DetailFilter, Fee, ItemDetail, NewItemDetail, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
+import type { DetailFilter, Fee, ItemDetail, JournalEvent, JournalFilter, NewJournalEvent, NewItemDetail, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -119,6 +119,61 @@ function detailQuery(familyId: string, where: DetailFilter): string {
   return `${parts.join("&")}&order=first_seen.asc`;
 }
 
+function toJournalRow(event: NewJournalEvent): Row {
+  return {
+    family_id: event.familyId,
+    child_id: event.childId,
+    stream: event.stream,
+    seq: event.seq,
+    kind: event.kind,
+    day: event.day,
+    event_type: event.eventType,
+    payload: event.payload,
+    content_hash: event.contentHash,
+    source: event.source,
+  };
+}
+
+function toJournalEvent(row: Row): JournalEvent {
+  return {
+    familyId: String(row.family_id),
+    childId: String(row.child_id),
+    stream: String(row.stream),
+    seq: Number(row.seq),
+    kind: row.kind as JournalEvent["kind"],
+    day: orNull(row.day),
+    eventType: String(row.event_type),
+    payload: row.payload as Record<string, unknown>,
+    contentHash: String(row.content_hash),
+    source: String(row.source),
+    recordedAt: new Date(String(row.recorded_at)),
+  };
+}
+
+/** A PostgREST list such as `("a","b")`, URL-encoded. */
+const inList = (values: readonly string[]): string =>
+  encodeURIComponent(`(${values.map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",")})`);
+
+function journalQuery(familyId: string, where: JournalFilter): string[] {
+  const optional: [string | undefined, string][] = [
+    [where.childId, "child_id=eq."],
+    [where.from, "day=gte."],
+    [where.to, "day=lte."],
+    [where.since?.toISOString(), "recorded_at=gte."],
+  ];
+  const parts = optional.flatMap(([value, prefix]) => (value === undefined ? [] : [prefix + encodeURIComponent(value)]));
+  if (where.kinds !== undefined) parts.push(`kind=in.${inList(where.kinds)}`);
+  return [filter("family_id", "eq", familyId), ...parts];
+}
+
+/** The streams of a filter in groups of at most `DETAIL_BATCH_SIZE`. One group with no stream filter if unset. */
+function streamGroups(streams: readonly string[] | undefined): (readonly string[] | undefined)[] {
+  if (streams === undefined) return [undefined];
+  const groups: string[][] = [];
+  for (let start = 0; start < streams.length; start += DETAIL_BATCH_SIZE) groups.push(streams.slice(start, start + DETAIL_BATCH_SIZE));
+  return groups;
+}
+
 const toDate = (value: unknown): Date | null => (value === null ? null : new Date(String(value)));
 
 function toPayment(row: Row): Payment {
@@ -178,6 +233,17 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
   async function insertNew(table: string, conflict: string, rows: Row[]): Promise<Row[]> {
     const init = { headers: headers({ ...JSON_HEADERS, prefer: INSERT_NEW }), body: JSON.stringify(rows) };
     return (await (await request("POST", table, `on_conflict=${conflict}`, init)).json()) as Row[];
+  }
+
+  async function readJournal(table: string, order: string, familyId: string, where: JournalFilter): Promise<JournalEvent[]> {
+    if (where.kinds?.length === 0) return [];
+    const rows: JournalEvent[] = [];
+    for (const group of streamGroups(where.streams)) {
+      const parts = journalQuery(familyId, where);
+      if (group !== undefined) parts.push(`stream=in.${inList(group)}`);
+      rows.push(...(await select(table, `${parts.join("&")}&order=${order}`)).map(toJournalEvent));
+    }
+    return rows;
   }
 
   const itemQuery = (familyId: string, watcher: string): string =>
@@ -240,6 +306,15 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     },
     listDetails: async (familyId, where = {}) =>
       (await select("item_details", detailQuery(familyId, where))).map(toDetail),
+    appendEvents: async (events) => {
+      for (let start = 0; start < events.length; start += DETAIL_BATCH_SIZE) {
+        const body = JSON.stringify(events.slice(start, start + DETAIL_BATCH_SIZE).map(toJournalRow));
+        await request("POST", "journal_events", "", { headers: headers({ ...JSON_HEADERS, prefer: "return=minimal" }), body });
+      }
+      return events.length;
+    },
+    listHeads: async (familyId, where = {}) => readJournal("journal_heads", "stream.asc", familyId, where),
+    listEvents: async (familyId, where = {}) => readJournal("journal_events", "stream.asc,seq.asc", familyId, where),
     enqueueNotification: async (entry: NewNotification) => (await insertNew("outbox", "key", [outboxRow(entry)])).length > 0,
     enqueueNotifications: async (entries) => {
       const unique = [...new Map(entries.map((entry) => [entry.key, entry])).values()];

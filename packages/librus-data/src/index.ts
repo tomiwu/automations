@@ -4,7 +4,11 @@ export type {
   Fee,
   ItemDetail,
   ItemKind,
+  JournalEvent,
+  JournalFilter,
+  JournalKind,
   NewItemDetail,
+  NewJournalEvent,
   NewNotification,
   NewPayment,
   OutboxEntry,
@@ -20,3 +24,5 @@ export { createSupabaseStorage, supabaseStorageFromRuntime } from "./supabase.ts
 export type { SupabaseStorage, SupabaseStorageOptions } from "./supabase.ts";
 export { createCredentialResolver, createSupabaseCredentialStore } from "./credentials.ts";
 export type { CredentialStore, SupabaseCredentialStoreOptions } from "./credentials.ts";
+export { checkEvent, contentHash, planEvents, projectHeads, projectStream } from "./journal.ts";
+export type { Classifier, Observed, PlanInput, StreamState } from "./journal.ts";
