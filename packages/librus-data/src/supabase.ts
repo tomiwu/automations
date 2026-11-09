@@ -305,12 +305,6 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const init = { headers: headers(JSON_HEADERS), body: JSON.stringify({ delivered_at: now().toISOString() }) };
       await request("PATCH", "outbox", `key=in.(${encodeURIComponent(list)})&delivered_at=is.null`, init);
     },
-    purgeDelivered: async (olderThanDays) => {
-      const limit = new Date(now().getTime() - olderThanDays * DAY_MS).toISOString();
-      const init = { headers: headers({ prefer: "return=representation" }) };
-      const removed = await request("DELETE", "outbox", filter("delivered_at", "lt", limit), init);
-      return ((await removed.json()) as Row[]).length;
-    },
     loadConfig,
     listFees: async (familyId) => (await select("fees", filter("family_id", "eq", familyId))).map(toFee),
     upsertPayment,

@@ -15,7 +15,6 @@
     "./events": "./src/entry/events.ts",
     "./stored-lessons": "./src/entry/stored-lessons.ts",
     "./stream-history": "./src/entry/stream-history.ts",
-    "./purge": "./src/entry/purge.ts",
     "./configure": "./src/entry/configure.ts"
   },
   "dependencies": {
@@ -38,13 +37,6 @@
         "schedule": {
           "type": "cron",
           "expression": "30 4,12 * * *"
-        }
-      },
-      "daily-purge": {
-        "entry": "./src/entry/purge.ts",
-        "schedule": {
-          "type": "cron",
-          "expression": "30 3 * * *"
         }
       }
     },

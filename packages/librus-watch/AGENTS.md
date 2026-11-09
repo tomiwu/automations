@@ -20,13 +20,12 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 | `./stream-history` | `{ stream }` | `{ stream, events, state }`. `state` is `null` for an unknown stream | none (reads Supabase only, 1 fetch) |
 | `./events` | `{ childId?, from?, to?, since? }` | `{ childId, child, from, to, since, events }`. Each event: `id`, `kind`, `date`, `endDate`, `start`, `end`, `title`, `text`, `sender`, `subject`, `category`, `sourceUpdatedAt`, `firstSeen` | none (reads Supabase only, no Librus login) |
 | `./scheduled` | none | `{ ok: true }` | runs the Watchers, writes Items and the Outbox, sends Telegram messages |
-| `./purge` | none | `{ ok: true, removed }` | deletes delivered Outbox rows older than 30 days |
 
-`./scheduled` and `./purge` are the jobs in `package.json` (`kody.jobs`). Do not call them as a test: `./scheduled` can send real messages.
+`./scheduled` is the only job in `package.json` (`kody.jobs`). Do not call it as a test: `./scheduled` can send real messages.
 
 ## Stored content
 
-The Watchers store the full content of each new Item in the Supabase table `item_details`. The meetings and days-off Watchers send no Notification; the Morning report lists them. `./events` reads this table. `from` and `to` are `YYYY-MM-DD`; `since` is an ISO time for `firstSeen` (default 7 days ago). Data is kept forever: `./purge` removes only delivered Outbox rows, never `item_details`. Changed content adds a new row with a new event `id`.
+The Watchers store the full content of each new Item in the Supabase table `item_details`. The meetings and days-off Watchers send no Notification; the Morning report lists them. `./events` reads this table. `from` and `to` are `YYYY-MM-DD`; `since` is an ISO time for `firstSeen` (default 7 days ago). Data is kept forever: no job deletes `item_details`, `journal_events` or Outbox rows. Changed content adds a new row with a new event `id`.
 
 ## Journal
 

@@ -14,7 +14,7 @@ This used most of the Kody fetch limit (2500 outbound fetches each UTC week).
 The owner wants event sourcing, as in the Akka Persistence journal:
 
 - Each change goes to the database as an event. The history is complete.
-- The jobs never delete or change a stored event. There is no purge of these rows.
+- The jobs never delete or change a stored event. There is no purge of these rows. Outbox rows are kept forever too: the `daily-purge` job and `purgeDelivered` were removed (#154), and migration 0010 takes the `delete` right on `outbox` from the watcher role.
 - The current state is a projection: a pure fold of the events of one stream.
 
 ## Decision

@@ -24,7 +24,6 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./scheduled` | One scheduled pass. It takes no input. It rejects when something failed. |
 | `./upcoming` | `{ childId?, days? }`. Homework and tests with the Lesson they fall on. |
 | `./lessons` | `{ childId? }`. The Lessons of the next 14 days. |
-| `./purge` | The daily job. It calls `purgeDelivered(30)` and returns `{ ok, removed }`. It takes no input. |
 | `./calendar` | `{ childId? }`. The Lessons of the next 14 days and the homework and tests of the same days, in one read with one Librus login. Use it instead of `lessons` plus `upcoming`. |
 | `./children` | No input. `{ children }`: `id`, `name` and `calendar_id` of every Child. |
 | `./events` | `{ childId?, from?, to?, since? }`. The stored content of the Items (meetings, days off, trips, Terminarz entries, announcements, messages, grades) as `events`. `from` and `to` are `YYYY-MM-DD`; `since` is an ISO time for `firstSeen` (default 7 days ago). It reads Supabase only: no Librus login. |
@@ -39,14 +38,13 @@ The Supabase URL and the Family ID are plain config set with `./configure` (`{ s
 - The Watchers for messages, announcements, trips, Terminarz entries, meetings, days off and grades store the full content of each new Item in the table `item_details` (migration `0006_item_details.sql`). A row has `kind`, `source_id`, `date`, `start_time`, `end_time`, `title`, `text`, `sender`, `subject`, `category`, `source_updated_at` and `first_seen`.
 - An Item with changed content adds a new row (another `content_hash`). The old row stays.
 - The role `automations_watcher` can only read and insert `item_details`. It cannot update or delete.
-- **Data is kept forever.** `daily-purge` removes only delivered Outbox rows older than 30 days. It never touches `item_details` or `items`.
+- **Data is kept forever.** No job deletes rows: `item_details`, `items`, `journal_events` and the Outbox (delivered rows too) are kept forever.
 
 ## Journal events (`scheduled-check`)
 
 - After the Watchers, `scheduled-check` appends Lesson and homework events to `journal_events` (ADR 0006). It uses only data that the run read already: the timetable is memoized in the source, and the `homework` Watcher gives its Items. It makes no new Librus request.
 - Streams: `lesson:<childId>:<date>:<period>`, `homework:<childId>:<librus id>` and `check:librus-watch:<childId>`. Each pass appends one `CheckCompleted` event when a part ran.
 - A failed timetable gives no Lesson event and no `LessonVanished`. A failed `homework` Watcher gives no homework event. A journal failure is reported as `journal: <message>`, and the Morning report still runs.
-- `daily-purge` never touches `journal_events`.
 - The journal step adds about 2 to 4 Supabase fetches for each Child and pass: one read of the heads, one append, and the check stream.
 - `journal_events` is append-only (see `packages/librus-data/README.md`).
 
@@ -84,7 +82,7 @@ Use `./stored-lessons` and `./stream-history` for the calendar sync. They read S
 
 The Kody free plan allows 2500 outbound fetches in a UTC week. This package keeps its use low:
 
-- **Count.** `entryDeps` wraps the fetch of the runtime in `countFetches`. Each scheduled run, purge run and export logs `fetches total=N <host>=n ...` and returns `fetches: { total, hosts }`. The Telegram sends go through the `telegram` package and are not in the count.
+- **Count.** `entryDeps` wraps the fetch of the runtime in `countFetches`. Each scheduled run and export logs `fetches total=N <host>=n ...` and returns `fetches: { total, hosts }`. The Telegram sends go through the `telegram` package and are not in the count.
 - **Name cache.** The names behind Librus IDs (`Users`, `Subjects`, `HomeWorks/Categories`) are kept in the package storage, one entry for each Account (`librus-names:<account id>`), for 7 days. A second run with the same IDs makes no name fetch.
 - **One config read.** `loadConfig` reads the Family and its Children, Accounts, Activities and Recipients in one request. The credentials of the Family load in one request on the first `runtime.secret` call. A run needs 2 Supabase requests for config and credentials.
 - **Per run.** A scheduled run needs about 2 Supabase requests for config and credentials, plus the Librus pages of each enabled Watcher, plus batched Supabase writes. `./events` needs only Supabase requests. The counter in the log shows the real numbers.
@@ -93,7 +91,7 @@ The Kody free plan allows 2500 outbound fetches in a UTC week. This package keep
 ## Not in this package
 
 The Telegram bot commands (`/librus_*`), the pause state and the `grades` and `messages` exports are not ported.
-The schedule is in `package.json` (`kody.jobs`). Cron is in UTC: `scheduled-check` runs at 04:30 and 12:30 UTC, `daily-purge` at 03:30 UTC.
+The schedule is in `package.json` (`kody.jobs`). Cron is in UTC: `scheduled-check` runs at 04:30 and 12:30 UTC. There is no purge job.
 
 ## Telegram update router
 

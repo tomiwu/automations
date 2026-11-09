@@ -62,7 +62,6 @@ A database leak alone gives only ciphertext. A package config leak alone gives a
 | Package / job | Cron (`package.json`) | What it does |
 | --- | --- | --- |
 | librus-watch `scheduled-check` | `30 4,12 * * *` | New Librus items to Telegram |
-| librus-watch `daily-purge` | `30 3 * * *` | Removes delivered Outbox rows older than 30 days. Stored content stays |
 | activities-watch `scheduled-check` | `30 4,12 * * *` | Cancelled or moved after-school classes to Telegram |
 | payments-watch `scheduled-check` | `0 8 * * *` | Due fees to Telegram with a ZBP QR code |
 | payments-watch webhook `telegram-update` | Owner taps Paid / Skip | Marks the fee in Supabase |
@@ -76,7 +75,6 @@ Kody reads the cron expressions in UTC. The jobs set no cron time zone. The tabl
 | 04:30 | 05:30 | 06:30 | librus-watch and activities-watch, morning run |
 | 12:30 | 13:30 | 14:30 | librus-watch and activities-watch, afternoon run |
 | 08:00 | 09:00 | 10:00 | payments-watch |
-| 03:30 | 04:30 | 05:30 | librus-watch `daily-purge` |
 
 ## 6. How results get back to the assistant and into Google Calendar
 
@@ -105,7 +103,7 @@ Where each kind of `./events` event goes in the calendar:
 | `grade` | In the description of the lesson on its `date` |
 | `meeting`, `trip` | Popup at 16:00 on the day before |
 
-Data in `item_details` and `journal_events` is kept forever. `daily-purge` removes only delivered Outbox rows.
+Data in `item_details`, `journal_events` and the Outbox is kept forever. No job deletes rows (the `daily-purge` job was removed in #154).
 
 The calendar sync must use the stored exports `./stored-lessons`, `./stored-sessions` and `./stream-history`. They read the Journal in Supabase and make no Librus or app request. Do not use `./lessons`, `./calendar`, `./upcoming` and `./sessions` for the sync. They log in to the Services and stay for manual use. Check `lastSavedAt` in the result: an old time means stale data. See ADR 0006.
 

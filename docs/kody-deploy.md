@@ -10,13 +10,13 @@ Four packages run as Kody packages. All are private.
 
 | Package | Jobs (in `package.json`, `kody.jobs`) |
 | --- | --- |
-| `@tomiwu/librus-watch` | `scheduled-check` (04:30 and 12:30 UTC), `daily-purge` (03:30 UTC) |
+| `@tomiwu/librus-watch` | `scheduled-check` (04:30 and 12:30 UTC) |
 | `@tomiwu/activities-watch` | The scheduled pass and the exports. See its README. |
 | `@tomiwu/payments-watch` | `scheduled-check` (08:00 UTC) |
 | `@tomiwu/kradziejka` | No jobs. Two inbound webhooks and one register webhook. See its README. |
 
 Kody reads cron expressions in UTC. Do not set a cron time zone.
-Each watcher package exports entry files (`./scheduled`, `./purge`, `./configure` and the exports). `@tomiwu/kradziejka` exports webhooks instead of jobs. Only the entry files import the Kody runtime.
+Each watcher package exports entry files (`./scheduled`, `./configure` and the exports). `@tomiwu/kradziejka` exports webhooks instead of jobs. Only the entry files import the Kody runtime.
 
 ## Secrets and credentials
 

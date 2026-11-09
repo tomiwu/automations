@@ -44,6 +44,6 @@ const failures = await runLibrusWatch({
 if (failures.length > 0) throw new Error(failures.join("; "));
 ```
 
-Run it with `node --experimental-strip-types script.ts`. Start it at least twice a day, so the free Supabase project does not pause. Run the purge (`runPurge`) once a day.
+Run it with `node --experimental-strip-types script.ts`. Start it at least twice a day, so the free Supabase project does not pause.
 
 The one-time import of a Kody export also runs on Node: see "Migration from Kody" in `packages/librus-data/README.md`.
