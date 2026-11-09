@@ -15,6 +15,7 @@ import configure from "kody:@tomiwu/payments-watch/configure";
 | `./scheduled` | Job event | Run summary | Reads Fees, writes Payments, sends Telegram photos |
 | `./telegram-update` | Webhook envelope or a Telegram update | `{ ok }` | Records Paid or Skip, edits the Telegram message |
 | `./configure` | Deployment config | Config without secrets | Writes package storage |
+| `./stored-payments` | `{ childId?, month? }` | `{ timezone, month, lastSavedAt, payments, fetches }` | None. Reads Supabase only |
 | `./app` | HTTP request | HTML dashboard | Reads and writes Payments |
 
 Do not call `./scheduled` or `./telegram-update` as a live test. They can message a real chat.

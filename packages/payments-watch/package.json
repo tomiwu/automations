@@ -10,7 +10,8 @@
     "./scheduled": "./src/entry/scheduled.ts",
     "./configure": "./src/entry/configure.ts",
     "./app": "./src/entry/app.ts",
-    "./telegram-update": "./src/entry/telegram-update.ts"
+    "./telegram-update": "./src/entry/telegram-update.ts",
+    "./stored-payments": "./src/entry/stored-payments.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
