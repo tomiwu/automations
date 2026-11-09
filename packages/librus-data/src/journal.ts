@@ -51,8 +51,9 @@ export async function planEvents<S>(input: PlanInput<S>): Promise<NewJournalEven
   return [...changes.filter((event) => event !== null), ...vanished];
 }
 
-const isGone = <S>(input: PlanInput<S>, head: JournalEvent): boolean =>
-  head.eventType !== input.classify.vanished && input.inVanishScope(head);
+function isGone<S>(input: PlanInput<S>, head: JournalEvent): boolean {
+  return head.eventType !== input.classify.vanished && input.inVanishScope(head);
+}
 
 async function planObserved<S>(input: PlanInput<S>, item: Observed<S>, head?: JournalEvent): Promise<NewJournalEvent | null> {
   const hash = await contentHash(item.state);
@@ -164,7 +165,9 @@ function inRange(day: string | null, filter: JournalFilter): boolean {
   return day !== null && afterFrom(day, filter.from) && beforeTo(day, filter.to);
 }
 
-const inList = <T>(allowed: readonly T[] | undefined, value: T): boolean => allowed === undefined || allowed.includes(value);
+function inList<T>(allowed: readonly T[] | undefined, value: T): boolean {
+  return allowed === undefined || allowed.includes(value);
+}
 
 const isSince = (event: JournalEvent, since?: Date): boolean =>
   since === undefined || event.recordedAt.getTime() >= since.getTime();
