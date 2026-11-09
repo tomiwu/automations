@@ -68,9 +68,9 @@ Enter these secrets in Kody and approve them for the host:
 
 For each Account, also enter the secrets that the Account names, for example `CHILD1_LIBRUS_LOGIN` and `CHILD1_LIBRUS_PASSWORD`. The database holds only the names.
 
-## 6. Daily purge
+## 6. Data is kept forever
 
-A scheduled job calls `purgeDelivered(30)` each day. It uses the role `automations_watcher`. The RLS policy allows the delete only for entries that were delivered more than 30 days ago. The job never touches `journal_events` or `item_details`.
+No job deletes rows. Delivered Outbox entries stay too. Migration `0010_outbox_keep.sql` removes the old purge policy and the `delete` grant on `outbox`, so the role `automations_watcher` cannot delete any row.
 
 ## Tests
 

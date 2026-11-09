@@ -42,7 +42,7 @@ packages/librus-data       StorageAdapter, SupabaseStorage, in-memory fake, migr
 packages/librus-watch      Librus watcher, lessons and upcoming exports, morning report
 packages/activities-watch  ActiveNow, Edusky and Mondo watchers, sessions export, mail compare
 packages/kradziejka       Telegram router to Grok bot routines (registry table kradziejka_bots)
-supabase/migrations        SQL: schema, RLS, restricted role, purge function
+supabase/migrations        SQL: schema, RLS, restricted role
 tools/admin                admin CLI (service_role, run on the owner's computer only)
 docs/                      PRD, ADRs, setup, Kody deploy, Supabase setup, adding a child
 examples/                  example rows and secret names (CHILD1_*, CHILD2_*)
@@ -72,12 +72,12 @@ Tooling: npm workspaces. No pnpm, no turbo. TypeScript, vitest. License: MIT.
 
 ### Part C: storage
 
-1. `StorageAdapter` operations: `knownItemIds`, `listItems`, `recordItems`, `enqueueNotification`, `pendingNotifications`, `markDelivered`, `purgeDelivered(olderThanDays)`, `loadConfig(familyId)`.
+1. `StorageAdapter` operations: `knownItemIds`, `listItems`, `recordItems`, `enqueueNotification`, `pendingNotifications`, `markDelivered`, `loadConfig(familyId)`.
 2. The public functions of `librus-data` keep their current names and input shapes, so the watchers change little.
 3. `SupabaseStorage` uses the PostgREST HTTP API with `SUPABASE_URL` and `SUPABASE_KEY` (restricted role). No Supabase SDK if plain fetch is enough.
 4. An in-memory fake implements the same interface. One shared contract test suite runs against both.
 5. `enqueueNotification` is idempotent on `key` (insert with conflict ignore).
-6. `purgeDelivered` removes Outbox entries delivered more than 30 days ago. A scheduled job calls it each day.
+6. Outbox entries are kept forever, also after delivery. There is no purge (removed in #154).
 7. Keepalive: each scheduled run reads one row. The watchers run at least twice a day, so the free plan does not pause (7 days of no activity).
 
 ### Part D: schema (SQL migration)

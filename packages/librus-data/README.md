@@ -17,7 +17,6 @@
 | `appendEvents(events)` | Appends Journal events in batches of 100 rows at most. A conflict on `(family_id, stream, seq)` is an error. Returns the number of new events |
 | `listHeads(familyId, filter?)` | The Head (last event) of each stream, read from the view `journal_heads` in one request. The filter has `childId`, `kinds`, `streams`, `from` and `to` |
 | `listEvents(familyId, filter?)` | The Journal events that match the filter, oldest first. The filter also has `since` |
-| `purgeDelivered(olderThanDays)` | Number of removed Outbox entries |
 | `loadConfig(familyId)` | `Config` of the Family, read in one request |
 | `listFees(familyId)` | Fees of the Family. The Watcher cannot change them |
 | `upsertPayment(payment)` | Makes a `pending` Payment and returns it. A Payment for the same Fee and month is returned as it is |

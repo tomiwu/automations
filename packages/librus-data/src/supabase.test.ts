@@ -57,7 +57,6 @@ describe("Journal requests", () => {
 async function runContractSample(storage: ReturnType<typeof setup>["storage"], advanceDays: (days: number) => Promise<void>) {
   await storage.appendEvents([{ ...journalSample(1), day: "2025-01-10" }]);
   await storage.appendEvents([journalSample(2)]);
-  await storage.purgeDelivered(30);
   await advanceDays(40);
   await storage.listEvents(FAMILY_ID, { from: "2025-01-01" });
   await storage.listHeads(FAMILY_ID);

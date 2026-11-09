@@ -106,17 +106,6 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       [...outbox.values()].filter((entry) => entry.familyId === familyId && entry.deliveredAt === null),
     markDelivered: async (key) => deliver(key),
     markDeliveredMany: async (keys) => keys.forEach(deliver),
-    purgeDelivered: async (olderThanDays) => {
-      const limit = now().getTime() - olderThanDays * DAY_MS;
-      let removed = 0;
-      for (const [key, entry] of outbox) {
-        if (entry.deliveredAt !== null && entry.deliveredAt.getTime() < limit) {
-          outbox.delete(key);
-          removed += 1;
-        }
-      }
-      return removed;
-    },
     loadConfig: async (familyId) => {
       const config = configs.get(familyId);
       if (!config) throw new Error(`Family ${familyId} has no config`);

@@ -169,8 +169,6 @@ export interface StorageAdapter {
   markDelivered(key: string): Promise<void>;
   /** Like `markDelivered` for many keys in one request. */
   markDeliveredMany(keys: readonly string[]): Promise<void>;
-  /** Removes entries delivered more than `olderThanDays` days ago. Returns the number removed. */
-  purgeDelivered(olderThanDays: number): Promise<number>;
   loadConfig(familyId: string): Promise<Config>;
   listFees(familyId: string): Promise<Fee[]>;
   /** Makes a `pending` Payment. A Payment for the same Fee and month is not changed and is returned as it is. */

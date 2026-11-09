@@ -138,11 +138,10 @@ function detailTests(create: () => Promise<ContractHarness>): void {
     expect(await ids({ since: new Date("2025-01-02T00:00:00Z") })).toEqual(["e"]);
   });
 
-  it("keeps details apart per Family and keeps them after a purge", async () => {
+  it("keeps details apart per Family over time", async () => {
     const { storage, advanceDays } = await detailHarness(create);
     await storage.recordDetails([detail(), detail({ familyId: OTHER_FAMILY_ID })]);
     await advanceDays(400);
-    await storage.purgeDelivered(30);
     expect((await storage.listDetails(FAMILY_ID)).length).toBe(1);
     expect((await storage.listDetails(OTHER_FAMILY_ID)).length).toBe(1);
   });
@@ -260,20 +259,6 @@ function outboxTests(create: () => Promise<ContractHarness>): void {
   });
 }
 
-function purgeTests(create: () => Promise<ContractHarness>): void {
-  it("purges only entries delivered long ago", async () => {
-    const { storage, advanceDays } = await create();
-    await storage.enqueueNotification(entry("old"));
-    await storage.enqueueNotification(entry("new"));
-    await storage.enqueueNotification(entry("open"));
-    await storage.markDelivered("old");
-    await advanceDays(31);
-    await storage.markDelivered("new");
-    expect(await storage.purgeDelivered(30)).toBe(1);
-    expect(await storage.purgeDelivered(30)).toBe(0);
-    expect((await storage.pendingNotifications(FAMILY_ID)).map((item) => item.key)).toEqual(["open"]);
-  });
-}
 
 function configTests(create: () => Promise<ContractHarness>): void {
   it("loads the config of a Family", async () => {
@@ -379,7 +364,6 @@ export function runStorageContract(name: string, create: () => Promise<ContractH
     detailTests(create);
     journalTests(create);
     outboxTests(create);
-    purgeTests(create);
     configTests(create);
     feeTests(create);
     paymentTests(create);
