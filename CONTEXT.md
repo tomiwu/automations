@@ -16,5 +16,9 @@
 - **Hub**: The registry row with slug `hub`. Unclear messages go to the hub.
 - **Sender**: The Telegram account that sent a message. Its ID is `senderId`.
 - **Allowlist**: The Telegram Sender IDs that `kradziejka` accepts. An empty list accepts no one.
+- **Journal event**: One stored change of one entity (Lesson, homework, Session, Item). It is never changed or deleted.
+- **Stream**: All Journal events of one entity, in `seq` order.
+- **Projection**: The state that a fold of the Journal events of a stream gives.
+- **Head**: The last Journal event of a stream.
 
 Avoid: "user" for Recipient, "event" for Item, "queue" for Outbox.
