@@ -107,3 +107,33 @@ export function checkCompletedForPayments(
   const stream = `check:${SOURCE}:${childId}`;
   return checkEvent({ familyId, childId, stream, source: SOURCE, day: at.toISOString().slice(0, 10), head, payload });
 }
+
+export type PaymentSent = "notified" | "reminded";
+
+const SENT_FIELD = { notified: "notifiedAt", reminded: "remindedAt" } as const;
+
+/**
+ * `PaymentChanged` that sets `notifiedAt` or `remindedAt` on a pending head. The amount and the amount source stay
+ * as they are. Else null: a decided Payment gets nothing, and a time that is set stays.
+ */
+export async function planPaymentSent(
+  head: JournalEvent,
+  sent: readonly PaymentSent[],
+  at: Date,
+): Promise<NewJournalEvent | null> {
+  const fresh = sent.filter((which) => head.payload.status === "pending" && !head.payload[SENT_FIELD[which]]);
+  if (fresh.length === 0) return null;
+  const payload = { ...head.payload, ...Object.fromEntries(fresh.map((which) => [SENT_FIELD[which], at.toISOString()])) };
+  return {
+    familyId: head.familyId,
+    childId: head.childId,
+    stream: head.stream,
+    seq: head.seq + 1,
+    kind: "payment",
+    day: head.day,
+    eventType: "PaymentChanged",
+    payload,
+    contentHash: await contentHash(payload),
+    source: SOURCE,
+  };
+}

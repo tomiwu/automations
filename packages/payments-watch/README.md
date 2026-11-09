@@ -31,6 +31,14 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - On `reminderDay` or later, a `pending` Payment gets one reminder with the key `payment:<payment id>:<chat id>:reminder`.
 - A `paid` or `skipped` Payment gets no Notification. A repeated run queues nothing twice.
 
+## Journal dual write
+
+- `runPayments` reads the heads of the `payment:` streams once. For each due Fee with an amount above 0 it plans `PaymentDue` or `PaymentChanged` (`planPaymentDue`). It appends all events of the pass, with one `CheckCompleted` for each Child that has an enabled Fee, in ONE `appendEvents` call. A failed pass appends the Payment events and no `CheckCompleted`.
+- A pending Payment with a changed amount gets `updatePendingAmount` (`amount`, `amount_source`). A `paid` or `skipped` Payment gets no event and no change. `fees` is never changed.
+- `runPaymentsWatch` records which Payment keys the delivery sent. `recordSent` then appends `PaymentChanged` with `notifiedAt` (first Notification) or `remindedAt` (reminder), the same amount and amount source, and sets `notified_at` or `reminded_at` (`markPaymentSent`). A failed append (for example a `seq` conflict) changes nothing.
+- The journal payload has no QR text, account, NIP, title, recipient name or source URL.
+- The Outbox keys do not change. There is no new site fetch.
+
 ## Notifier
 
 - The port `Notifier.sendPayment(recipient, notice, qr)` takes the Recipient, a `PaymentNotice` (`child`, `fee`, `payment`) and the QR code.

@@ -351,6 +351,36 @@ function paymentTests(create: () => Promise<ContractHarness>): void {
     expect(await storage.listPayments(FAMILY_ID)).toEqual([decided]);
   });
 
+  it("updates the amount of a pending Payment only", async () => {
+    const storage = await start();
+    const { id } = await storage.upsertPayment(newPayment());
+    expect(await storage.updatePendingAmount(id, 20000, "page")).toBe(true);
+    expect((await storage.listPayments(FAMILY_ID))[0]).toMatchObject({ amount: 20000, amountSource: "page" });
+    await storage.setPaymentStatus(id, "paid", "1000001");
+    expect(await storage.updatePendingAmount(id, 30000, "config")).toBe(false);
+    expect((await storage.listPayments(FAMILY_ID))[0]).toMatchObject({ amount: 20000, amountSource: "page", status: "paid" });
+    expect(await storage.updatePendingAmount(OTHER_FEE_ID, 1, "config")).toBe(false);
+  });
+
+  it("sets the sent times of a pending Payment one time", async () => {
+    const storage = await start();
+    const { id } = await storage.upsertPayment(newPayment());
+    const first = new Date("2025-01-10T10:00:00Z");
+    expect(await storage.markPaymentSent(id, "notified", first)).toBe(true);
+    expect(await storage.markPaymentSent(id, "notified", new Date("2025-01-11T10:00:00Z"))).toBe(false);
+    expect(await storage.markPaymentSent(id, "reminded", first)).toBe(true);
+    const [payment] = await storage.listPayments(FAMILY_ID);
+    expect(payment).toMatchObject({ notifiedAt: first, remindedAt: first });
+  });
+
+  it("does not set the sent time of a Payment that is not pending", async () => {
+    const storage = await start();
+    const { id } = await storage.upsertPayment(newPayment());
+    await storage.setPaymentStatus(id, "skipped", "1000001");
+    expect(await storage.markPaymentSent(id, "notified", new Date())).toBe(false);
+    expect((await storage.listPayments(FAMILY_ID))[0]?.notifiedAt).toBeNull();
+  });
+
   it("returns false for an unknown Payment", async () => {
     const storage = await start();
     expect(await storage.setPaymentStatus(OTHER_FEE_ID, "paid", "1000001")).toBe(false);

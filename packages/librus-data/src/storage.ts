@@ -175,6 +175,10 @@ export interface StorageAdapter {
   upsertPayment(payment: NewPayment): Promise<Payment>;
   /** Payments of the Family, oldest first. */
   listPayments(familyId: string): Promise<Payment[]>;
+  /** Sets `amount` and `amountSource` of a `pending` Payment. Returns false if nothing changed. */
+  updatePendingAmount(id: string, amount: number, amountSource: AmountSource): Promise<boolean>;
+  /** Sets `notifiedAt` or `remindedAt` of a `pending` Payment that has no such time yet. Returns false if nothing changed. */
+  markPaymentSent(id: string, which: "notified" | "reminded", at: Date): Promise<boolean>;
   /** Sets the status, `decidedAt` and `decidedBy` of a `pending` Payment. Returns false if nothing changed. */
   setPaymentStatus(
     id: string,

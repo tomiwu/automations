@@ -1,6 +1,15 @@
-import type { Fee, Payment, StorageAdapter } from "@automations/librus-data";
+import {
+  checkCompletedForPayments,
+  paymentStream,
+  planPaymentDue,
+  type Fee,
+  type JournalEvent,
+  type NewJournalEvent,
+  type Payment,
+  type StorageAdapter,
+} from "@automations/librus-data";
 import { localDate, t, type Child, type Config, type MessageKey, type Recipient } from "@automations/shared";
-import type { FeeSource } from "./fee-source.ts";
+import type { FeeAmount, FeeSource } from "./fee-source.ts";
 
 /** What one run of the Payment engine needs. */
 export interface PaymentRun {
@@ -15,6 +24,10 @@ interface RunContext {
   config: Config;
   day: number;
   month: string;
+  /** The heads of the `payment:` streams of the Family, read once. */
+  heads: ReadonlyMap<string, JournalEvent>;
+  /** The Journal events of this pass. They are appended in one call at the end. */
+  events: NewJournalEvent[];
 }
 
 const pad = (value: number): string => String(value).padStart(2, "0");
@@ -58,18 +71,72 @@ async function notifyPayment(context: RunContext, fee: Fee, payment: Payment): P
   if (context.day >= fee.reminderDay) await queue(context, fee, payment, "payment.reminder");
 }
 
+const dateOf = (value: unknown): Date | null => (typeof value === "string" ? new Date(value) : null);
+
+/** The state to journal: the amount that was found, and the sent times that the head or the row has. */
+function journalState(stored: Payment, found: FeeAmount, head: JournalEvent | undefined): Payment {
+  return {
+    ...stored,
+    amount: found.amount,
+    amountSource: found.source,
+    notifiedAt: dateOf(head?.payload.notifiedAt) ?? stored.notifiedAt,
+    remindedAt: dateOf(head?.payload.remindedAt) ?? stored.remindedAt,
+  };
+}
+
+/**
+ * Plans the Journal event of a pending Payment and sets the projection to the amount that was found.
+ * Returns the Payment as the Notifications must show it.
+ */
+async function journalPayment(context: RunContext, fee: Fee, stored: Payment, found: FeeAmount): Promise<Payment> {
+  if (stored.status !== "pending") return stored;
+  const head = context.heads.get(paymentStream(fee.childId, fee.id, stored.month));
+  const next = journalState(stored, found, head);
+  const event = await planPaymentDue(head, fee, next);
+  if (event) context.events.push(event);
+  if (next.amount === stored.amount && next.amountSource === stored.amountSource) return stored;
+  await context.storage.updatePendingAmount(stored.id, next.amount, next.amountSource);
+  return { ...stored, amount: next.amount, amountSource: next.amountSource };
+}
+
 async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Promise<void> {
   if (!isDue(context, fee)) return;
   const found = await source.amountFor(fee, context.month);
   if (!found || found.amount <= 0) return;
-  const payment = await context.storage.upsertPayment({
+  const stored = await context.storage.upsertPayment({
     familyId: fee.familyId,
     feeId: fee.id,
     month: context.month,
     amount: found.amount,
     amountSource: found.source,
   });
-  await notifyPayment(context, fee, payment);
+  await notifyPayment(context, fee, await journalPayment(context, fee, stored, found));
+}
+
+const checkStream = (childId: string): string => `check:payments-watch:${childId}`;
+
+/** One `CheckCompleted` for each Child that has an enabled Fee. */
+async function checkEvents(run: PaymentRun, fees: readonly Fee[]): Promise<NewJournalEvent[]> {
+  const childIds = [...new Set(fees.filter((fee) => fee.enabled).map((fee) => fee.childId))];
+  if (childIds.length === 0) return [];
+  const heads = await run.storage.listHeads(run.familyId, { streams: childIds.map(checkStream) });
+  return Promise.all(
+    childIds.map((childId) =>
+      checkCompletedForPayments(run.familyId, childId, run.now, heads.find((head) => head.stream === checkStream(childId))),
+    ),
+  );
+}
+
+async function handleFees(context: RunContext, run: PaymentRun, fees: readonly Fee[]): Promise<void> {
+  let failed = true;
+  try {
+    for (const fee of fees) await handleFee(context, run.source, fee);
+    failed = false;
+  } finally {
+    const checks = failed ? [] : await checkEvents(run, fees);
+    const events = [...context.events, ...checks];
+    if (events.length > 0) await run.storage.appendEvents(events);
+  }
 }
 
 /**
@@ -77,15 +144,21 @@ async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Prom
  * A Payment is made on `notifyDay` or later, one time only. A `pending` Payment gets one Notification
  * for each Recipient of the Child, and one reminder on `reminderDay` or later. The Outbox keys make a
  * repeated run send nothing twice. A `paid` or `skipped` Payment gets nothing.
+ * The pass also writes the Journal: `PaymentDue` or `PaymentChanged` for a pending Payment, and one
+ * `CheckCompleted` for each Child with an enabled Fee when the pass did not fail. All events go in one append.
  */
 export async function runPayments(run: PaymentRun): Promise<void> {
   const config = await run.storage.loadConfig(run.familyId);
   const today = localDate(run.now, config.family.timezone);
+  const fees = await run.storage.listFees(run.familyId);
+  const heads = await run.storage.listHeads(run.familyId, { kinds: ["payment"] });
   const context: RunContext = {
     storage: run.storage,
     config,
     day: Number(today.slice(8)),
     month: today.slice(0, 7),
+    heads: new Map(heads.map((head) => [head.stream, head])),
+    events: [],
   };
-  for (const fee of await run.storage.listFees(run.familyId)) await handleFee(context, run.source, fee);
+  await handleFees(context, run, fees);
 }

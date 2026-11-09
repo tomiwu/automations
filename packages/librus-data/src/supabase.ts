@@ -188,6 +188,12 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     ...extra,
   });
 
+  /** Patches the Payments that match the query. Returns true if a row changed. */
+  async function patchPayment(query: string, body: Record<string, unknown>): Promise<boolean> {
+    const init = { headers: headers({ ...JSON_HEADERS, prefer: "return=representation" }), body: JSON.stringify(body) };
+    return ((await (await request("PATCH", "payments", query, init)).json()) as Row[]).length > 0;
+  }
+
   async function request(method: string, table: string, query: string, init: RequestInit = {}): Promise<Response> {
     const response = await options.fetch(`${base}/${table}?${query}`, { ...init, method });
     if (!response.ok) {
@@ -310,6 +316,16 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     upsertPayment,
     listPayments: async (familyId) =>
       (await select("payments", `${filter("family_id", "eq", familyId)}&order=created_at.asc`)).map(toPayment),
+    updatePendingAmount: async (id, amount, amountSource) =>
+      patchPayment(`${filter("id", "eq", id)}&status=eq.pending`, {
+        amount,
+        amount_source: amountSource,
+      }),
+    markPaymentSent: async (id, which, at) => {
+      const column = which === "notified" ? "notified_at" : "reminded_at";
+      const query = `${filter("id", "eq", id)}&status=eq.pending&${column}=is.null`;
+      return patchPayment(query, { [column]: at.toISOString() });
+    },
     setPaymentStatus: async (id, status, decidedBy) => {
       const body = JSON.stringify({ status, decided_by: decidedBy, decided_at: now().toISOString() });
       const init = { headers: headers({ ...JSON_HEADERS, prefer: "return=representation" }), body };

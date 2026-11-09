@@ -6,6 +6,7 @@ import {
   paymentStream,
   planPaymentDecision,
   planPaymentDue,
+  planPaymentSent,
 } from "./payment-journal.ts";
 import type { PaymentInput } from "./payment-journal.ts";
 import { CHILD_ID, FAMILY_ID, FEE_ID, exampleFee } from "./fixtures.ts";
@@ -153,5 +154,29 @@ describe("checkCompletedForPayments", () => {
       eventType: "CheckCompleted",
       source: "payments-watch",
     });
+  });
+});
+
+describe("planPaymentSent", () => {
+  it("sets the sent time and keeps the amount, the source and the other time", async () => {
+    const head = await headOf(payment({ notifiedAt: new Date("2025-01-10T08:00:00Z") }));
+    const event = await planPaymentSent(head, ["notified", "reminded"], AT);
+    expect(event).toMatchObject({ eventType: "PaymentChanged", seq: 2, stream: head.stream, kind: "payment" });
+    expect(event?.payload).toMatchObject({
+      amount: 15000,
+      amountSource: "config",
+      notifiedAt: "2025-01-10T08:00:00.000Z",
+      remindedAt: AT.toISOString(),
+    });
+  });
+
+  it("gives null when the times are set already", async () => {
+    const head = await headOf(payment({ notifiedAt: AT }));
+    expect(await planPaymentSent(head, ["notified"], new Date("2025-01-13T08:00:00Z"))).toBeNull();
+  });
+
+  it("gives null for a Payment that is not pending", async () => {
+    const head = await headOf(payment({ status: "paid" }));
+    expect(await planPaymentSent(head, ["reminded"], AT)).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import type { StorageAdapter } from "@automations/librus-data";
 import type { Runtime } from "@automations/shared";
 import { deliverPending, type Messenger } from "@tomiwu/librus-watch";
+import { recordSent } from "./sent-journal.ts";
 import { runPayments } from "./engine.ts";
 import type { FeeSource } from "./fee-source.ts";
 
@@ -26,10 +27,18 @@ export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
   } catch (error) {
     failures.push(`payments: ${messageOf(error)}`);
   }
+  const delivered: string[] = [];
+  const watching: StorageAdapter = {
+    ...storage,
+    markDeliveredMany: async (keys) => {
+      await storage.markDeliveredMany(keys);
+      delivered.push(...keys);
+    },
+  };
   try {
     const config = await storage.loadConfig(familyId);
     await deliverPending({
-      storage,
+      storage: watching,
       familyId,
       messenger: deps.messenger,
       chatIds: config.recipients.map((recipient) => recipient.telegram_chat_id),
@@ -37,6 +46,11 @@ export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
     });
   } catch (error) {
     failures.push(`deliver: ${messageOf(error)}`);
+  }
+  try {
+    await recordSent(storage, familyId, delivered, runtime.now());
+  } catch (error) {
+    failures.push(`journal: ${messageOf(error)}`);
   }
   for (const failure of failures) runtime.log("error", failure);
   return failures;
