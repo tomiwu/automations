@@ -1,6 +1,6 @@
 import type { Config, FetchFn, Runtime } from "@automations/shared";
-import { DETAIL_BATCH_SIZE, uniqueDetails } from "./details.ts";
-import type { DetailFilter, Fee, ItemDetail, JournalEvent, JournalFilter, NewJournalEvent, NewItemDetail, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
+import { appendItemEvents, DETAIL_BATCH_SIZE, detailsFromJournal, uniqueDetails } from "./details.ts";
+import type { Fee, JournalEvent, JournalFilter, NewJournalEvent, NewItemDetail, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -69,27 +69,6 @@ function toFee(row: Row): Fee {
 
 const orNull = (value: unknown): string | null => (value === null ? null : String(value));
 
-function toDetail(row: Row): ItemDetail {
-  const time = (value: unknown): string | null => (value === null ? null : String(value).slice(0, 5));
-  return {
-    familyId: String(row.family_id),
-    scope: String(row.scope),
-    kind: row.kind as ItemDetail["kind"],
-    childId: String(row.child_id),
-    sourceId: String(row.source_id),
-    date: orNull(row.date),
-    startTime: time(row.start_time),
-    endTime: time(row.end_time),
-    title: String(row.title),
-    text: String(row.text),
-    sender: orNull(row.sender),
-    subject: orNull(row.subject),
-    category: orNull(row.category),
-    sourceUpdatedAt: row.source_updated_at === null ? null : new Date(String(row.source_updated_at)),
-    firstSeen: new Date(String(row.first_seen)),
-  };
-}
-
 function toDetailRow(detail: NewItemDetail, hash: string): Row {
   return {
     family_id: detail.familyId,
@@ -108,15 +87,6 @@ function toDetailRow(detail: NewItemDetail, hash: string): Row {
     category: detail.category,
     source_updated_at: detail.sourceUpdatedAt?.toISOString() ?? null,
   };
-}
-
-function detailQuery(familyId: string, where: DetailFilter): string {
-  const parts = [filter("family_id", "eq", familyId)];
-  if (where.childId !== undefined) parts.push(filter("child_id", "eq", where.childId));
-  if (where.from !== undefined) parts.push(filter("date", "gte", where.from));
-  if (where.to !== undefined) parts.push(filter("date", "lte", where.to));
-  if (where.since !== undefined) parts.push(filter("first_seen", "gte", where.since.toISOString()));
-  return `${parts.join("&")}&order=first_seen.asc`;
 }
 
 function toJournalRow(event: NewJournalEvent): Row {
@@ -283,7 +253,7 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     return toPayment(existing);
   }
 
-  return {
+  const storage: SupabaseStorage = {
     keepalive: async () => {
       await select("families", "select=id&limit=1");
     },
@@ -302,10 +272,10 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
         const batch = unique.slice(start, start + DETAIL_BATCH_SIZE).map(({ row, hash }) => toDetailRow(row, hash));
         added += (await insertNew("item_details", "family_id,scope,source_id,content_hash", batch)).length;
       }
+      await appendItemEvents(storage, rows);
       return added;
     },
-    listDetails: async (familyId, where = {}) =>
-      (await select("item_details", detailQuery(familyId, where))).map(toDetail),
+    listDetails: async (familyId, where = {}) => detailsFromJournal(storage, familyId, where),
     appendEvents: async (events) => {
       for (let start = 0; start < events.length; start += DETAIL_BATCH_SIZE) {
         const body = JSON.stringify(events.slice(start, start + DETAIL_BATCH_SIZE).map(toJournalRow));
@@ -353,6 +323,7 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       return ((await (await request("PATCH", "payments", query, init)).json()) as Row[]).length > 0;
     },
   };
+  return storage;
 }
 
 /**
