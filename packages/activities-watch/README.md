@@ -36,6 +36,7 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | --- | --- |
 | `./scheduled` | One scheduled pass. It takes no input. It rejects when something failed. |
 | `./sessions` | No input. `{ sessions, errors }`: every Session of every Child for the next 14 days, ordered by start. |
+| `./stored-sessions` | `{ childId?, from?, to? }`. `{ timezone, from, to, accounts, sessions, fetches }`: the Sessions as the Journal stores them, ordered by start, with `lastSavedAt` of each Account (null before the first save). `from` defaults to today, `to` to `from` + 13 (at most 60 days). Vanished Sessions stay with `vanished: true`. It reads Supabase only (3 fetches at most): no app login. |
 | `./after-school` | `{ childId, day, language? }`. `{ text }`: the after-school section of one Child. |
 
 Each Session has `childId` and the name of the Child (`child`).
