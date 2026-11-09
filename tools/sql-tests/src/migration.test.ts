@@ -18,7 +18,7 @@ describe.skipIf(!url)("0001_init.sql", () => {
     expect(psql(db, migration).ok).toBe(true);
     expect(psql(db, migration).ok).toBe(true);
     const seed = [
-      `delete from outbox; delete from items; delete from families`,
+      `delete from outbox where family_id = '${family}'; delete from items where family_id = '${family}'; delete from families where id = '${family}'`,
       `insert into families (id, name) values ('${family}', 'Example Family')`,
       `insert into children (family_id, name) values ('${family}', 'Child One')`,
       `insert into outbox (key, family_id, chat_id, text, delivered_at) values
