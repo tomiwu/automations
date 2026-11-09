@@ -62,11 +62,8 @@ function resolveRange(object: Record<string, unknown>, today: string): Range {
   return { from, to };
 }
 
-const state = (head: StreamState) => head.state as Record<string, string>;
-
 function lessonOf(head: StreamState): StoredLesson {
-  const s = state(head) as unknown as Lesson;
-  const { date, period, start, end, subject, teacher, room, status, substituteTeacher } = s;
+  const { date, period, start, end, subject, teacher, room, status, substituteTeacher } = head.state as unknown as Lesson;
   return {
     id: "", stream: head.stream, date, period, start, end, subject, teacher, room, status, substituteTeacher,
     vanished: head.vanished, seq: head.seq, lastChanged: head.lastChanged.toISOString(), homeworkGiven: [], testAtNextLesson: [],
@@ -122,11 +119,9 @@ export async function storedLessonsExport(deps: ExportDeps, input: unknown = {})
   const { from, to } = resolveRange(object, localDate(deps.runtime.now(), timezone));
   const heads = await deps.storage.listHeads(deps.familyId, { childId: child.id, kinds: ["lesson", "homework"], from, to });
   const checks = await deps.storage.listHeads(deps.familyId, { streams: [`check:librus-watch:${child.id}`] });
-  const states = projectHeads(heads);
-  const kindOf = new Map(heads.map((head) => [head.stream, head.kind]));
-  const homework = states.filter((s) => kindOf.get(s.stream) === "homework").map(homeworkOf).sort(byDateThenStart);
-  const lessons = states
-    .filter((s) => kindOf.get(s.stream) === "lesson")
+  const headsOfKind = (kind: string) => projectHeads(heads.filter((head) => head.kind === kind));
+  const homework = headsOfKind("homework").map(homeworkOf).sort(byDateThenStart);
+  const lessons = headsOfKind("lesson")
     .map(lessonOf)
     .sort((a, b) => a.date.localeCompare(b.date) || a.period - b.period);
   return withFetches(deps, {
