@@ -49,11 +49,50 @@ async function setup(events: (childIds: string[]) => NewJournalEvent[], twoChild
 const check = (childId: string, payload: Record<string, unknown>) =>
   event(childId, { stream: `check:librus-watch:${childId}`, kind: "check", eventType: "CheckCompleted", day: "2026-01-10", payload });
 
+const itemEvent = (childId: string, kind: string, sourceId: string, date: string, text: string) =>
+  event(childId, {
+    stream: `item:${kind}:${sourceId}`, kind: kind as "dayOff", day: date, eventType: "ItemRecorded",
+    payload: { scope: kind, sourceId, kind, childId, date, title: "Break", text },
+  });
+
+describe("storedLessonsExport days off", () => {
+  it("cancels Lessons inside a day off and keeps the others", async () => {
+    const { deps, childIds } = await setup(([c]) => [
+      lessonEvent(c!, "2026-01-11", 1), lessonEvent(c!, "2026-01-12", 1), lessonEvent(c!, "2026-01-13", 2), lessonEvent(c!, "2026-01-14", 1),
+      itemEvent(c!, "dayOff", "d1", "2026-01-12", "Break\n2026-01-12 - 2026-01-13"),
+      itemEvent(c!, "terminarz", "t1", "2026-01-14", "dzień wolny"),
+    ]);
+    const result = await storedLessonsExport(deps, { childId: childIds[0], from: "2026-01-11", to: "2026-01-14" });
+    expect(result.lessons.map((l) => [l.date, l.status, l.cancelled, l.cancelReason?.sourceId])).toEqual([
+      ["2026-01-11", "normal", false, undefined], ["2026-01-12", "cancelled", true, "d1"],
+      ["2026-01-13", "cancelled", true, "d1"], ["2026-01-14", "normal", false, undefined],
+    ]);
+    expect(result.lessons[1]!.cancelReason).toEqual({ reason: "day_off", sourceStream: "item:dayOff:d1", sourceId: "d1" });
+    expect(result.fetches!.total).toBeLessThanOrEqual(4);
+  });
+
+  it("covers a day off that starts before the range", async () => {
+    const { deps, childIds } = await setup(([c]) => [
+      lessonEvent(c!, "2026-01-12", 1), itemEvent(c!, "dayOff", "d2", "2026-01-05", "Break\n2026-01-05 - 2026-01-12"),
+    ]);
+    const result = await storedLessonsExport(deps, { childId: childIds[0], from: "2026-01-12", to: "2026-01-14" });
+    expect(result.lessons[0]).toMatchObject({ status: "cancelled", cancelled: true });
+  });
+
+  it("treats a day off without a range line as one day", async () => {
+    const { deps, childIds } = await setup(([c]) => [
+      lessonEvent(c!, "2026-01-12", 1), lessonEvent(c!, "2026-01-13", 1), itemEvent(c!, "dayOff", "d3", "2026-01-12", "Break"),
+    ]);
+    const result = await storedLessonsExport(deps, { childId: childIds[0], from: "2026-01-12", to: "2026-01-14" });
+    expect(result.lessons.map((l) => l.cancelled)).toEqual([true, false]);
+  });
+});
+
 describe("storedLessonsExport", () => {
-  it("makes at most 3 Supabase fetches and no other fetch", async () => {
+  it("makes at most 4 Supabase fetches and no other fetch", async () => {
     const { deps, childIds } = await setup(([c]) => [lessonEvent(c!, "2026-01-10", 1)]);
     const result = await storedLessonsExport(deps, { childId: childIds[0] });
-    expect(result.fetches!.total).toBeLessThanOrEqual(3);
+    expect(result.fetches!.total).toBeLessThanOrEqual(4);
     expect(Object.keys(result.fetches!.hosts)).toEqual(["project.example.test"]);
   });
 

@@ -1,7 +1,7 @@
 import { addDays, localDate, type FetchCount } from "@automations/shared";
 import { projectHeads, type JournalEvent, type StreamState } from "@automations/librus-data";
 import { checkChildId, checkKeys, inputObject, MAX_DAYS, pickTarget, withFetches, type ExportDeps } from "./exports.ts";
-import { checkDay } from "./events.ts";
+import { checkDay, rangeEnd } from "./events.ts";
 import { lessonRecords, type HomeworkNote, type TestNote } from "./lessons.ts";
 import { librusTargets } from "./run.ts";
 import type { HomeworkItem, Lesson } from "./types.ts";
@@ -9,14 +9,22 @@ import type { HomeworkItem, Lesson } from "./types.ts";
 const DEFAULT_SPAN_DAYS = 13;
 const DAY_MS = 86_400_000;
 
+export interface CancelReason {
+  reason: "day_off";
+  sourceStream: string;
+  sourceId: string;
+}
+
 export interface StoredLesson extends Lesson {
   id: string;
   stream: string;
+  cancelled: boolean;
   vanished: boolean;
   seq: number;
   lastChanged: string;
   homeworkGiven: HomeworkNote[];
   testAtNextLesson: TestNote[];
+  cancelReason?: CancelReason;
 }
 
 export interface StoredHomework {
@@ -66,7 +74,7 @@ function lessonOf(head: StreamState): StoredLesson {
   const { date, period, start, end, subject, teacher, room, status, substituteTeacher } = head.state as unknown as Lesson;
   return {
     id: "", stream: head.stream, date, period, start, end, subject, teacher, room, status, substituteTeacher,
-    vanished: head.vanished, seq: head.seq, lastChanged: head.lastChanged.toISOString(), homeworkGiven: [], testAtNextLesson: [],
+    cancelled: status === "cancelled", vanished: head.vanished, seq: head.seq, lastChanged: head.lastChanged.toISOString(), homeworkGiven: [], testAtNextLesson: [],
   };
 }
 
@@ -95,6 +103,28 @@ function withNotes(child: { id: string; name: string }, lessons: StoredLesson[],
   });
 }
 
+interface DayOff {
+  from: string;
+  to: string;
+  reason: CancelReason;
+}
+
+function dayOffOf(head: StreamState): DayOff | null {
+  const { date, text, sourceId } = head.state as { date?: string | null; text?: string; sourceId?: string };
+  if (head.vanished || !date || sourceId === undefined) return null;
+  const to = rangeEnd(text ?? "") ?? date;
+  return { from: date, to: to < date ? date : to, reason: { reason: "day_off", sourceStream: head.stream, sourceId: String(sourceId) } };
+}
+
+/** A Lesson inside a day off of Librus is cancelled. A day off wins over the timetable. The Lesson stays in the list. */
+function withDaysOff(lessons: StoredLesson[], daysOff: DayOff[]): StoredLesson[] {
+  return lessons.map((lesson) => {
+    const dayOff = daysOff.find((d) => d.from <= lesson.date && lesson.date <= d.to);
+    if (!dayOff) return lesson;
+    return { ...lesson, status: "cancelled", cancelled: true, cancelReason: dayOff.reason };
+  });
+}
+
 function checkOf(heads: JournalEvent[]): Pick<StoredLessonsExport, "lastSavedAt" | "lastCheck"> {
   const [head] = heads;
   if (!head) return { lastSavedAt: null, lastCheck: null };
@@ -119,6 +149,8 @@ export async function storedLessonsExport(deps: ExportDeps, input: unknown = {})
   const { from, to } = resolveRange(object, localDate(deps.runtime.now(), timezone));
   const heads = await deps.storage.listHeads(deps.familyId, { childId: child.id, kinds: ["lesson", "homework"], from, to });
   const checks = await deps.storage.listHeads(deps.familyId, { streams: [`check:librus-watch:${child.id}`] });
+  const dayOffHeads = await deps.storage.listHeads(deps.familyId, { childId: child.id, kinds: ["dayOff"], to });
+  const daysOff = projectHeads(dayOffHeads).map(dayOffOf).filter((d): d is DayOff => d !== null && d.to >= from);
   const headsOfKind = (kind: string) => projectHeads(heads.filter((head) => head.kind === kind));
   const homework = headsOfKind("homework").map(homeworkOf).sort(byDateThenStart);
   const lessons = headsOfKind("lesson")
@@ -126,6 +158,6 @@ export async function storedLessonsExport(deps: ExportDeps, input: unknown = {})
     .sort((a, b) => a.date.localeCompare(b.date) || a.period - b.period);
   return withFetches(deps, {
     childId: child.id, child: child.name, timezone, from, to, ...checkOf(checks),
-    lessons: withNotes(child, lessons, homework), homework,
+    lessons: withDaysOff(withNotes(child, lessons, homework), daysOff), homework,
   });
 }

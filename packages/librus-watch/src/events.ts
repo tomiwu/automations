@@ -49,10 +49,13 @@ export function checkSince(value: unknown, now: Date): Date {
   return since;
 }
 
+/** The last day in the date range line of a text, or null. */
+export const rangeEnd = (text: string): string | null => RANGE.exec(text)?.[2] ?? null;
+
 /** The last day of a trip or a day off, read from the date range line of its text. Else null. */
 function endDateOf(detail: ItemDetail): string | null {
   if (!RANGE_KINDS.includes(detail.kind)) return null;
-  return RANGE.exec(detail.text)?.[2] ?? null;
+  return rangeEnd(detail.text);
 }
 
 /** The event date. An announcement or a message without a date gets the local day of `firstSeen`. */
