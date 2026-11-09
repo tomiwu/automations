@@ -11,6 +11,7 @@ const PRIMARY_KEYS: Record<string, readonly string[]> = {
   items: ["family_id", "watcher", "id"],
   outbox: ["key"],
   payments: ["fee_id", "month"],
+  journal_events: ["family_id", "stream", "seq"],
   item_details: ["family_id", "scope", "source_id", "content_hash"],
 };
 
@@ -44,11 +45,33 @@ function predicatesOf(params: URLSearchParams): Predicate[] {
   return [...params].filter(([name]) => !CONTROL_PARAMS.has(name)).map(([name, value]) => predicateFor(name, value));
 }
 
+function compareColumn(a: Row, b: Row, term: string): number {
+  const [column = "", direction] = term.split(".");
+  const left = a[column];
+  const right = b[column];
+  const order =
+    typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right));
+  return direction === "desc" ? -order : order;
+}
+
 function sortRows(rows: Row[], order: string | null): Row[] {
   if (!order) return rows;
-  const column = order.split(".")[0] ?? "";
-  return [...rows].sort((a, b) => String(a[column]).localeCompare(String(b[column])));
+  const terms = order.split(",");
+  return [...rows].sort((a, b) => terms.reduce((result, term) => result || compareColumn(a, b, term), 0));
 }
+
+/** The last event of each stream, as the view `journal_heads` gives it. */
+function headsOf(events: Row[]): Row[] {
+  const last = new Map<string, Row>();
+  for (const event of events) {
+    const slot = JSON.stringify([event.family_id, event.stream]);
+    const head = last.get(slot);
+    if (!head || Number(head.seq) < Number(event.seq)) last.set(slot, event);
+  }
+  return [...last.values()];
+}
+
+class DuplicateKeyError extends Error {}
 
 /** A fake of the PostgREST API of Supabase. It keeps the tables in memory and uses no network. */
 export interface FakePostgrest {
@@ -76,6 +99,7 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
       const empty = { notified_at: null, reminded_at: null, decided_at: null, decided_by: null };
       return { id: randomUUID(), status: "pending", created_at: time, ...empty };
     }
+    if (name === "journal_events") return { recorded_at: time };
     return { queued_at: time, delivered_at: null, first_seen: time };
   };
 
@@ -85,14 +109,13 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
     const added: Row[] = [];
     for (const row of body) {
       const same = (other: Row): boolean => keys.length > 0 && keys.every((key) => other[key] === row[key]);
-      if (rows.some(same)) {
-        if (!ignoreDuplicates) throw new Error("duplicate key");
+      if (rows.some(same) || added.some(same)) {
+        if (!ignoreDuplicates) throw new DuplicateKeyError("duplicate key");
         continue;
       }
-      const stored = { ...defaultsOf(name), ...row };
-      rows.push(stored);
-      added.push(stored);
+      added.push({ ...defaultsOf(name), ...row });
     }
+    rows.push(...added);
     return added;
   };
 
@@ -110,7 +133,8 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
 
   const handle = (method: string, name: string, params: URLSearchParams, init?: RequestInit): Response => {
     const matches = predicatesOf(params);
-    const selected = table(name).filter((row) => matches.every((test) => test(row)));
+    const source = name === "journal_heads" ? headsOf(table("journal_events")) : table(name);
+    const selected = source.filter((row) => matches.every((test) => test(row)));
     const prefer = new Headers(init?.headers).get("prefer") ?? "";
     if (method === "GET") return json(embed(sortRows(selected, params.get("order")), name, params.get("select")));
     if (method === "POST") {
@@ -136,7 +160,12 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
       if (headers.get("apikey") !== expectedKey || headers.get("authorization") !== `Bearer ${expectedKey}`) {
         return json({ message: "Invalid API key" }, 401);
       }
-      return handle(method, url.pathname.replace("/rest/v1/", ""), url.searchParams, init);
+      try {
+        return handle(method, url.pathname.replace("/rest/v1/", ""), url.searchParams, init);
+      } catch (error) {
+        if (error instanceof DuplicateKeyError) return json({ code: "23505", message: error.message }, 409);
+        throw error;
+      }
     },
     seedConfig: (config) => {
       const withTime = (rows: readonly object[]): Row[] =>

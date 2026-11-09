@@ -46,6 +46,42 @@ export interface DetailFilter {
   since?: Date;
 }
 
+export type JournalKind = "lesson" | "homework" | "session" | "check" | ItemKind;
+
+/** One Journal event to append. The payload is the full new state of the entity. */
+export interface NewJournalEvent {
+  familyId: string;
+  childId: string;
+  stream: string;
+  /** Starts at 1 and grows by 1 in each stream. */
+  seq: number;
+  kind: JournalKind;
+  /** `YYYY-MM-DD`. */
+  day: string | null;
+  eventType: string;
+  payload: Record<string, unknown>;
+  contentHash: string;
+  /** `librus-watch`, `activities-watch` or `backfill-0008`. */
+  source: string;
+}
+
+/** A stored Journal event. It is never changed or removed. */
+export interface JournalEvent extends NewJournalEvent {
+  recordedAt: Date;
+}
+
+export interface JournalFilter {
+  childId?: string;
+  kinds?: readonly JournalKind[];
+  /** First `day`, `YYYY-MM-DD`, included. An event with no day does not match. */
+  from?: string;
+  /** Last `day`, included. */
+  to?: string;
+  streams?: readonly string[];
+  /** Only events recorded at or after this time. */
+  since?: Date;
+}
+
 /** One Notification for one Recipient. The `key` includes the chat ID. */
 export interface NewNotification {
   key: string;
@@ -116,6 +152,15 @@ export interface StorageAdapter {
   recordDetails(rows: readonly NewItemDetail[]): Promise<number>;
   /** Details of the Family, oldest first. */
   listDetails(familyId: string, filter?: DetailFilter): Promise<ItemDetail[]>;
+  /**
+   * Appends Journal events in batches. A key `(familyId, stream, seq)` that exists already rejects the batch.
+   * Returns the number of events. There is no method that changes or removes an event.
+   */
+  appendEvents(events: readonly NewJournalEvent[]): Promise<number>;
+  /** The last event of each stream. */
+  listHeads(familyId: string, filter?: JournalFilter): Promise<JournalEvent[]>;
+  /** Events ordered by stream and `seq`. */
+  listEvents(familyId: string, filter?: JournalFilter): Promise<JournalEvent[]>;
   /** Idempotent on `key`. Returns true if the entry is new. */
   enqueueNotification(entry: NewNotification): Promise<boolean>;
   /** Like `enqueueNotification` for many entries in one request. Returns the number of new entries. */

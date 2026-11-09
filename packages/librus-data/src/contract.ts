@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CHILD_ID, exampleConfig, exampleFee, FAMILY_ID, OTHER_FAMILY_ID } from "./fixtures.ts";
-import type { Fee, NewItemDetail, NewPayment, StorageAdapter } from "./storage.ts";
+import type { Fee, NewItemDetail, NewJournalEvent, NewPayment, StorageAdapter } from "./storage.ts";
 import type { Config } from "@automations/shared";
 
 /** What the contract suite needs from one adapter under test. */
@@ -129,6 +129,89 @@ function detailTests(create: () => Promise<ContractHarness>): void {
     await storage.purgeDelivered(30);
     expect((await storage.listDetails(FAMILY_ID)).length).toBe(1);
     expect((await storage.listDetails(OTHER_FAMILY_ID)).length).toBe(1);
+  });
+}
+
+const event = (overrides: Partial<NewJournalEvent> = {}): NewJournalEvent => ({
+  familyId: FAMILY_ID,
+  childId: CHILD_ID,
+  stream: `lesson:${CHILD_ID}:2025-01-10:1`,
+  seq: 1,
+  kind: "lesson",
+  day: "2025-01-10",
+  eventType: "LessonScheduled",
+  payload: { subject: "Maths", room: "A1" },
+  contentHash: "hash-1",
+  source: "librus-watch",
+  ...overrides,
+});
+
+function journalTests(create: () => Promise<ContractHarness>): void {
+  it("appends and lists Journal events in stream and seq order", async () => {
+    const { storage } = await detailHarness(create);
+    expect(await storage.appendEvents([event({ seq: 2, eventType: "LessonChanged" }), event({ stream: "a", seq: 1 })])).toBe(2);
+    expect(await storage.appendEvents([])).toBe(0);
+    await storage.appendEvents([event()]);
+    const listed = await storage.listEvents(FAMILY_ID);
+    expect(listed.map((row) => [row.stream, row.seq])).toEqual([["a", 1], [event().stream, 1], [event().stream, 2]]);
+    expect(listed[1]).toMatchObject({ ...event(), recordedAt: expect.any(Date) });
+  });
+
+  it("rejects a batch with a duplicate key and stores no row of it", async () => {
+    const { storage } = await detailHarness(create);
+    await storage.appendEvents([event()]);
+    await expect(storage.appendEvents([event({ seq: 2 }), event()])).rejects.toThrow();
+    await expect(storage.appendEvents([event({ seq: 3 }), event({ seq: 3 })])).rejects.toThrow();
+    expect((await storage.listEvents(FAMILY_ID)).map((row) => row.seq)).toEqual([1]);
+  });
+
+  it("stores 250 events and filters them", async () => {
+    const { storage } = await detailHarness(create);
+    const rows = Array.from({ length: 250 }, (_, index) => event({ stream: `s${String(index).padStart(3, "0")}` }));
+    expect(await storage.appendEvents(rows)).toBe(250);
+    expect((await storage.listEvents(FAMILY_ID)).length).toBe(250);
+    const streams = rows.slice(0, 150).map((row) => row.stream);
+    expect((await storage.listEvents(FAMILY_ID, { streams })).length).toBe(150);
+    expect((await storage.listHeads(FAMILY_ID, { streams })).length).toBe(150);
+    expect(await storage.listEvents(FAMILY_ID, { streams: [] })).toEqual([]);
+  });
+
+  it("filters by Child, kind, day, stream and time", async () => {
+    const { storage, advanceDays } = await detailHarness(create);
+    await storage.appendEvents([
+      event({ stream: "a", day: "2025-01-10" }),
+      event({ stream: "b", day: "2025-01-12", kind: "homework" }),
+      event({ stream: "c", day: null, kind: "check" }),
+      event({ stream: "d", day: "2025-01-11", childId: OTHER_CHILD_ID }),
+    ]);
+    await advanceDays(1);
+    await storage.appendEvents([event({ stream: "e", day: "2025-01-14" })]);
+    const names = async (filter: Parameters<typeof storage.listEvents>[1]): Promise<string[]> =>
+      (await storage.listEvents(FAMILY_ID, filter)).map((row) => row.stream);
+    expect(await names({ childId: OTHER_CHILD_ID })).toEqual(["d"]);
+    expect(await names({ kinds: ["homework", "check"] })).toEqual(["b", "c"]);
+    expect(await names({ kinds: [] })).toEqual([]);
+    expect(await names({ from: "2025-01-11", to: "2025-01-12" })).toEqual(["b", "d"]);
+    expect(await names({ from: "2025-01-01" })).toEqual(["a", "b", "d", "e"]);
+    expect(await names({ streams: ["a", "e"] })).toEqual(["a", "e"]);
+    expect(await names({ since: new Date("2025-01-02T00:00:00Z") })).toEqual(["e"]);
+  });
+
+  it("gives the last event of each stream as the head", async () => {
+    const { storage } = await detailHarness(create);
+    await storage.appendEvents([event(), event({ stream: "b" })]);
+    await storage.appendEvents([event({ seq: 2, eventType: "LessonChanged", payload: { room: "B2" } })]);
+    const heads = (await storage.listHeads(FAMILY_ID)).sort((a, b) => a.stream.localeCompare(b.stream));
+    expect(heads.map((row) => [row.stream, row.seq])).toEqual([["b", 1], [event().stream, 2]]);
+    expect(heads[1]?.payload).toEqual({ room: "B2" });
+    expect((await storage.listHeads(FAMILY_ID, { childId: OTHER_CHILD_ID })).length).toBe(0);
+  });
+
+  it("keeps Journal events apart per Family", async () => {
+    const { storage } = await detailHarness(create);
+    await storage.appendEvents([event(), event({ familyId: OTHER_FAMILY_ID })]);
+    expect((await storage.listEvents(FAMILY_ID)).length).toBe(1);
+    expect((await storage.listHeads(OTHER_FAMILY_ID)).length).toBe(1);
   });
 }
 
@@ -278,6 +361,7 @@ export function runStorageContract(name: string, create: () => Promise<ContractH
   describe(`StorageAdapter contract: ${name}`, () => {
     itemTests(create);
     detailTests(create);
+    journalTests(create);
     outboxTests(create);
     purgeTests(create);
     configTests(create);
