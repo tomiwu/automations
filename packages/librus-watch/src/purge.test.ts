@@ -50,6 +50,22 @@ describe("runPurge", () => {
     expect(await storage.listDetails("f1")).toHaveLength(1);
   });
 
+  it("keeps every Journal event", async () => {
+    let current = new Date("2026-01-01T00:00:00Z");
+    const storage = createMemoryStorage({ now: () => current });
+    await storage.appendEvents([
+      {
+        familyId: "f1", childId: "c1", stream: "lesson:c1:2026-01-02:1", seq: 1, kind: "lesson", day: "2026-01-02",
+        eventType: "LessonScheduled", payload: { subject: "Math" }, contentHash: "h1", source: "librus-watch",
+      },
+    ]);
+    await storage.enqueueNotification({ key: "old", familyId: "f1", chatId: "1000001", text: "Hello" });
+    await storage.markDelivered("old");
+    current = new Date(current.getTime() + 400 * DAY_MS);
+    await runPurge({ storage, runtime: fakeRuntime() });
+    expect(await storage.listEvents("f1")).toHaveLength(1);
+  });
+
   it("logs the fetch count when it has a counter", async () => {
     const counter = countFetches(async () => new Response(""));
     await counter.fetch("https://project.example.test/rest/v1/outbox");

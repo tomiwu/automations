@@ -3,7 +3,7 @@ import { fakeRuntime } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import type { Messenger } from "./deliver.ts";
 import { librusTargets, runLibrusWatch, type RunDeps } from "./run.ts";
-import { ACCOUNT1, CHILD1, CHILD2, FAMILY_ID, fakeSource, testConfig } from "./test-fixtures.ts";
+import { ACCOUNT1, CHILD1, CHILD2, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
 
 function setup(mutate: (config: ReturnType<typeof testConfig>) => void = () => {}) {
   const config = testConfig();
@@ -104,6 +104,27 @@ describe("runLibrusWatch", () => {
     };
     expect(await runLibrusWatch(deps)).toEqual([]);
     expect(runtime.logs.some((l) => l.level === "warn" && l.message === "morning report failed: down")).toBe(true);
+  });
+
+  it("reports a journal failure like a Watcher failure and still sends the Morning report", async () => {
+    const { deps, storage, sent } = setup();
+    storage.listHeads = async () => {
+      throw new Error("heads down");
+    };
+    const failures = await runLibrusWatch(deps);
+    expect(failures).toEqual(["Child One: journal: heads down"]);
+    expect(sent.some((s) => s.includes("Morning report"))).toBe(true);
+  });
+
+  it("appends the Journal events of the Child with the source 'librus-watch'", async () => {
+    const { deps, storage, source } = setup();
+    source.lessons = [lesson("2026-01-05", 1, "Math")];
+    await runLibrusWatch(deps);
+    const events = await storage.listEvents(FAMILY_ID);
+    expect(events.map((e) => [e.stream.split(":")[0], e.eventType, e.source])).toEqual([
+      ["check", "CheckCompleted", "librus-watch"],
+      ["lesson", "LessonScheduled", "librus-watch"],
+    ]);
   });
 
   it("returns a delivery failure and a config error", async () => {

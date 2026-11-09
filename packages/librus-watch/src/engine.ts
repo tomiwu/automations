@@ -13,7 +13,7 @@ import {
   type ItemChange,
 } from "./format.ts";
 import { detailOf } from "./details.ts";
-import type { ItemsByWatcher, LibrusSource, SubstitutionItem, WatcherName } from "./types.ts";
+import type { HomeworkItem, ItemsByWatcher, LibrusSource, SubstitutionItem, WatcherName } from "./types.ts";
 
 /** The first record of each Watcher scope. It marks the scope as baselined, even when Librus gave no Item. */
 export const BASELINE_ID = "__baseline__";
@@ -190,7 +190,7 @@ function detailsOf(
  * one Notification for each Item and each Recipient, then record the Items. The Notification is queued
  * first and its key is the recorded ID, so a crash between the two steps neither loses nor repeats it.
  */
-export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promise<void> {
+export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promise<HashedItem[]> {
   const scope = scopeOf(watcher, check.child);
   const current = (await check.source.currentItems(watcher)) as HashedItem[];
   const known = await check.storage.knownItemIds(check.familyId, scope);
@@ -201,24 +201,37 @@ export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promi
     await check.storage.enqueueNotifications(announcements.flatMap((a) => notificationsFor(check, scope, a)));
   }
   await check.storage.recordItems(check.familyId, scope, [BASELINE_ID, ...current.map(storedId)]);
+  return current;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+/** The failure texts of a Check, and the homework Items when the `homework` Watcher ran without a failure. */
+export interface ChildCheckResult {
+  failures: string[];
+  homework?: HomeworkItem[];
+}
+
 /**
  * Runs each Watcher of one Child. A Watcher that fails does not stop the others.
- * Returns one failure text for each failed Watcher.
+ * Returns one failure text for each failed Watcher, and the homework Items that the run read.
  */
-export async function runChildCheck(check: ChildCheck, watchers: readonly WatcherName[] = WATCHERS_IN_ORDER): Promise<string[]> {
-  const failures: string[] = [];
+export async function checkChild(check: ChildCheck, watchers: readonly WatcherName[] = WATCHERS_IN_ORDER): Promise<ChildCheckResult> {
+  const result: ChildCheckResult = { failures: [] };
   for (const watcher of watchers) {
     try {
-      await runWatcher(check, watcher);
+      const items = await runWatcher(check, watcher);
+      if (watcher === "homework") result.homework = items as HomeworkItem[];
       check.log?.(`watcher ${watcher}: ok`);
     } catch (error) {
       check.log?.(`watcher ${watcher}: fail`);
-      failures.push(`${watcher}: ${messageOf(error)}`);
+      result.failures.push(`${watcher}: ${messageOf(error)}`);
     }
   }
-  return failures;
+  return result;
+}
+
+/** Like `checkChild`, but returns only the failure texts. */
+export async function runChildCheck(check: ChildCheck, watchers: readonly WatcherName[] = WATCHERS_IN_ORDER): Promise<string[]> {
+  return (await checkChild(check, watchers)).failures;
 }
