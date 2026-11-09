@@ -1,13 +1,12 @@
 import { addDays, formatFetchCount, localDate, type FetchCount, type FetchCounter, type Runtime } from "@automations/shared";
 import { projectHeads, type StorageAdapter, type StreamState } from "@automations/librus-data";
-import { checkKeys, inputObject } from "./exports.ts";
+import { checkKeys, DAY_PATTERN, inputObject } from "./exports.ts";
 import type { Session, SessionStatus } from "./sessions.ts";
 import { activityTargets } from "./targets.ts";
 
 const DEFAULT_SPAN_DAYS = 13;
 const MAX_DAYS = 60;
 const DAY_MS = 86_400_000;
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface StoredSessionsDeps {
   runtime: Pick<Runtime, "now" | "log">;
@@ -51,7 +50,7 @@ export interface StoredSessionsExport {
 
 function checkDay(name: string, value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== "string" || !DAY.test(value) || Number.isNaN(Date.parse(value))) {
+  if (typeof value !== "string" || !DAY_PATTERN.test(value) || Number.isNaN(Date.parse(value))) {
     throw new Error(`${name} must be a date YYYY-MM-DD.`);
   }
   return value;
