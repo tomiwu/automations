@@ -65,7 +65,7 @@ The workflow `.github/workflows/deploy-kody.yml` runs after CI is green on `main
 
 1. `tools/kody-stage/stage.mjs` builds a self-contained tree for each package. Kody gets dependencies from the public npm registry, so the private `@automations/*` packages are copied into `vendor/` and their imports are rewritten. Test files are left out.
 2. The job sends the tree to the Kody publish checks (`packageCheck`). This saves nothing.
-3. Only when the repository variable `KODY_DEPLOY_ENABLED` is `true` (and a manual run is not a dry run): the job pushes the tree to the Kody package repo (`packageGetGitRemote`, a fast-forward push) and runs `kody package publish`.
+3. Only when the repository variable `KODY_DEPLOY_ENABLED` is `true` (and a manual run is not a dry run): the job pushes the tree to the Kody package repo (`packageGetGitRemote`, a fast-forward push) and runs `kody package publish`. If publish returns `status: "dispatched"`, the job polls `workflowRunList` for that `workflow_id` until the durable run is terminal and fails the job on `errored` (printing `last_error`). One re-publish runs after a durable failure, because Kody says a re-run can repair missing artifacts.
 
 Setup (the owner does this, never an agent):
 
