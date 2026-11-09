@@ -26,18 +26,7 @@ runStorageContract("supabase (fake PostgREST)", async () => {
 });
 
 describe("Journal requests", () => {
-  const row = (index: number) => ({
-    familyId: FAMILY_ID,
-    childId: "00000000-0000-4000-8000-0000000000c1",
-    stream: `s${index}`,
-    seq: 1,
-    kind: "lesson" as const,
-    day: null,
-    eventType: "LessonScheduled",
-    payload: {},
-    contentHash: "h",
-    source: "librus-watch",
-  });
+  const row = (index: number) => journalSample(1, `s${index}`);
   const journalRequests = (server: ReturnType<typeof setup>["server"]) =>
     server.requests.filter((request) => request.url.includes("/journal_events"));
 
@@ -74,10 +63,10 @@ async function runContractSample(storage: ReturnType<typeof setup>["storage"], a
   await storage.listHeads(FAMILY_ID);
 }
 
-const journalSample = (seq: number) => ({
+const journalSample = (seq: number, stream = "s") => ({
   familyId: FAMILY_ID,
   childId: "00000000-0000-4000-8000-0000000000c1",
-  stream: "s",
+  stream,
   seq,
   kind: "lesson" as const,
   day: null,
