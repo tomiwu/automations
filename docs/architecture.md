@@ -33,7 +33,6 @@
 - The Outbox `key` includes the chat ID. `enqueueNotification` ignores a key that exists, so a repeated run does not send twice.
 - The watcher key has the role `automations_watcher`. The role cannot change config rows. The `service_role` key stays on the computer of the owner.
 - One deployment serves one Family. The secret `FAMILY_ID` holds its ID.
-
 - The table `journal_events` is append-only. No job changes or deletes a Journal event (ADR 0006). The state of a Stream is the Projection of its events.
 
 ## Accounts and Services
