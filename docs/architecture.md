@@ -5,7 +5,7 @@
 | Part | Path | Job |
 | --- | --- | --- |
 | Shared | `packages/shared` | `Runtime` interface, config types and validation, i18n catalogs (`pl`, `en`), helpers |
-| Storage | `packages/librus-data` | `StorageAdapter`, the Supabase adapter, the in-memory fake, the migration import |
+| Storage | `packages/librus-data` | `StorageAdapter`, the Journal core (`journal.ts`), the Supabase adapter, the in-memory fake, the migration import |
 | Librus | `packages/librus-watch` | Librus Watchers, Morning report, delivery of the Outbox, exports |
 | Activities | `packages/activities-watch` | ActiveNow, Edusky and Mondo Watchers, `sessions` export, mail comparison |
 | Kradziejka | `packages/kradziejka` | Telegram router to Grok bot routines. The registry is the table `kradziejka_bots`. |
@@ -22,6 +22,8 @@
 5. The text of an entry comes from the catalog in the language of the Recipient.
 6. `deliverPending` sends the Outbox entries to Telegram and sets `delivered_at`.
 7. A daily job removes entries that were delivered more than 30 days ago.
+8. After the Watchers, the same pass appends Journal events for the Lessons, the homework and the Sessions that it read. It reads the Heads, compares, and appends only the changes, plus one `CheckCompleted` event. It makes no new request to a Service.
+9. The calendar sync reads the Journal through `./stored-lessons`, `./stored-sessions` and `./stream-history`. These read Supabase only. The exports `./lessons`, `./calendar`, `./upcoming` and `./sessions` log in to the Services and stay for manual use.
 
 ## Rules
 
@@ -31,6 +33,7 @@
 - The Outbox `key` includes the chat ID. `enqueueNotification` ignores a key that exists, so a repeated run does not send twice.
 - The watcher key has the role `automations_watcher`. The role cannot change config rows. The `service_role` key stays on the computer of the owner.
 - One deployment serves one Family. The secret `FAMILY_ID` holds its ID.
+- The table `journal_events` is append-only. No job changes or deletes a Journal event (ADR 0006). The state of a Stream is the Projection of its events.
 
 ## Accounts and Services
 

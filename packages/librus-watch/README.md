@@ -47,6 +47,29 @@ The Supabase URL and the Family ID are plain config set with `./configure` (`{ s
 - Streams: `lesson:<childId>:<date>:<period>`, `homework:<childId>:<librus id>` and `check:librus-watch:<childId>`. Each pass appends one `CheckCompleted` event when a part ran.
 - A failed timetable gives no Lesson event and no `LessonVanished`. A failed `homework` Watcher gives no homework event. A journal failure is reported as `journal: <message>`, and the Morning report still runs.
 - `daily-purge` never touches `journal_events`.
+- The journal step adds about 2 to 4 Supabase fetches for each Child and pass: one read of the heads, one append, and the check stream.
+- `journal_events` is append-only (see `packages/librus-data/README.md`).
+
+## The stored exports
+
+Use `./stored-lessons` and `./stream-history` for the calendar sync. They read Supabase only. Do not use `./lessons`, `./calendar` and `./upcoming` for the sync: they log in to Librus and use many fetches. Those three stay for manual use.
+
+### `./stored-lessons`
+
+- **Input:** `{ childId?, from?, to? }`. `from` and `to` are `YYYY-MM-DD`. `from` is today by default. `to` is `from` + 13 days by default. The range is at most 60 days. Other keys are rejected.
+- **Output:** `{ childId, child, timezone, from, to, lastSavedAt, lastCheck, lessons, homework, fetches? }`.
+- `lessons` has the Lessons of the range. Each has `id`, `stream`, `date`, `period`, `start`, `end`, `subject`, `teacher`, `room`, `status`, `substituteTeacher`, `homeworkGiven` and `testAtNextLesson`.
+- `homework` has the homework and tests of the range. Each has `id`, `stream`, `category`, `isTest`, `date`, `subject`, `content`, `teacher`, `lessonNo`, `start` and `end`.
+- Each entry also has `vanished`, `seq` and `lastChanged`. A vanished entry stays in the result with `vanished: true`.
+- `lastSavedAt` is the time of the last `CheckCompleted` event. It is `null` before the first save. `lastCheck` is `{ timetableOk, homeworkOk }` of that pass. Use them to find stale data.
+- **Fetches:** the config, the heads of the Lessons and homework, and the head of the check stream. This is 3 Supabase fetches at most. There is no Librus fetch.
+
+### `./stream-history`
+
+- **Input:** `{ stream }`. `stream` is a text of at most 300 characters. Other keys are rejected.
+- **Output:** `{ stream, events, state, fetches? }`. `events` are the Journal events of the stream, oldest first. Each has `seq`, `eventType`, `kind`, `day`, `recordedAt`, `contentHash` and `payload`. `state` is the state that the events give, or `null` for an unknown stream.
+- It works for the streams `lesson:`, `homework:`, `session:`, `item:` and `check:`.
+- **Fetches:** 1 Supabase fetch. There is no Librus fetch.
 
 ## The `./events` export
 

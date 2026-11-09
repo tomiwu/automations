@@ -16,6 +16,8 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 | `./lessons` | `{ childId? }` | Lessons of the next 14 days | logs in to Librus, read-only |
 | `./calendar` | `{ childId? }` | Lessons and upcoming homework and tests of the next 14 days, one login | logs in to Librus, read-only |
 | `./upcoming` | `{ childId?, days? }` | homework and tests with their Lesson | logs in to Librus, read-only |
+| `./stored-lessons` | `{ childId?, from?, to? }` | `{ childId, child, timezone, from, to, lastSavedAt, lastCheck, lessons, homework }`. Entries have `vanished`, `seq`, `lastChanged` | none (reads Supabase only, 3 fetches at most) |
+| `./stream-history` | `{ stream }` | `{ stream, events, state }`. `state` is `null` for an unknown stream | none (reads Supabase only, 1 fetch) |
 | `./events` | `{ childId?, from?, to?, since? }` | `{ childId, child, from, to, since, events }`. Each event: `id`, `kind`, `date`, `endDate`, `start`, `end`, `title`, `text`, `sender`, `subject`, `category`, `sourceUpdatedAt`, `firstSeen` | none (reads Supabase only, no Librus login) |
 | `./scheduled` | none | `{ ok: true }` | runs the Watchers, writes Items and the Outbox, sends Telegram messages |
 | `./purge` | none | `{ ok: true, removed }` | deletes delivered Outbox rows older than 30 days |
@@ -25,6 +27,10 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 ## Stored content
 
 The Watchers store the full content of each new Item in the Supabase table `item_details`. The meetings and days-off Watchers send no Notification; the Morning report lists them. `./events` reads this table. `from` and `to` are `YYYY-MM-DD`; `since` is an ISO time for `firstSeen` (default 7 days ago). Data is kept forever: `./purge` removes only delivered Outbox rows, never `item_details`. Changed content adds a new row with a new event `id`.
+
+## Journal
+
+`./scheduled` appends Lesson and homework events to the append-only table `journal_events` (ADR 0006). It uses only data that the run read already. The calendar sync must use `./stored-lessons` (and `./stream-history` for one stream). It must not use `./lessons`, `./calendar` and `./upcoming`: those log in to Librus and stay for manual use. `from` defaults to today, `to` to `from` + 13 (at most 60 days). Check `lastSavedAt` and `lastCheck` for stale data. Nothing changes or deletes a Journal event.
 
 ## Config
 
@@ -40,6 +46,8 @@ The Watchers store the full content of each new Item in the Supabase table `item
 2. `lessons` with `{ childId }` from step 1: returns Lessons. This proves the Librus login. Do not pass `days`; `lessons` rejects it.
 3. `upcoming` with `{ childId, days: 7 }`.
 4. `events` with `{ childId }`: returns `events` (can be empty). It needs no Librus login.
+5. `stored-lessons` with `{ childId }`: returns `lessons` and `homework` (can be empty before the first journal pass). It needs no Librus login.
+6. `stream-history` with a `stream` from step 5: returns the `events` of that stream.
 
 ## Edge cases
 

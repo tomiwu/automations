@@ -37,6 +37,15 @@ To check a stored login without showing it, run `printf %s "$NAME" | admin verif
 
 Security: a leak of the database alone gives only ciphertext; a leak of the package storage alone gives a key without data. Anyone who can change and publish these Kody packages can read the decrypted values, as with any code that logs in.
 
+## Fetch budget
+
+The Kody free plan allows 2500 outbound fetches in a UTC week. Each run logs its fetch count.
+
+- The journal step of a scheduled pass adds about 2 to 4 Supabase fetches for each Child and pass: the read of the Heads, the append, and the check stream.
+- The stored exports read Supabase only: `./stored-lessons` and `./stored-sessions` use 3 fetches at most, `./stream-history` uses 1. They make no Librus or app fetch.
+- The calendar sync must use the stored exports. It must not use `./lessons`, `./calendar`, `./upcoming` and `./sessions`. Those exports log in to the Services, use many fetches and stay for manual use.
+- Journal rows are never purged, so the table grows. The estimate is far below the free Supabase limit (ADR 0006).
+
 ## Telegram
 
 The delivery uses the external `telegram` package (`@tomiwu/telegram`, an unchanged copy of `@kody/telegram`). Install it in Kody before the first deploy.

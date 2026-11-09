@@ -14,12 +14,27 @@
 | `markDeliveredMany(keys)` | Like `markDelivered` for many keys in one request |
 | `recordDetails(rows)` | Stores the content of Items in batches. Returns the number of new rows. Same content is ignored; changed content adds a row and the old row stays. It also appends `ItemRecorded` or `ItemChanged` events to the Journal (stream `item:<scope>:<sourceId>`) |
 | `listDetails(familyId, { childId?, from?, to?, since? })` | Stored details, oldest first. They are read from the Item events of the Journal; `firstSeen` is `recordedAt`. `from` and `to` are `YYYY-MM-DD`. Details are never purged |
+| `appendEvents(events)` | Appends Journal events in batches of 100 rows at most. A conflict on `(family_id, stream, seq)` is an error. Returns the number of new events |
+| `listHeads(familyId, filter?)` | The Head (last event) of each stream, read from the view `journal_heads` in one request. The filter has `childId`, `kinds`, `streams`, `from` and `to` |
+| `listEvents(familyId, filter?)` | The Journal events that match the filter, oldest first. The filter also has `since` |
 | `purgeDelivered(olderThanDays)` | Number of removed Outbox entries |
 | `loadConfig(familyId)` | `Config` of the Family, read in one request |
 | `listFees(familyId)` | Fees of the Family. The Watcher cannot change them |
 | `upsertPayment(payment)` | Makes a `pending` Payment and returns it. A Payment for the same Fee and month is returned as it is |
 | `listPayments(familyId)` | Payments of the Family, oldest first |
 | `setPaymentStatus(id, status, decidedBy)` | Sets `paid` or `skipped`, `decidedAt` and `decidedBy` of a `pending` Payment. Returns `false` if nothing changed |
+
+## Journal
+
+`src/journal.ts` holds the pure core of the event journal (ADR 0006). It has no network code.
+
+- `contentHash(value)` gives a stable hash of a value.
+- `planEvents` compares the observed entities with the Heads and gives only the change events. No change gives no event. An entity in the read window that is not in a successful download gets a `...Vanished` event.
+- `checkEvent` makes the `CheckCompleted` event of one successful pass.
+- `projectStream(events)` and `projectHeads(heads)` give the Projection (the state of a stream). Each event carries the whole state, so the last event gives it.
+- `matchesJournalFilter` is the filter that the memory adapter and the fake PostgREST use.
+
+**Append-only rule.** A Journal event is never changed or deleted. The role `automations_watcher` has only `select` and `insert` on `journal_events`. A trigger rejects `update`, `delete` and `truncate` for all roles. `StorageAdapter` has no method that changes or removes an event, and a test checks that the Supabase adapter never sends `PATCH` or `DELETE` to `journal_events`. `purgeDelivered` never touches the table.
 
 `createMemoryStorage` is the in-memory fake. It uses no network.
 
