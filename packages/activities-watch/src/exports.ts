@@ -4,12 +4,12 @@ import { collectSessions, type CollectDeps, type SessionsResult } from "./collec
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function inputObject(input: unknown): Record<string, unknown> {
+export function inputObject(input: unknown): Record<string, unknown> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) throw new Error("Input must be an object.");
   return input as Record<string, unknown>;
 }
 
-function checkKeys(object: Record<string, unknown>, allowed: readonly string[]): void {
+export function checkKeys(object: Record<string, unknown>, allowed: readonly string[]): void {
   const unknown = Object.keys(object).filter((key) => !allowed.includes(key));
   if (unknown.length > 0) throw new Error(`Unknown input key(s): ${unknown.join(", ")}.`);
 }
