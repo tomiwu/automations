@@ -101,8 +101,8 @@ async function apply(
 
 /**
  * Handles a `pay:<payment id>:paid|skip` button press. Returns false when the data is not a `pay:` callback.
- * Only a Recipient of the Child of the Fee can change the Payment. The first press appends the decision event to the Journal, sets the status, edits the
- * message and removes the buttons. A later press changes nothing.
+ * Only a Recipient of the Child of the Fee can change the Payment. The first press appends the decision event
+ * to the Journal, sets the status, edits the message and removes the buttons. A later press changes nothing.
  */
 export async function handlePaymentCallback(deps: CallbackDeps, query: CallbackQuery): Promise<boolean> {
   if (!query.data.startsWith(PREFIX)) return false;
