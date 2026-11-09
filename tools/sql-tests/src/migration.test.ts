@@ -33,7 +33,7 @@ describe.skipIf(!url)("0001_init.sql", () => {
     for (const table of ["families", "children", "accounts", "activities", "recipients"]) {
       expect(asWatcher(db, `select count(*) from ${table}`).ok).toBe(true);
     }
-    expect(count(db, "select count(*) from children")).toBe(1);
+    expect(count(db, `select count(*) from children where family_id = '${family}'`)).toBe(1);
   });
 
   it("does not let the watcher write the config tables", () => {
