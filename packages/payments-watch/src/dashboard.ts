@@ -1,5 +1,6 @@
 import type { StorageAdapter } from "@automations/librus-data";
 import { localDate, t, type Language, type MessageKey } from "@automations/shared";
+import { decidePayment } from "./decision.ts";
 import { formatAmount } from "./engine.ts";
 import { buildDashboard, type Dashboard, type DashboardRow } from "./dashboard-data.ts";
 import type { DashboardUser } from "./dashboard-config.ts";
@@ -161,8 +162,15 @@ async function login(request: Request, context: Context): Promise<Response> {
 
 const DECISION_PATH = /^\/payments\/([^/]+)\/(paid|skip)$/;
 
+async function decideKnown(context: Context, paymentId: string, decision: "paid" | "skipped", decidedBy: string): Promise<void> {
+  const { storage, familyId, now } = context.deps;
+  const payment = (await storage.listPayments(familyId)).find((candidate) => candidate.id === paymentId);
+  const fee = payment && (await storage.listFees(familyId)).find((candidate) => candidate.id === payment.feeId);
+  if (payment && fee) await decidePayment({ storage, familyId, payment, fee, decision, decidedBy, at: now() });
+}
+
 /**
- * Sets the status with the same storage function as the Telegram callback. The first press wins.
+ * Sets the status with the same function as the Telegram callback (`decidePayment`). The first press wins.
  * A repeated press changes nothing. Both end in a redirect to the overview.
  */
 async function decide(request: Request, context: Context, route: string): Promise<Response> {
@@ -171,7 +179,7 @@ async function decide(request: Request, context: Context, route: string): Promis
   const match = DECISION_PATH.exec(route);
   if (!match) return notFound(context);
   const status = match[2] === "paid" ? "paid" : "skipped";
-  await context.deps.storage.setPaymentStatus(decodeURIComponent(match[1] ?? ""), status, user.user);
+  await decideKnown(context, decodeURIComponent(match[1] ?? ""), status, user.user);
   return redirect(context.base, "/");
 }
 

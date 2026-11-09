@@ -187,4 +187,22 @@ describe("Paid and Skip buttons", () => {
     const response = await handleDashboard(press("/app/payments/unknown/paid", await sessionCookie(d, "/app")), d, "/app");
     expect(response.headers.get("location")).toBe("/app/");
   });
+
+  const eventTypes = async (d: DashboardDeps) =>
+    (await d.storage.listEvents(FAMILY, { kinds: ["payment"] })).map((event) => event.eventType);
+
+  it("appends PaymentDue and the decision once for a Payment without a head", async () => {
+    const d = await deps();
+    const id = await pendingId(d);
+    const cookie = await sessionCookie(d);
+    await handleDashboard(press(`/payments/${id}/paid`, cookie), d, "");
+    await handleDashboard(press(`/payments/${id}/skip`, cookie), d, "");
+    expect(await eventTypes(d)).toEqual(["PaymentDue", "PaymentPaid"]);
+  });
+
+  it("appends nothing without a session", async () => {
+    const d = await deps();
+    await handleDashboard(press(`/payments/${await pendingId(d)}/paid`, ""), d, "");
+    expect(await eventTypes(d)).toEqual([]);
+  });
 });

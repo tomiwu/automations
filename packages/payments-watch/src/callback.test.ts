@@ -2,6 +2,7 @@ import { createMemoryStorage } from "@automations/librus-data";
 import type { Fee } from "@automations/librus-data";
 import type { Config } from "@automations/shared";
 import { describe, expect, it } from "vitest";
+import { runPayments } from "./engine.ts";
 import { handlePaymentCallback, type CallbackQuery } from "./callback.ts";
 import type { TelegramClient, TelegramParams } from "./notifier.ts";
 
@@ -57,13 +58,14 @@ async function setup() {
       calls.push({ method, params });
     },
   };
+  const events = async () => (await storage.listEvents(FAMILY_ID, { kinds: ["payment"] })).map((event) => event.eventType);
   const handle = (query: Partial<CallbackQuery>) =>
     handlePaymentCallback(
       { familyId: FAMILY_ID, storage, client },
       { id: "q1", data: `pay:${payment.id}:paid`, chatId: "1000001", messageId: 7, caption: "Caption", ...query },
     );
   const status = async () => (await storage.listPayments(FAMILY_ID))[0];
-  return { payment, calls, handle, status };
+  return { payment, calls, handle, status, events, storage };
 }
 
 describe("handlePaymentCallback", () => {
@@ -131,5 +133,42 @@ describe("handlePaymentCallback", () => {
     const { handle, calls } = await setup();
     await handle({ caption: undefined });
     expect(calls[1]?.params).toMatchObject({ caption: "Status: paid" });
+  });
+
+  it("appends PaymentDue and the decision for a Payment without a head, in one call", async () => {
+    const { handle, events, status } = await setup();
+    await handle({});
+    expect(await events()).toEqual(["PaymentDue", "PaymentPaid"]);
+    expect((await status())?.status).toBe("paid");
+  });
+
+  it("appends one decision event only, after the head, and nothing on a second press", async () => {
+    const { handle, events, payment, storage } = await setup();
+    await runPayments({
+      storage,
+      familyId: FAMILY_ID,
+      now: new Date("2025-02-12T08:00:00Z"),
+      source: { amountFor: async () => ({ feeId: fee.id, month: "2025-02", amount: 15050, source: "config" }) },
+    });
+    expect(await events()).toEqual(["PaymentDue"]);
+    await handle({ data: `pay:${payment.id}:skip` });
+    await handle({});
+    expect(await events()).toEqual(["PaymentDue", "PaymentSkipped"]);
+  });
+
+  it("appends nothing for a non-Recipient", async () => {
+    const { handle, events } = await setup();
+    await handle({ chatId: "1000002" });
+    expect(await events()).toEqual([]);
+  });
+
+  it("answers already and keeps the Payment pending when the append has a seq conflict", async () => {
+    const { handle, calls, status, storage } = await setup();
+    storage.appendEvents = async () => {
+      throw new Error("seq conflict");
+    };
+    await handle({});
+    expect((await status())?.status).toBe("pending");
+    expect(calls[0]?.params).toMatchObject({ text: "This Payment has a status already." });
   });
 });

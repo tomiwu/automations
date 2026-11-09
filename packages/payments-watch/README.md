@@ -39,6 +39,13 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - The journal payload has no QR text, account, NIP, title, recipient name or source URL.
 - The Outbox keys do not change. There is no new site fetch.
 
+## Decision steps
+
+- `decidePayment` (`src/decision.ts`) is used by the Telegram callback and the Dashboard, after their Recipient or allowlist check.
+- It reads the head of the stream `payment:<childId>:<feeId>:<month>` and plans the decision with `planPaymentDecision`. It appends `PaymentPaid` or `PaymentSkipped`, then calls `setPaymentStatus` (dual write, projection).
+- When the head is missing (a Payment made before the Journal), it first plans `PaymentDue` from the projection row. Both events go in ONE `appendEvents` call.
+- A Payment that is not `pending`, a decided head, or a failed append (for example a `seq` conflict) changes nothing. It gives `false`.
+
 ## Notifier
 
 - The port `Notifier.sendPayment(recipient, notice, qr)` takes the Recipient, a `PaymentNotice` (`child`, `fee`, `payment`) and the QR code.
@@ -52,8 +59,8 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 
 - `handlePaymentCallback(deps, query)` handles a button press with the data `pay:<payment id>:paid` or `pay:<payment id>:skip`. It gives `false` for other data.
 - Only a Recipient of the Child of the Fee can change the Payment. Another chat gets an error answer and the Payment stays as it is.
-- The first press sets the status and `decidedBy` (the chat ID), answers the press, edits the caption with the new status and removes the buttons.
-- A second press changes nothing. The chat gets an error answer.
+- The first press appends the decision event and then sets the status and `decidedBy` (the chat ID) in the projection (see Decision steps), answers the press, edits the caption with the new status and removes the buttons.
+- A second press changes nothing and appends nothing. The chat gets the answer "already". A `seq` conflict gives the same answer.
 - The texts come from the pl/en catalogs. A chat that is not a Recipient gets the default language of the Family.
 
 ## Entry files and Kody job
@@ -70,7 +77,7 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - The allowlist is in the deployment config, not in the code. `./configure` takes the optional `allowlist`: a list of `{ user, tokenDigest }`. `tokenDigest` is the SHA-256 of the login token in hex. The owner makes the token and the digest. The app never shows the token.
 - Views: unpaid Payments, next due Payments (date, amount), paid Payments, and the spend per Child per month and per school year. `schoolYearOf` maps September to December of year N and January to June of year N+1 to "N/N+1". July and August are in no school year. The spend counts `paid` Payments only.
 - The texts come from the pl/en catalogs (`dashboard.*`) in the default language of the Family.
-- Each `pending` Payment in the unpaid table has a `Paid` and a `Skip` button. A button posts to `/payments/<payment id>/paid` or `/payments/<payment id>/skip`. The handler calls `StorageAdapter.setPaymentStatus`, the same function as the Telegram callback, with the dashboard user as `decidedBy`. A request without a session changes nothing.
+- Each `pending` Payment in the unpaid table has a `Paid` and a `Skip` button. A button posts to `/payments/<payment id>/paid` or `/payments/<payment id>/skip`. The handler calls `decidePayment`, the same function as the Telegram callback, with the dashboard user as `decidedBy`. A request without a session changes nothing.
 - The first press wins. A repeated press, or a press for an unknown Payment, changes nothing. Each press ends in a redirect to the overview. The session cookie is `SameSite=Lax`, so a form on another site cannot press a button.
 
 ## Telegram webhook
