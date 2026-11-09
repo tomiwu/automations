@@ -12,8 +12,8 @@
 | `markDelivered(key)` | Sets `deliveredAt` |
 | `enqueueNotifications(entries)` | Like `enqueueNotification` for many entries in one request. Returns the number of new entries |
 | `markDeliveredMany(keys)` | Like `markDelivered` for many keys in one request |
-| `recordDetails(rows)` | Stores the content of Items in batches. Returns the number of new rows. Same content is ignored; changed content adds a row and the old row stays |
-| `listDetails(familyId, { childId?, from?, to?, since? })` | Stored details, oldest first. `from` and `to` are `YYYY-MM-DD`. Details are never purged |
+| `recordDetails(rows)` | Stores the content of Items in batches. Returns the number of new rows. Same content is ignored; changed content adds a row and the old row stays. It also appends `ItemRecorded` or `ItemChanged` events to the Journal (stream `item:<scope>:<sourceId>`) |
+| `listDetails(familyId, { childId?, from?, to?, since? })` | Stored details, oldest first. They are read from the Item events of the Journal; `firstSeen` is `recordedAt`. `from` and `to` are `YYYY-MM-DD`. Details are never purged |
 | `purgeDelivered(olderThanDays)` | Number of removed Outbox entries |
 | `loadConfig(familyId)` | `Config` of the Family, read in one request |
 | `listFees(familyId)` | Fees of the Family. The Watcher cannot change them |

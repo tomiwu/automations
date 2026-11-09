@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Config } from "@automations/shared";
-import { detailSlot, matchesFilter, uniqueDetails } from "./details.ts";
+import { appendItemEvents, detailSlot, detailsOfEvents, ITEM_KINDS, uniqueDetails } from "./details.ts";
 import { matchesJournalFilter } from "./journal.ts";
 import type { Fee, ItemDetail, JournalEvent, JournalFilter, NewNotification, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
@@ -48,7 +48,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
   const itemsOf = (familyId: string, watcher: string): StoredItem[] =>
     [...items.values()].filter((item) => item.familyId === familyId && item.watcher === watcher);
 
-  return {
+  const storage: MemoryStorage = {
     setConfig,
     setFee: (fee) => {
       fees.set(fee.id, fee);
@@ -73,12 +73,11 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
         details.set(slot, { ...row, firstSeen: now() });
         added += 1;
       }
+      await appendItemEvents(storage, rows);
       return added;
     },
     listDetails: async (familyId, filter = {}) =>
-      [...details.values()]
-        .filter((detail) => detail.familyId === familyId && matchesFilter(detail, filter))
-        .map((detail) => ({ ...detail })),
+      detailsOfEvents(journalOf(familyId, { ...filter, kinds: ITEM_KINDS }).map((event) => structuredClone(event))),
     appendEvents: async (events) => {
       const keys = new Set(journal.map(journalKey));
       for (const event of events) {
@@ -151,4 +150,5 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       return true;
     },
   };
+  return storage;
 }

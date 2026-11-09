@@ -95,6 +95,22 @@ function detailTests(create: () => Promise<ContractHarness>): void {
     expect(texts).toContain("Changed text.");
   });
 
+  it("puts details on the journal as Item events", async () => {
+    const { storage } = await detailHarness(create);
+    const filter = { kinds: ["message" as const] };
+    await storage.recordDetails([detail()]);
+    await storage.recordDetails([detail()]);
+    expect(await storage.listEvents(FAMILY_ID, filter)).toHaveLength(1);
+    await storage.recordDetails([detail({ text: "Changed text." })]);
+    const events = await storage.listEvents(FAMILY_ID, filter);
+    expect(events.map((event) => [event.seq, event.eventType, event.source])).toEqual([
+      [1, "ItemRecorded", "librus-watch"],
+      [2, "ItemChanged", "librus-watch"],
+    ]);
+    expect(events[0]?.stream).toBe("item:messages:child-one:m1");
+    expect(events[0]?.payload).toMatchObject({ sourceId: "m1", kind: "message", sourceUpdatedAt: "2025-01-09T08:00:00.000Z" });
+  });
+
   it("stores many rows in batches", async () => {
     const { storage } = await detailHarness(create);
     const rows = Array.from({ length: 250 }, (_, index) => detail({ sourceId: `m${index}` }));
