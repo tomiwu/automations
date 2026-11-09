@@ -3,6 +3,8 @@ import type { StorageAdapter } from "@automations/librus-data";
 import { deliverPending, type Messenger } from "@tomiwu/librus-watch";
 import type { ActiveNowOptions } from "./activenow-source.ts";
 import { runWatcher } from "./engine.ts";
+import { appendSessionsJournal, type AccountSessions } from "./journal-sessions.ts";
+import type { Session } from "./sessions.ts";
 import { createSource, type CreateSource } from "./source.ts";
 import { activityTargets, type ActivityTarget } from "./targets.ts";
 
@@ -43,12 +45,15 @@ async function notifyFailure(deps: RunDeps, target: ActivityTarget, message: str
   }
 }
 
-async function runTarget(deps: RunDeps, config: Config, target: ActivityTarget): Promise<string | undefined> {
+/** The result of one Account: the Sessions it read, or the failure text. */
+type TargetResult = { sessions: Session[]; failure?: undefined } | { failure: string; sessions?: undefined };
+
+async function runTarget(deps: RunDeps, config: Config, target: ActivityTarget): Promise<TargetResult> {
   const { runtime } = deps;
   const timezone = config.family.timezone;
   const source = (deps.createSource ?? createSource(runtime, deps.activeNow))(target, timezone);
   try {
-    await runWatcher({
+    const sessions = await runWatcher({
       familyId: deps.familyId,
       child: target.child,
       recipients: target.recipients,
@@ -59,11 +64,28 @@ async function runTarget(deps: RunDeps, config: Config, target: ActivityTarget):
       timezone,
     });
     runtime.log("info", `account ${target.account.id}: ok`);
-    return undefined;
+    return { sessions };
   } catch (error) {
     runtime.log("info", `account ${target.account.id}: fail`);
     await notifyFailure(deps, target, messageOf(error), localDate(runtime.now(), timezone));
-    return `${target.child.name} ${target.account.service}: ${messageOf(error)}`;
+    return { failure: `${target.child.name} ${target.account.service}: ${messageOf(error)}` };
+  }
+}
+
+/** Appends the Journal events once for all Accounts. Returns the failure text, or no text. */
+async function journalStep(deps: RunDeps, config: Config, accounts: AccountSessions[]): Promise<string[]> {
+  try {
+    await appendSessionsJournal({
+      storage: deps.storage,
+      familyId: deps.familyId,
+      accounts,
+      timezone: config.family.timezone,
+      now: deps.runtime.now(),
+      log: (message) => deps.runtime.log("info", message),
+    });
+    return [];
+  } catch (error) {
+    return [`journal: ${messageOf(error)}`];
   }
 }
 
@@ -76,10 +98,13 @@ export async function runActivitiesWatch(deps: RunDeps): Promise<string[]> {
   const config = await deps.storage.loadConfig(deps.familyId);
   const { targets, errors } = activityTargets(config);
   const failures = [...errors];
+  const read: AccountSessions[] = [];
   for (const target of targets) {
-    const failure = await runTarget(deps, config, target);
-    if (failure) failures.push(failure);
+    const result = await runTarget(deps, config, target);
+    if (result.failure !== undefined) failures.push(result.failure);
+    else read.push({ target, sessions: result.sessions });
   }
+  failures.push(...(await journalStep(deps, config, read)));
   try {
     await deliverPending({
       storage: deps.storage,
