@@ -22,11 +22,20 @@ To apply the files from your own computer, set `SUPABASE_DB_URL` in the environm
 
 Fallback: open the SQL editor of the project, paste the content of `supabase/migrations/0001_init.sql` and run it. The file is idempotent.
 
-The migration makes the tables, the RLS policies and the role `automations_watcher`. The role can:
+The migrations 0007 to 0009 add the event journal (ADR 0006):
+
+- `0007_journal_events.sql` makes the table `journal_events`, a trigger that rejects `update`, `delete` and `truncate`, and the view `journal_heads` (the last event of each stream).
+- `0008_journal_backfill.sql` copies each `item_details` row into `journal_events` as one event. `item_details` stays.
+- `0009_journal_backfill_again.sql` runs the copy a second time, for the rows that the old code wrote between 0008 and the deploy.
+
+Each of them can run more than once. A second run of the copy adds no row.
+
+The migrations make the tables, the RLS policies and the role `automations_watcher`. The role can:
 
 - read the config tables (`families`, `children`, `accounts`, `activities`, `recipients`);
 - read and insert `items`;
 - read and insert `outbox` entries, update only `outbox.delivered_at`, and delete `outbox` entries that were delivered more than 30 days ago;
+- read and insert `journal_events`, and read `journal_heads`. The role cannot update or delete a Journal event, and no role can (a trigger rejects it);
 - read, insert, and update `kradziejka_bots` (the Grok bot registry). The role cannot delete those rows. Webhook keys in that table are ciphertext.
 
 ## 3. Make the role key
@@ -61,7 +70,7 @@ For each Account, also enter the secrets that the Account names, for example `CH
 
 ## 6. Daily purge
 
-A scheduled job calls `purgeDelivered(30)` each day. It uses the role `automations_watcher`. The RLS policy allows the delete only for entries that were delivered more than 30 days ago.
+A scheduled job calls `purgeDelivered(30)` each day. It uses the role `automations_watcher`. The RLS policy allows the delete only for entries that were delivered more than 30 days ago. The job never touches `journal_events` or `item_details`.
 
 ## Tests
 

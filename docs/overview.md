@@ -82,8 +82,8 @@ Kody reads the cron expressions in UTC. The jobs set no cron time zone. The tabl
 
 | Routine | When (Europe/Warsaw) | What happens |
 | --- | --- | --- |
-| Librus → Child A calendar | 07:15, hourly 14:00–20:00, 22:00 | Reads Librus data from Kody (read-only), compares with the calendar, adds or updates events |
-| Activities → Child B calendar | 07:20 and 18:20 | Reads ActiveNow / My School / Mondo data from Kody, adds or updates events |
+| Librus → Child A calendar | 07:15, hourly 14:00–20:00, 22:00 | Reads the stored Lessons and homework from Kody (`./stored-lessons`, Supabase only), compares with the calendar, adds or updates events |
+| Activities → Child B calendar | 07:20 and 18:20 | Reads the stored Sessions from Kody (`./stored-sessions`, Supabase only), adds or updates events |
 | Loop monitor | Every 30 min while the Sandcastle loop runs | Reports only merges and problems |
 
 | Calendar rule | Example |
@@ -105,9 +105,11 @@ Where each kind of `./events` event goes in the calendar:
 | `grade` | In the description of the lesson on its `date` |
 | `meeting`, `trip` | Popup at 16:00 on the day before |
 
-Data in `item_details` is kept forever. `daily-purge` removes only delivered Outbox rows.
+Data in `item_details` and `journal_events` is kept forever. `daily-purge` removes only delivered Outbox rows.
 
-Fetch budget: the Kody free plan allows 2500 outbound fetches in a UTC week. Each run logs its fetch count. Names are cached for 7 days, config loads in one request and writes are batched (`packages/librus-watch/README.md`). `./events` reads Supabase only.
+The calendar sync must use the stored exports `./stored-lessons`, `./stored-sessions` and `./stream-history`. They read the Journal in Supabase and make no Librus or app request. Do not use `./lessons`, `./calendar`, `./upcoming` and `./sessions` for the sync. They log in to the Services and stay for manual use. Check `lastSavedAt` in the result: an old time means stale data. See ADR 0006.
+
+Fetch budget: the Kody free plan allows 2500 outbound fetches in a UTC week. Each run logs its fetch count. Names are cached for 7 days, config loads in one request and writes are batched (`packages/librus-watch/README.md`). `./events` and the stored exports read Supabase only. The journal step adds about 2 to 4 Supabase fetches for each Child and pass.
 
 Routines only read from Kody. The Owner hears only about changes or failures. The routines live in the assistant, not in this repository.
 

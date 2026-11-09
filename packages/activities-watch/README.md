@@ -43,6 +43,18 @@ Each Session has `childId` and the name of the Child (`child`).
 The Supabase URL and the Family ID are plain config set with `./configure` (`{ supabaseUrl, familyId }`). The secret `SUPABASE_KEY` gives access to the storage.
 The secret `EDUSKY_CLIENT_SECRET` holds the client secret that the Edusky web app sends to log in. The repository does not hold it.
 
+## The stored export
+
+Use `./stored-sessions` for the calendar sync. It reads Supabase only. Do not use `./sessions` for the sync: it logs in to the apps. `./sessions` stays for manual use.
+
+- **Input:** `{ childId?, from?, to? }`. `from` and `to` are `YYYY-MM-DD`. `from` is today by default. `to` is `from` + 13 days by default. The range is at most 60 days. Other keys are rejected.
+- **Output:** `{ timezone, from, to, accounts, sessions, fetches? }`.
+- Each Session has `id`, `stream`, `childId`, `child`, `activity`, `service`, `start`, `end`, `place`, `status`, `warning`, `vanished`, `seq` and `lastChanged`. A vanished Session stays in the result with `vanished: true`.
+- Each entry of `accounts` has `accountId`, `childId`, `service` and `lastSavedAt`. `lastSavedAt` is the time of the last `CheckCompleted` event of the Account, or `null` before the first save. Use it to find stale data.
+- **Fetches:** the config, the heads of the Sessions, and the heads of the check streams. This is 3 Supabase fetches at most. There is no app request.
+- The journal step adds about 2 Supabase fetches for each pass (two `listHeads` reads and one `appendEvents` call for all Accounts).
+- `journal_events` is append-only (see `packages/librus-data/README.md`).
+
 ## After-school section and mail comparison
 
 - `createAfterSchool(deps)` makes the `afterSchool` port of the Morning report of `@tomiwu/librus-watch`. It reads only the Accounts of the Child.

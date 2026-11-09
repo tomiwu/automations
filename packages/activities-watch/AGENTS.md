@@ -12,10 +12,15 @@ import afterSchool from "kody:@tomiwu/activities-watch/after-school";
 | Export | Input | Output | Side effects |
 | --- | --- | --- | --- |
 | `./sessions` | none | `{ sessions, errors }`, every Session of the next 14 days, ordered by start | logs in to the apps, read-only |
+| `./stored-sessions` | `{ childId?, from?, to? }` | `{ timezone, from, to, accounts, sessions }`. Each Session has `vanished`, `seq`, `lastChanged`. Each Account has `lastSavedAt` | none (reads Supabase only, 3 fetches at most) |
 | `./after-school` | `{ childId, day: "YYYY-MM-DD", language?: "pl" \| "en" }` | `{ text }` | read-only |
 | `./scheduled` | none | `{ ok: true }` | runs the Watchers, writes Items and the Outbox, sends Telegram messages |
 
 `./scheduled` is the job in `package.json` (`kody.jobs`). Do not call it as a test: it can send real messages.
+
+## Journal
+
+`./scheduled` appends Session events to the append-only table `journal_events` (ADR 0006), once at the end of the run, from the Sessions that it read already. The calendar sync must use `./stored-sessions`. It must not use `./sessions`: that export logs in to the apps and stays for manual use. `from` defaults to today, `to` to `from` + 13 (at most 60 days). Check `lastSavedAt` of each Account for stale data. Nothing changes or deletes a Journal event.
 
 ## Config
 
@@ -28,7 +33,8 @@ import afterSchool from "kody:@tomiwu/activities-watch/after-school";
 ## Smoke tests
 
 1. `sessions` with `{}`: `errors` is empty and `sessions` is an array. Each Session has `childId` and `child`.
-2. `after-school` with a `childId` from step 1 and today's `day`: returns `{ text }` (it can be empty on a day without classes).
+2. `stored-sessions` with `{}`: returns `accounts` and `sessions` (can be empty before the first journal pass). It needs no app login.
+3. `after-school` with a `childId` from step 1 and today's `day`: returns `{ text }` (it can be empty on a day without classes).
 
 ## Edge cases
 
