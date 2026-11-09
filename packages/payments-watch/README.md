@@ -86,3 +86,12 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - `routeTelegramUpdate` sends a `pay:` callback to `handlePaymentCallback`. The `callback_query` gives the id, the data, the chat ID, the message ID and the caption. A callback without a message changes nothing. Any other update is ignored and logged.
 - The reply goes through `@tomiwu/telegram` with the secret `TELEGRAM_BOT_TOKEN`.
 - The code does not register the webhook with Telegram. The owner calls `setWebhook` by hand with the webhook URL.
+
+## The `./stored-payments` export
+
+- **Input:** `{ childId?, month? }`. `month` is `YYYY-MM`. It is the current month in the Family time zone by default, and at most 12 months back. Other keys are rejected.
+- **Output:** `{ timezone, month, lastSavedAt, payments, fetches? }`. `payments` are the head states of the `payment:` streams of the month, ordered by `dueDay`. Each has `stream`, `seq`, `eventType`, `lastChanged`, `childId`, `feeId`, `organizer`, `month`, `dueDay` (1 to 28), `status` (`pending`, `paid` or `skipped`), `amount` (grosze), `amountSource`, `notifiedAt`, `remindedAt`, `decidedAt` and `decidedBy`. A reader derives `overdue` from `status`, `month` and `dueDay`.
+- `lastSavedAt` maps each Child ID to the time of the last `CheckCompleted` in `check:payments-watch:<childId>`, or `null` before the first check.
+- It never returns a bank account, NIP, title, recipient or source URL.
+- **Fetches:** the config, the payment heads and the check heads. This is 3 Supabase fetches. There is no organizer or Librus fetch.
+- The Dashboard keeps reading the `payments` table until the dual write ends. Other readers can use this export now.
