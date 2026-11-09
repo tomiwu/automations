@@ -27,7 +27,7 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./calendar` | `{ childId? }`. The Lessons of the next 14 days and the homework and tests of the same days, in one read with one Librus login. Use it instead of `lessons` plus `upcoming`. |
 | `./children` | No input. `{ children }`: `id`, `name` and `calendar_id` of every Child. |
 | `./events` | `{ childId?, from?, to?, since? }`. The stored content of the Items (meetings, days off, trips, Terminarz entries, announcements, messages, grades) as `events`. `from` and `to` are `YYYY-MM-DD`; `since` is an ISO time for `firstSeen` (default 7 days ago). It reads Supabase only: no Librus login. |
-| `./stored-lessons` | `{ childId?, from?, to? }`. The Lessons and homework as the Journal stores them, with `lastSavedAt` and `lastCheck`. `from` defaults to today, `to` to `from` + 13 (at most 60 days). Vanished entries stay with `vanished: true`. It reads Supabase only (3 fetches at most): no Librus login. |
+| `./stored-lessons` | `{ childId?, from?, to? }`. The Lessons and homework as the Journal stores them, with `lastSavedAt` and `lastCheck`. `from` defaults to today, `to` to `from` + 13 (at most 60 days). Vanished entries stay with `vanished: true`. It reads Supabase only (4 fetches at most): no Librus login. |
 | `./stream-history` | `{ stream }` (text, at most 300 characters). The Journal events of one stream, oldest first, and the state they give (`null` for an unknown stream). Works for `lesson:`, `homework:`, `session:`, `item:` and `check:` streams. It reads Supabase only (1 fetch). |
 
 Both exports include `childId` and the name of the Child. Without `childId` the Family must have one Child with Librus.
@@ -56,11 +56,11 @@ Use `./stored-lessons` and `./stream-history` for the calendar sync. They read S
 
 - **Input:** `{ childId?, from?, to? }`. `from` and `to` are `YYYY-MM-DD`. `from` is today by default. `to` is `from` + 13 days by default. The range is at most 60 days. Other keys are rejected.
 - **Output:** `{ childId, child, timezone, from, to, lastSavedAt, lastCheck, lessons, homework, fetches? }`.
-- `lessons` has the Lessons of the range. Each has `id`, `stream`, `date`, `period`, `start`, `end`, `subject`, `teacher`, `room`, `status`, `substituteTeacher`, `homeworkGiven` and `testAtNextLesson`.
+- `lessons` has the Lessons of the range. Each has `id`, `stream`, `date`, `period`, `start`, `end`, `subject`, `teacher`, `room`, `status`, `cancelled`, `substituteTeacher`, `homeworkGiven` and `testAtNextLesson`. A Lesson on a school or class day off of Librus (an Item of kind `dayOff`) has `status: "cancelled"`, `cancelled: true` and `cancelReason: { reason: "day_off", sourceStream, sourceId }`. A day off wins over the timetable. Other Items never cancel a Lesson. The Lesson stays in the list.
 - `homework` has the homework and tests of the range. Each has `id`, `stream`, `category`, `isTest`, `date`, `subject`, `content`, `teacher`, `lessonNo`, `start` and `end`.
 - Each entry also has `vanished`, `seq` and `lastChanged`. A vanished entry stays in the result with `vanished: true`.
 - `lastSavedAt` is the time of the last `CheckCompleted` event. It is `null` before the first save. `lastCheck` is `{ timetableOk, homeworkOk }` of that pass. Use them to find stale data.
-- **Fetches:** the config, the heads of the Lessons and homework, and the head of the check stream. This is 3 Supabase fetches at most. There is no Librus fetch.
+- **Fetches:** the config, the heads of the Lessons and homework, and the head of the check stream, and the heads of the day-off Items. This is 4 Supabase fetches at most. There is no Librus fetch.
 
 ### `./stream-history`
 
