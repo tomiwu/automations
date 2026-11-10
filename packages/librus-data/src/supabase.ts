@@ -44,6 +44,7 @@ function toEntry(row: Row): OutboxEntry {
     text: String(row.text),
     queuedAt: new Date(String(row.queued_at)),
     deliveredAt: row.delivered_at === null ? null : new Date(String(row.delivered_at)),
+    messageId: row.message_id === null || row.message_id === undefined ? null : Number(row.message_id),
   };
 }
 
@@ -306,6 +307,12 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const init = { headers: headers(JSON_HEADERS), body: JSON.stringify({ delivered_at: now().toISOString() }) };
       await request("PATCH", "outbox", `${filter("key", "eq", key)}&delivered_at=is.null`, init);
     },
+    recordMessageId: async (key, messageId) => {
+      const init = { headers: headers(JSON_HEADERS), body: JSON.stringify({ message_id: messageId }) };
+      await request("PATCH", "outbox", filter("key", "eq", key), init);
+    },
+    sentMessages: async (familyId) =>
+      (await select("outbox", `${filter("family_id", "eq", familyId)}&message_id=not.is.null&order=queued_at.asc`)).map(toEntry),
     markDeliveredMany: async (keys) => {
       if (keys.length === 0) return;
       const list = keys.map((key) => `"${key.replace(/(["\\])/g, "\\$1")}"`).join(",");

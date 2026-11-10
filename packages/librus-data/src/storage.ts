@@ -95,6 +95,8 @@ export interface NewNotification {
 export interface OutboxEntry extends NewNotification {
   queuedAt: Date;
   deliveredAt: Date | null;
+  /** The Telegram message ID of the message that was sent for this entry, or null (not sent, or sent before it was stored). */
+  messageId: number | null;
 }
 
 /** One recurring charge of one Organizer for one Child. The Watcher reads it and never changes it. */
@@ -170,6 +172,10 @@ export interface StorageAdapter {
   enqueueNotifications(entries: readonly NewNotification[]): Promise<number>;
   pendingNotifications(familyId: string): Promise<OutboxEntry[]>;
   markDelivered(key: string): Promise<void>;
+  /** Stores the Telegram message ID of the message that was sent for the entry. It is a delivery field, not Journal data. */
+  recordMessageId(key: string, messageId: number): Promise<void>;
+  /** The entries of the Family that have a stored Telegram message ID, oldest first. */
+  sentMessages(familyId: string): Promise<OutboxEntry[]>;
   /** Like `markDelivered` for many keys in one request. */
   markDeliveredMany(keys: readonly string[]): Promise<void>;
   loadConfig(familyId: string): Promise<Config>;

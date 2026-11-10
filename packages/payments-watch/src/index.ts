@@ -13,5 +13,7 @@ export { formatAmount, runPayments } from "./engine.ts";
 export type { PaymentRun } from "./engine.ts";
 export { createTelegramHttpClient, createTelegramNotifier } from "./notifier.ts";
 export type { Notifier, PaymentNotice, TelegramClient, TelegramParams } from "./notifier.ts";
+export { editCancelledMessages } from "./cancel-edit.ts";
+export type { CancelEditDeps } from "./cancel-edit.ts";
 export { handlePaymentCallback } from "./callback.ts";
 export type { CallbackDeps, CallbackQuery } from "./callback.ts";

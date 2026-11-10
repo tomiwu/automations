@@ -61,6 +61,15 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - When the Payment amount comes from the page and the config has a different amount for the month, the caption shows both amounts.
 - `createTelegramHttpClient(fetch, token)` is a `TelegramClient` that posts to the bot API. The token is the existing `TELEGRAM_BOT_TOKEN`. No new secret is needed.
 
+## Cancel edit
+
+- When a QR photo is sent (first Notification or reminder), the Telegram message ID is stored in the Outbox row (`outbox.message_id`, migration 0013, `recordMessageId`). It is a delivery field like `delivered_at`. It is not in the Journal.
+- `editCancelledMessages` runs in each pass (`RunDeps.client`, set by `./scheduled` when `paymentPhotos` is on). For each `cancelled` Payment whose head is `PaymentCancelled`, it edits each stored message of each Recipient: the caption becomes "CANCELLED, do not pay." plus the reason, and the Paid and Skip buttons are removed (`editMessageCaption` with an empty keyboard).
+- `fee_disabled`: edit only. `organizer_void` and `organizer_withdrawn`: edit, and one short new text message to the Recipient (Outbox key `cancel-notice:<payment id>:<seq>:<chat id>`, sent by the text delivery of the same pass).
+- The edit is done once for each cancel and Recipient (Outbox key `cancel-edit:<payment id>:<seq>:<chat id>`, `seq` of the `PaymentCancelled` event). A repeated run does nothing.
+- A Payment with no stored message ID (sent before this change) gets no edit and no error. A failed edit (for example a Telegram 400 for an old or deleted message) is logged. The run continues and the cancel stays. The edit is not tried again.
+- The texts are in the pl/en catalogs (`payment.cancelled.*`).
+
 ## Callback
 
 - `handlePaymentCallback(deps, query)` handles a button press with the data `pay:<payment id>:paid` or `pay:<payment id>:skip`. It gives `false` for other data.

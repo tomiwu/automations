@@ -64,7 +64,17 @@ function dropReason(target: Target): string | undefined {
 async function send(deps: PaymentDeliveryDeps, target: Required<Target>): Promise<void> {
   const { fee, payment } = target;
   const qr = await buildZbpQr({ nip: fee.nip ?? "", nrb: fee.account, amountGrosze: payment.amount, recipient: fee.recipientName, title: fee.title });
-  await deps.notifier.sendPayment(target.recipient, { child: target.child, fee, payment, reminder: target.reminder }, qr);
+  const messageId = await deps.notifier.sendPayment(target.recipient, { child: target.child, fee, payment, reminder: target.reminder }, qr);
+  if (typeof messageId === "number") await storeMessageId(deps, target.entry.key, messageId);
+}
+
+/** Keeps the message ID for the later edit of a cancel. A failed write is logged: the message is sent already. */
+async function storeMessageId(deps: PaymentDeliveryDeps, key: string, messageId: number): Promise<void> {
+  try {
+    await deps.storage.recordMessageId(key, messageId);
+  } catch (error) {
+    deps.log?.(`payment photo: message id of ${key} not stored (${error instanceof Error ? error.message : String(error)})`);
+  }
 }
 
 interface PhotoRun {
