@@ -66,7 +66,7 @@ host_checks() {
 
 container_checks() {
   local probe="$HOME/.doctor-write-test" cli
-  (touch "$probe" && rm -f "$probe") 2>/dev/null || fail "\$HOME ($HOME) writable" "chown -R agent:agent /home/agent in the Containerfile"
+  (touch "$probe" && rm -f "$probe") 2>/dev/null || fail "\$HOME ($HOME) writable" "chown -R \$AGENT_UID:\$AGENT_GID /home/agent in the Containerfile"
   [ "$(stat -c %a "$TMP_DIR" 2>/dev/null)" = "1777" ] || fail "$TMP_DIR mode 1777" "install -d -m 1777 /tmp in the Containerfile"
   mkdir -p "$TMP_DIR/claude-$(id -u)" 2>/dev/null || fail "mkdir $TMP_DIR/claude-$(id -u)" "install -d -m 1777 /tmp in the Containerfile"
   for cli in git node gh; do

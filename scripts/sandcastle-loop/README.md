@@ -22,7 +22,7 @@ export LOOP_IMAGE="$(LOOP_REPO=tomiwu/automations scripts/sandcastle-loop/build-
 ```
 
 - `build-image.sh` builds `Containerfile` in this directory and tags it `sandcastle:<repo>-<short sha of the Containerfile>`. Only the tag goes to stdout; the build output goes to stderr.
-- The last root steps of the Containerfile are `install -d -m 1777 /tmp` and `chown -R agent:agent /home/agent`. The last `RUN` is `doctor.sh container` as the agent user, so the build fails when the image is broken.
+- The last root steps of the Containerfile are `install -d -m 1777 /tmp` and `chown -R $AGENT_UID:$AGENT_GID /home/agent` (numeric: the group of the renamed user is still `node`). The last `RUN` is `doctor.sh container` as the agent user, so the build fails when the image is broken.
 - Another repository keeps its own Containerfile (for example extra toolchains) and sets `LOOP_CONTAINERFILE`, `LOOP_BUILD_CONTEXT` (put `doctor.sh` in it) and `LOOP_IMAGE_NAME`. `LOOP_STORAGE_CONF` selects the podman storage. `LOOP_MODELS` is passed as a build arg, so the build checks the agent CLIs.
 - The box wrapper switches to this image after the merge (owner step). `.sandcastle/Containerfile` stays for the current loop.
 

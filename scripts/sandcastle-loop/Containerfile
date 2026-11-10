@@ -3,8 +3,22 @@
 # toolchain) stay in the Containerfile of that repository (LOOP_CONTAINERFILE).
 FROM node:22-bookworm
 
+# apt over HTTPS with retries and without SRV records. On the box, apt asks DNS for the SRV record
+# _http._tcp.deb.debian.org, and that target goes to the proxy 198.18.0.1, which gives HTTP 500 for the
+# InRelease files (then apt reports "not signed") and breaks the TLS handshake for https. A plain lookup of
+# deb.debian.org (curl does this) works. Step 1 installs ca-certificates over HTTP only when the base
+# image does not have them (node:22-bookworm has them); step 2 switches the sources to https.
+# The podman store on the box can lose the mode of /tmp, and apt-key then cannot write its temporary file
+# (apt also reports that as "not signed"). So each apt step sets /tmp to 1777 first.
+RUN install -d -m 1777 /tmp \
+  && printf 'Acquire::Retries "5";\nAcquire::EnableSrvRecords "false";\n' > /etc/apt/apt.conf.d/80-loop-net \
+  && if [ ! -s /etc/ssl/certs/ca-certificates.crt ]; then \
+       apt-get update && apt-get install -y --no-install-recommends ca-certificates; \
+     fi \
+  && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources
+
 # Install system dependencies
-RUN apt-get -o Acquire::Retries=5 update && apt-get install -y \
+RUN install -d -m 1777 /tmp && apt-get update && apt-get install -y \
   git \
   curl \
   jq \
@@ -12,11 +26,11 @@ RUN apt-get -o Acquire::Retries=5 update && apt-get install -y \
   && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+RUN install -d -m 1777 /tmp && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
   | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-  && apt-get -o Acquire::Retries=5 update && apt-get install -y gh \
+  && apt-get update && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI (used when AGENT=claude)
@@ -29,7 +43,9 @@ ARG AGENT_UID=1000
 ARG AGENT_GID=1000
 
 # Rename the base image's "node" user to "agent" and align UID/GID.
-RUN groupmod -o -g $AGENT_GID node && usermod -o -u $AGENT_UID -g $AGENT_GID -d /home/agent -m -l agent node
+# The podman store on the box can lose the owner of the moved home directory, so set it again here.
+RUN groupmod -o -g $AGENT_GID node && usermod -o -u $AGENT_UID -g $AGENT_GID -d /home/agent -m -l agent node \
+  && install -d -o $AGENT_UID -g $AGENT_GID /home/agent && chown -R $AGENT_UID:$AGENT_GID /home/agent
 USER ${AGENT_UID}:${AGENT_GID}
 
 # Cursor CLI fetches plugins over SSH. The sandbox has no SSH key, so use HTTPS.
@@ -48,7 +64,7 @@ ENV PATH="/home/agent/.local/bin:$PATH"
 USER root
 RUN chmod -R a+rwX /home/agent \
   && install -d -m 1777 /tmp \
-  && chown -R agent:agent /home/agent
+  && chown -R $AGENT_UID:$AGENT_GID /home/agent
 
 # The build fails when the image is broken: run the container part of the loop doctor as the agent user.
 ARG LOOP_MODELS=claude:default,cursor:default

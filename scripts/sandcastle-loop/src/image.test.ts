@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,6 +43,21 @@ describe("build-image.sh", () => {
     expect(a.at(-1)).toBe(root);
   });
 
+  it("takes the repo name from the origin URL, not from a worktree directory name", () => {
+    const { dir } = stubPodman();
+    const work = mkdtempSync(join(tmpdir(), "loop-wt-"));
+    const wt = join(work, "example-repo-170");
+    mkdirSync(wt);
+    spawnSync("git", ["init", "-q", wt]);
+    spawnSync("git", ["-C", wt, "remote", "add", "origin", "git@github.com:example-owner/example-repo.git"]);
+    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${dir}:${process.env.PATH}` };
+    delete env.LOOP_REPO;
+    const r = spawnSync("bash", [script], { cwd: wt, env, encoding: "utf8" });
+    rmSync(work, { recursive: true, force: true });
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim()).toBe(`sandcastle:example-repo-${shortSha(containerfile)}`);
+  });
+
   it("uses the Containerfile, context and image name of another repository", () => {
     const { dir, args } = stubPodman();
     const own = join(dir, "Containerfile");
@@ -74,8 +89,22 @@ describe("Containerfile", () => {
     const lastRoot = text.lastIndexOf("USER root");
     const after = text.slice(lastRoot);
     expect(after).toContain("install -d -m 1777 /tmp");
-    expect(after).toContain("chown -R agent:agent /home/agent");
-    expect(after.indexOf("USER ${AGENT_UID}:${AGENT_GID}")).toBeGreaterThan(after.indexOf("chown -R agent:agent"));
+    expect(after).toContain("chown -R $AGENT_UID:$AGENT_GID /home/agent");
+    expect(after.indexOf("USER ${AGENT_UID}:${AGENT_GID}")).toBeGreaterThan(after.indexOf("chown -R $AGENT_UID:$AGENT_GID"));
+  });
+
+  it("sets apt to https, 5 retries and no SRV records before the first apt-get", () => {
+    const firstApt = text.indexOf("apt-get update");
+    const netStep = text.indexOf("Acquire::EnableSrvRecords");
+    expect(text).toContain('Acquire::Retries "5";');
+    expect(text).toContain('Acquire::EnableSrvRecords "false";');
+    expect(text).toContain("s|http://deb.debian.org|https://deb.debian.org|g");
+    expect(netStep).toBeGreaterThan(-1);
+    expect(netStep).toBeLessThan(firstApt);
+  });
+
+  it("uses numeric ids for chown, because the group of the renamed user is still node", () => {
+    expect(text).not.toMatch(/chown -R agent:agent/);
   });
 
   it("ends with a RUN of the container doctor as the agent user", () => {

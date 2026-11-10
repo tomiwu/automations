@@ -87,7 +87,7 @@ describe("doctor.sh", () => {
     ["gh auth", (b) => ({ ...b.env, GH_AUTH_RC: "1" }), "DOCTOR FAIL: gh auth status -> fix:"],
     ["gh repo access", (b) => ({ ...b.env, GH_REPO_RC: "1" }), "DOCTOR FAIL: gh repo view example-owner/example-repo"],
     ["/tmp mode", (b) => (chmodSync(b.tmp, 0o755), b.env), "mode 1777 -> fix: install -d -m 1777 /tmp"],
-    ["HOME not writable", (b) => (chmodSync(b.home, 0o500), b.env), "writable -> fix: chown -R agent:agent /home/agent"],
+    ["HOME not writable", (b) => (chmodSync(b.home, 0o500), b.env), "writable -> fix: chown -R $AGENT_UID:$AGENT_GID /home/agent"],
     ["extra repo hook", (b) => ({ ...b.env, LOOP_DOCTOR_EXTRA: "exit 3" }), "DOCTOR FAIL: LOOP_DOCTOR_EXTRA (exit 3)"],
   ];
 
