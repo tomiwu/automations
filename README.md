@@ -35,6 +35,8 @@ npm run test:sql:local   # migration changed: SQL tests on a throwaway postgres:
 
 When you change a file in `supabase/migrations`, run `npm run test:sql:local` before the push. It needs podman or docker, and `psql` in the `PATH`.
 
+Before a push, run `npm run check`. It runs typecheck, test, crap and gitleaks (when gitleaks is installed) in order, stops at the first failure and names the failed step. `npm run crap:changed` runs crap only in the workspaces that changed against `origin/main` (`-- --dry-run` prints the list, `-- --base <ref>` changes the base). See `tools/dev-checks`.
+
 Requirements: Node 22 or later. The repository uses npm workspaces.
 
 ## License

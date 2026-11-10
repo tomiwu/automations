@@ -11,6 +11,8 @@
     "test": "npm run test --workspaces --if-present",
     "crap": "npm run crap --workspaces --if-present",
     "test:sql:local": "bash scripts/test-sql-local.sh",
+    "check": "bash scripts/check.sh",
+    "crap:changed": "tsx tools/dev-checks/src/cli.ts",
     "sandcastle": "npx tsx .sandcastle/main.mts"
   },
   "devDependencies": {
