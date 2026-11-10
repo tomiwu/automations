@@ -38,7 +38,7 @@ export LOOP_IMAGE="$(LOOP_REPO=tomiwu/automations scripts/sandcastle-loop/build-
 
 The order is Claude -> Cursor CLI Composer 2.5 -> Grok in the Cursor CLI. Only local CLIs run; the loop never calls a Cursor cloud agent.
 
-- The Grok id is `GROK_CURSOR_MODEL` in `src/config.ts` (`grok-4.5-high`, the id that the e1003-firmware loop uses). Check it with `agent --list-models` when the Cursor key works, and change it there or in `LOOP_MODELS`.
+- The Grok id is `GROK_CURSOR_MODEL` in `src/config.ts` (`grok-4.5-high`, the id that the e1003-firmware loop uses). **UNVERIFIED**: this id was not run yet. Check it with `agent --list-models` when the Cursor key works, and change it there or in `LOOP_MODELS`.
 - On a limit error of any agent (credit, quota, usage or rate limit, "hit your ... limit", "5-hour limit", "resets"), the loop changes to the next model, runs the same phase again and logs `MODEL SWITCH <from> -> <to> (<reason>)`.
 - When all models are limited, the loop logs `ALL MODELS LIMITED. Wait N min`, sleeps until the earliest reset time in the errors ("resets 4:30am", "resets at 16:05", or an ISO time; else 30 minutes), then starts again with the first model. It does not exit.
 
