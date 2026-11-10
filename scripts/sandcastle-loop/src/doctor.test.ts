@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { hermeticEnv, type Hermetic } from "./test-env.ts";
 
 const doctor = join(dirname(fileURLToPath(import.meta.url)), "..", "doctor.sh");
 const FAKE_TOKEN = "gho_FAKE0123456789abcdefFAKE";
@@ -15,12 +16,10 @@ function tempDir(prefix: string): string {
   return dir;
 }
 
-function executable(path: string, body: string): void {
-  writeFileSync(path, `#!/bin/sh\n${body}\n`);
-  chmodSync(path, 0o755);
-}
+const boxes: Hermetic[] = [];
 
 afterEach(() => {
+  boxes.splice(0).forEach((box) => box.cleanup());
   for (const dir of dirs.splice(0)) {
     spawnSync("chmod", ["-R", "u+rwx", dir]);
     rmSync(dir, { recursive: true, force: true });
@@ -30,9 +29,7 @@ afterEach(() => {
 // A fake box: stub commands on PATH, a repo root with node_modules, a HOME and a /tmp with mode 1777.
 // The fake podman runs the container part of the script on the host.
 function fakeBox(options: { omit?: string[] } = {}) {
-  const stub = tempDir("doctor-stub-");
   const root = tempDir("doctor-root-");
-  const home = tempDir("doctor-home-");
   const tmp = tempDir("doctor-tmp-");
   chmodSync(tmp, 0o1777);
   mkdirSync(join(root, "node_modules", "@ai-hero", "sandcastle"), { recursive: true });
@@ -49,19 +46,19 @@ exit 1`,
     node: "echo v22.0.0",
     git: "echo git version 2.0.0",
   };
-  for (const [name, body] of Object.entries(commands)) {
-    if (!options.omit?.includes(name)) executable(join(stub, name), body);
-  }
-  const env = {
-    PATH: `${stub}:/usr/bin:/bin`,
-    HOME: home,
-    LOOP_ROOT: root,
-    DOCTOR_TMP: tmp,
-    LOOP_IMAGE: "sandcastle:example",
-    LOOP_REPO: "example-owner/example-repo",
-    LOOP_MODELS: "claude:model-a,cursor:model-b",
-    XDG_RUNTIME_DIR: tmp,
-  };
+  const kept = Object.fromEntries(Object.entries(commands).filter(([name]) => !options.omit?.includes(name)));
+  const box = hermeticEnv(kept, {
+    env: {
+      LOOP_ROOT: root,
+      DOCTOR_TMP: tmp,
+      LOOP_IMAGE: "sandcastle:example",
+      LOOP_REPO: "example-owner/example-repo",
+      LOOP_MODELS: "claude:model-a,cursor:model-b",
+      XDG_RUNTIME_DIR: tmp,
+    },
+  });
+  boxes.push(box);
+  const { stubDir: stub, home, env } = box;
   return { stub, root, home, tmp, env };
 }
 

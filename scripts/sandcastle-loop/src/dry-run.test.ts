@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { hermeticEnv, type Hermetic } from "./test-env.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dirs: string[] = [];
@@ -35,12 +36,22 @@ function dryRun(extra: Record<string, string>): string {
   const result = spawnSync(process.execPath, ["--import", "tsx", join(root, "main.mts")], {
     encoding: "utf8",
     cwd: root,
-    env: { ...process.env, PATH: `${stub}:${process.env.PATH}`, DRY_RUN: "1", LOOP_REPO: "example-owner/example-repo", ...extra },
+    env: { ...hermetic(stub), DRY_RUN: "1", LOOP_REPO: "example-owner/example-repo", ...extra },
   });
   return result.stdout + result.stderr;
 }
 
+const boxes: Hermetic[] = [];
+
+/** The stub gh first, then real node and git, then the system directories. Nothing else of the machine. */
+function hermetic(stub: string): Record<string, string> {
+  const box = hermeticEnv({}, { real: ["node", "git"] });
+  boxes.push(box);
+  return { ...box.env, PATH: `${stub}:${box.env.PATH}` };
+}
+
 afterEach(() => {
+  boxes.splice(0).forEach((box) => box.cleanup());
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
