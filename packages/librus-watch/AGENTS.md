@@ -16,7 +16,7 @@ import upcoming from "kody:@tomiwu/librus-watch/upcoming";
 | `./lessons` | `{ childId? }` | Lessons of the next 14 days | logs in to Librus, read-only |
 | `./calendar` | `{ childId? }` | Lessons and upcoming homework and tests of the next 14 days, one login | logs in to Librus, read-only |
 | `./upcoming` | `{ childId?, days? }` | homework and tests with their Lesson | logs in to Librus, read-only |
-| `./stored-lessons` | `{ childId?, from?, to? }` | `{ childId, child, timezone, from, to, lastSavedAt, lastCheck, lessons, homework }`. A Lesson on a Librus day off has `status: "cancelled"`, `cancelled: true` and `cancelReason: { reason: "day_off", sourceStream, sourceId }`. Entries have `vanished`, `seq`, `lastChanged` | none (reads Supabase only, 4 fetches at most) |
+| `./stored-lessons` | `{ childId?, from?, to? }` | `{ childId, child, timezone, from, to, lastSavedAt, lastCheck, lessons, homework }`. A Lesson on a Librus day off has `status: "cancelled"`, `cancelled: true` and `cancelReason: { reason: "day_off", sourceStream, sourceId }`. Each Lesson and homework entry has `childId` (the Journal `child_id`), `vanished`, `seq`, `lastChanged` | none (reads Supabase only, 4 fetches at most) |
 | `./stream-history` | `{ stream }` | `{ stream, events, state }`. `state` is `null` for an unknown stream | none (reads Supabase only, 1 fetch) |
 | `./events` | `{ childId?, from?, to?, since? }` | `{ childId, child, from, to, since, events }`. Each event: `id`, `kind`, `date`, `endDate`, `start`, `end`, `title`, `text`, `sender`, `subject`, `category`, `sourceUpdatedAt`, `firstSeen` | none (reads Supabase only, no Librus login) |
 | `./scheduled` | none | `{ ok: true }` | runs the Watchers, writes Items and the Outbox, sends Telegram messages |

@@ -179,4 +179,17 @@ describe("storedLessonsExport", () => {
     const { deps } = await setup(() => []);
     await expect(storedLessonsExport(deps, input)).rejects.toThrow(message);
   });
+
+  it("gives the Journal child_id on each lesson and homework entry", async () => {
+    const { deps, childIds } = await setup(([a, b]) => [
+      lessonEvent(a!, "2026-01-10", 1), lessonEvent(b!, "2026-01-10", 1), homeworkEvent(a!, "x", "2026-01-10"), homeworkEvent(b!, "y", "2026-01-10"),
+    ], true);
+    for (const childId of childIds) {
+      const result = await storedLessonsExport(deps, { childId });
+      expect(result.childId).toBe(childId);
+      expect(result.lessons.length).toBeGreaterThan(0);
+      expect(result.homework.length).toBeGreaterThan(0);
+      expect([...result.lessons, ...result.homework].every((entry) => entry.childId === childId)).toBe(true);
+    }
+  });
 });

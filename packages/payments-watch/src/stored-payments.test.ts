@@ -97,4 +97,10 @@ describe("storedPaymentsExport", () => {
     await expect(storedPaymentsExport(deps, { childId: "nope" })).rejects.toThrow("Unknown child");
     await expect(storedPaymentsExport(deps, { x: 1 })).rejects.toThrow("Unknown input");
   });
+
+  it("gives the Journal child_id on each entry, also when the payload has none", async () => {
+    const deps = await setup([payment(CHILD1, "2026-12", 5), payment(CHILD2, "2026-12", 6, { childId: undefined })]);
+    const out = await storedPaymentsExport(deps);
+    expect(out.payments.map((p) => [p.dueDay, p.childId])).toEqual([[5, CHILD1], [6, CHILD2]]);
+  });
 });
