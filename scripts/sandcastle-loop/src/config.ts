@@ -47,7 +47,9 @@ export interface LoopConfig {
 }
 
 // Tomasz's order (9.11): Claude -> Cursor CLI Composer 2.5 -> Grok in the Cursor CLI. Local CLIs only.
-// GROK_CURSOR_MODEL is the Grok id of the Cursor CLI. Check it with `agent --list-models`; change it here or in LOOP_MODELS.
+// GROK_CURSOR_MODEL is the Grok id of the Cursor CLI.
+// UNVERIFIED: "grok-4.5-high" is copied from the e1003-firmware loop log. Nobody has run it yet.
+// Check it with `agent --list-models` after a valid Cursor key is set, then change it here or in LOOP_MODELS.
 export const GROK_CURSOR_MODEL = "grok-4.5-high";
 export const DEFAULT_MODELS = `claude:claude-sonnet-5-5,cursor:composer-2.5,cursor:${GROK_CURSOR_MODEL}`;
 export const DEFAULT_CHECKS =
