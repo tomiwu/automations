@@ -91,9 +91,9 @@ async function main() {
   let workflowId = result.workflow_id ?? null;
   let readStatus = true;
   let repairs = 0;
-  const deadline = Date.now() + waitMs;
+  const deadline = performance.now() + waitMs;
   while (!DONE.has(result.status)) {
-    if (Date.now() >= deadline) throw new Error(`publish of ${name} not done within ${waitMs / 1000} s`);
+    if (performance.now() >= deadline) throw new Error(`publish of ${name} not done within ${waitMs / 1000} s`);
     await sleep(pollMs);
     if (readStatus && workflowId) {
       const status = await runStatus(workflowId);
