@@ -182,8 +182,14 @@ async function reappear(context: RunContext, { fee, payment }: Watched): Promise
   await context.storage.reopenCancelledPayment(payment.id);
 }
 
+/** A paid Payment gets the refund-check flag. A pending Payment is cancelled. */
+async function actOnDue(context: RunContext, item: CancelDue): Promise<void> {
+  if (item.watched.payment.status === "paid") await flagRefund(context, item);
+  else await cancelOrganizer(context, item);
+}
+
 async function planOrganizer(context: RunContext, step: CounterStep): Promise<void> {
-  for (const item of step.due) await (item.watched.payment.status === "paid" ? flagRefund(context, item) : cancelOrganizer(context, item));
+  for (const item of step.due) await actOnDue(context, item);
   for (const item of step.listed) await reappear(context, item);
 }
 
