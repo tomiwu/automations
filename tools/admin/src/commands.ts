@@ -1,7 +1,7 @@
 import { encryptCredential, decryptCredential, importCredentialKey, isValidNip, isValidNrb, newCredentialKey } from "@automations/shared";
 import { comparePaymentsProjection, paymentStream, type ProjectionRow } from "@automations/librus-data";
 import { oneOf, parseArgs, required, secretName, weekday } from "./args.ts";
-import { dayOffPayload, familyOf, headOf, isoDate, manualStream, nextEvent } from "./day-off.ts";
+import { dayOffPayload, familyOf, headOf, isoDate, manualStream, nextEvent, type JournalRow } from "./day-off.ts";
 import { signWatcherKey } from "./jwt.ts";
 import { rekey } from "./rekey.ts";
 import type { RestClient, Row } from "./rest.ts";
@@ -325,7 +325,7 @@ const paymentsConsistency: Command = async (flags, _positional, deps) => {
   if (differences.length > 0) throw new Error(`${differences.length} difference(s) between the Journal and the payments table`);
 };
 
-async function appendOrReport(deps: AdminDeps, event: Awaited<ReturnType<typeof nextEvent>>, flags: Flags, done: string): Promise<void> {
+async function appendOrReport(deps: AdminDeps, event: JournalRow | null, flags: Flags, done: string): Promise<void> {
   if (event === null) {
     deps.print("No change: the Journal head has this content already");
     return;
