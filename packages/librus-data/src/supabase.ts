@@ -129,6 +129,7 @@ function journalQuery(familyId: string, where: JournalFilter): string[] {
     [where.childId, "child_id=eq."],
     [where.from, "day=gte."],
     [where.to, "day=lte."],
+    [where.before, "day=lt."],
     [where.since?.toISOString(), "recorded_at=gte."],
   ];
   const parts = optional.flatMap(([value, prefix]) => (value === undefined ? [] : [prefix + encodeURIComponent(value)]));

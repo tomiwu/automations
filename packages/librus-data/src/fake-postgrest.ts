@@ -25,13 +25,29 @@ function inPredicate(column: string, operand: string): Predicate {
   return (row) => values.includes(String(row[column]));
 }
 
+const compare = (column: string, operand: string, test: (a: string, b: string) => boolean): Predicate => (row) =>
+  typeof row[column] === "string" && test(row[column] as string, operand);
+
+const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Like Postgres `date`: a `YYYY-MM-DD` operand that is not a real day (for example `2026-11-31`) is a 400. */
+function checkDate(operand: string): string {
+  if (DATE_SHAPE.test(operand) && new Date(`${operand}T00:00:00Z`).toISOString().slice(0, 10) !== operand) {
+    throw new FakeBadRequest(`date/time field value out of range: "${operand}"`);
+  }
+  return operand;
+}
+
+/** A filter that Postgres would reject with 400. */
+class FakeBadRequest extends Error {}
+
 const OPERATORS: Record<string, (column: string, operand: string) => Predicate> = {
   eq: (column, operand) => (row) => String(row[column]) === operand,
   is: (column) => (row) => row[column] === null,
   in: inPredicate,
-  gte: (column, operand) => (row) => typeof row[column] === "string" && row[column] >= operand,
-  lte: (column, operand) => (row) => typeof row[column] === "string" && row[column] <= operand,
-  lt: (column, operand) => (row) => typeof row[column] === "string" && row[column] < operand,
+  gte: (column, operand) => compare(column, checkDate(operand), (a, b) => a >= b),
+  lte: (column, operand) => compare(column, checkDate(operand), (a, b) => a <= b),
+  lt: (column, operand) => compare(column, checkDate(operand), (a, b) => a < b),
 };
 
 function predicateFor(column: string, filter: string): Predicate {
@@ -164,6 +180,7 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
         return handle(method, url.pathname.replace("/rest/v1/", ""), url.searchParams, init);
       } catch (error) {
         if (error instanceof DuplicateKeyError) return json({ code: "23505", message: error.message }, 409);
+        if (error instanceof FakeBadRequest) return json({ code: "22008", message: error.message }, 400);
         throw error;
       }
     },

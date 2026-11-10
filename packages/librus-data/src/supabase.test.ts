@@ -25,6 +25,25 @@ runStorageContract("supabase (fake PostgREST)", async () => {
   return { storage, advanceDays, seedConfig: async (config) => server.seedConfig(config), seedFee: async (fee) => server.seedFee(fee) };
 });
 
+describe("day bounds", () => {
+  it("sends `before` as day=lt", async () => {
+    const { server, storage } = setup();
+    await storage.listHeads(FAMILY_ID, { from: "2026-11-01", before: "2026-12-01" });
+    const url = server.requests.at(-1)?.url ?? "";
+    expect(url).toContain("day=gte.2026-11-01");
+    expect(url).toContain("day=lt.2026-12-01");
+    expect(url).not.toContain("day=lte.");
+  });
+
+  it("answers 400 for a day that does not exist, like Postgres", async () => {
+    const { storage } = setup();
+    for (const day of ["2026-11-31", "2027-02-29", "2028-02-30"]) {
+      await expect(storage.listHeads(FAMILY_ID, { to: day })).rejects.toThrow("400");
+    }
+    await expect(storage.listHeads(FAMILY_ID, { to: "2028-02-29" })).resolves.toEqual([]);
+  });
+});
+
 describe("Journal requests", () => {
   const row = (index: number) => journalSample(1, `s${index}`);
   const journalRequests = (server: ReturnType<typeof setup>["server"]) =>

@@ -208,6 +208,8 @@ function journalTests(create: () => Promise<ContractHarness>): void {
     expect(await names({ kinds: [] })).toEqual([]);
     expect(await names({ from: "2025-01-11", to: "2025-01-12" })).toEqual(["b", "d"]);
     expect(await names({ from: "2025-01-01" })).toEqual(["a", "b", "d", "e"]);
+    expect(await names({ from: "2025-01-10", before: "2025-01-12" })).toEqual(["a", "d"]);
+    expect(await names({ before: "2025-01-11" })).toEqual(["a"]);
     expect(await names({ streams: ["a", "e"] })).toEqual(["a", "e"]);
     expect(await names({ since: new Date("2025-01-02T00:00:00Z") })).toEqual(["e"]);
   });

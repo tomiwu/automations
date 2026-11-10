@@ -77,6 +77,8 @@ export interface JournalFilter {
   from?: string;
   /** Last `day`, included. */
   to?: string;
+  /** First `day` after the range, not included (half-open range). Use `monthRange` for a month. */
+  before?: string;
   streams?: readonly string[];
   /** Only events recorded at or after this time. */
   since?: Date;

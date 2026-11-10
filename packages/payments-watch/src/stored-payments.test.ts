@@ -28,7 +28,7 @@ const check = (childId: string): NewJournalEvent => ({
   stream: `check:payments-watch:${childId}`, day: "2026-12-10", payload: { checkedAt: NOW.toISOString() },
 });
 
-async function setup(events: NewJournalEvent[]) {
+async function setup(events: NewJournalEvent[], now: Date = NOW) {
   const server = createFakePostgrest(NOW, KEY);
   const config = exampleConfig();
   config.children.push({ ...config.children[0]!, id: CHILD2, name: "Child Two" });
@@ -37,7 +37,7 @@ async function setup(events: NewJournalEvent[]) {
   await createSupabaseStorage(supabase).appendEvents(events);
   const counting = countFetches(server.fetch);
   const storage = createSupabaseStorage({ ...supabase, fetch: counting.fetch });
-  const runtime = { ...fakeRuntime({ now: NOW }), fetch: counting.fetch };
+  const runtime = { ...fakeRuntime({ now }), fetch: counting.fetch };
   return { runtime, storage, familyId: FAMILY_ID, counter: counting };
 }
 
@@ -102,5 +102,25 @@ describe("storedPaymentsExport", () => {
     const deps = await setup([payment(CHILD1, "2026-12", 5), payment(CHILD2, "2026-12", 6, { childId: undefined })]);
     const out = await storedPaymentsExport(deps);
     expect(out.payments.map((p) => [p.dueDay, p.childId])).toEqual([[5, CHILD1], [6, CHILD2]]);
+  });
+});
+
+describe("storedPaymentsExport month range", () => {
+  // Each month: its last day is in the export, the first day of the next month is not.
+  it.each([
+    ["2026-11", 30, "2026-12"],
+    ["2027-02", 28, "2027-03"],
+    ["2028-02", 29, "2028-03"],
+    ["2026-12", 31, "2027-01"],
+    ["2026-10", 31, "2026-11"],
+  ])("reads %s with a half-open range of real days", async (month, lastDay, next) => {
+    const deps = await setup([payment(CHILD1, month, 1), payment(CHILD1, month, lastDay), payment(CHILD1, next, 1)]);
+    const out = await storedPaymentsExport(deps, { month });
+    expect(out.payments.map((p) => `${p.month}/${p.dueDay}`)).toEqual([`${month}/1`, `${month}/${lastDay}`]);
+  });
+
+  it("defaults to November 2026 without a 400 (the reported bug)", async () => {
+    const deps = await setup([payment(CHILD1, "2026-11", 30)], new Date("2026-11-10T03:07:00Z"));
+    await expect(storedPaymentsExport(deps)).resolves.toMatchObject({ month: "2026-11", payments: [{ dueDay: 30 }] });
   });
 });
