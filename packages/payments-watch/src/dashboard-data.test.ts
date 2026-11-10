@@ -32,6 +32,7 @@ const payment = (id: string, feeId: string, month: string, amount: number, statu
   remindedAt: null,
   decidedAt: null,
   decidedBy: null,
+  refundCheckAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
 });
 const children = [

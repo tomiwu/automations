@@ -110,6 +110,18 @@ describe("read view", () => {
     expect(body).toContain("Example &lt;Organizer&gt;");
   });
 
+  it("shows the refund-check mark on a paid row that has the flag, read only", async () => {
+    const d = await deps();
+    const cookie = await sessionCookie(d);
+    const before = await (await handleDashboard(get("/", cookie), d, "")).text();
+    expect(before).not.toContain("Check for a refund");
+    const paid = (await d.storage.listPayments(FAMILY)).find((payment) => payment.status === "paid")!;
+    await d.storage.flagRefundCheck(paid.id, new Date("2026-02-09T08:00:00Z"));
+    const after = await (await handleDashboard(get("/", cookie), d, "")).text();
+    expect(after).toContain("Check for a refund");
+    expect((await d.storage.listPayments(FAMILY)).find((payment) => payment.id === paid.id)?.status).toBe("paid");
+  });
+
   it("uses the mount prefix for links and the cookie path", async () => {
     const d = await deps();
     const response = await handleDashboard(post("/pay/login", `user=adult-one&token=${TOKEN}`), d, "/pay");

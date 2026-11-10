@@ -30,7 +30,7 @@ export interface CancelDue {
 
 export interface CounterStep {
   counters: Counters;
-  /** The pending Payments that reached the count. */
+  /** The pending and paid Payments that reached the count. */
   due: CancelDue[];
   /** The cancelled Payments whose charge is listed again. */
   listed: Watched[];
@@ -62,18 +62,21 @@ function countCandidate(item: Watched, candidate: Candidate, previous: Counters[
   else step.counters[streamOf(item)] = { reason: candidate.reason, count };
 }
 
+/** A pending Payment can be cancelled. A paid Payment with no flag yet can get the refund-check flag. */
+const isCounted = ({ status, refundCheckAt }: Payment): boolean => status === "pending" || (status === "paid" && refundCheckAt === null);
+
 function advanceOne(item: Watched, previous: Counters[string] | undefined, step: CounterStep): void {
   const { observation, payment } = item;
   if (observation.kind === "listed") {
     if (payment.status === "cancelled") step.listed.push(item);
     return;
   }
-  if (payment.status === "pending") countCandidate(item, observation, previous, step);
+  if (isCounted(payment)) countCandidate(item, observation, previous, step);
 }
 
 /**
  * Moves the counters by the good readings of one successful pass. A candidate adds 1 (a new reason starts at 1).
- * A listed charge resets the counter. A Payment that is not pending has no counter. A Fee with no good reading
+ * A listed charge resets the counter. A Payment that is not pending, and not paid without a refund-check flag, has no counter. A Fee with no good reading
  * keeps its counter. A counter of another month is dropped.
  */
 export function advanceCounters(stored: Counters, watched: readonly Watched[], month: string): CounterStep {

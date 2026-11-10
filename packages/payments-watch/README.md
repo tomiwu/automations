@@ -63,6 +63,7 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 
 ## Cancel edit
 
+- A `paid` Payment that the Organizer no longer lists (same N=2 pass rule and reset rules as the Organizer cancel) gets the refund-check flag `payments.refund_check_at` (migration 0014, `flagRefundCheck`). No Journal event is made and the status stays `paid`. Each Recipient of the Child gets one notice (Outbox key `refund-check:<payment id>:<chat id>`). The Dashboard shows the flag on the paid row. A `skipped` or `cancelled` Payment gets nothing.
 - When a QR photo is sent (first Notification or reminder), the Telegram message ID is stored in the Outbox row (`outbox.message_id`, migration 0013, `recordMessageId`). It is a delivery field like `delivered_at`. It is not in the Journal.
 - `editCancelledMessages` runs in each pass (`RunDeps.client`, set by `./scheduled` when `paymentPhotos` is on). For each `cancelled` Payment whose head is `PaymentCancelled`, it edits each stored message of each Recipient: the caption becomes "CANCELLED, do not pay." plus the reason, and the Paid and Skip buttons are removed (`editMessageCaption` with an empty keyboard).
 - `fee_disabled`: edit only. `organizer_void` and `organizer_withdrawn`: edit, and one short new text message to the Recipient (Outbox key `cancel-notice:<payment id>:<seq>:<chat id>`, sent by the text delivery of the same pass).

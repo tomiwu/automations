@@ -376,6 +376,20 @@ function paymentTests(create: () => Promise<ContractHarness>): void {
     expect(await storage.cancelPendingPayment("00000000-0000-4000-8000-00000000dead")).toBe(false);
   });
 
+  it("flags a paid Payment once for a refund check, and keeps the status", async () => {
+    const storage = await start();
+    const { id } = await storage.upsertPayment(newPayment());
+    const at = new Date("2025-02-12T08:00:00Z");
+    expect(await storage.flagRefundCheck(id, at)).toBe(false);
+    await storage.setPaymentStatus(id, "paid", "1000001");
+    expect((await storage.listPayments(FAMILY_ID))[0]?.refundCheckAt).toBeNull();
+    expect(await storage.flagRefundCheck(id, at)).toBe(true);
+    expect((await storage.listPayments(FAMILY_ID))[0]).toMatchObject({ status: "paid", refundCheckAt: at });
+    expect(await storage.flagRefundCheck(id, new Date("2025-02-20T08:00:00Z"))).toBe(false);
+    expect((await storage.listPayments(FAMILY_ID))[0]?.refundCheckAt).toEqual(at);
+    expect(await storage.flagRefundCheck("00000000-0000-4000-8000-00000000dead", at)).toBe(false);
+  });
+
   it("opens a cancelled Payment again, and only a cancelled one", async () => {
     const storage = await start();
     const { id } = await storage.upsertPayment(newPayment());

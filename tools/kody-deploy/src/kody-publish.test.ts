@@ -44,7 +44,7 @@ async function fakeKody(plan: Script) {
 }
 
 function publish(url: string, env: Record<string, string> = {}) {
-  const started = Date.now();
+  const started = performance.now();
   return new Promise<{ code: number | null; out: string; ms: number }>((resolve) => {
     const child = spawn("node", [script, PKG], {
       env: { PATH: process.env.PATH ?? "", KODY_API_TOKEN: FAKE_TOKEN, KODY_API_URL: url, KODY_PUBLISH_POLL_MS: "20", KODY_PUBLISH_WAIT_MS: "5000", ...env },
@@ -52,7 +52,7 @@ function publish(url: string, env: Record<string, string> = {}) {
     let out = "";
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (out += d));
-    child.on("close", (code) => resolve({ code, out, ms: Date.now() - started }));
+    child.on("close", (code) => resolve({ code, out, ms: performance.now() - started }));
   });
 }
 

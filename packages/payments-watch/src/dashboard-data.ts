@@ -9,6 +9,8 @@ export interface DashboardRow {
   /** Grosze. */
   amount: number;
   status: Payment["status"];
+  /** The Organizer no longer lists this paid charge (payments contract v0.2, PC2). */
+  refundCheck: boolean;
 }
 
 export interface MonthSpend {
@@ -61,6 +63,7 @@ function toRow(payment: Payment, fee: Fee, child: string): DashboardRow {
     dueDate: `${payment.month}-${pad(fee.dueDay)}`,
     amount: payment.amount,
     status: payment.status,
+    refundCheck: payment.refundCheckAt !== null,
   };
 }
 

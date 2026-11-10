@@ -38,6 +38,7 @@ const payment: Payment = {
   decidedAt: null,
   decidedBy: null,
   createdAt: new Date("2025-02-10T08:00:00Z"),
+  refundCheckAt: null,
 };
 
 const png = Buffer.from([137, 80, 78, 71]);
