@@ -39,6 +39,8 @@ Before a push, run `npm run check`. It runs typecheck, test, crap and gitleaks (
 
 Requirements: Node 22 or later. The repository uses npm workspaces.
 
+A new git worktree needs its own `npm ci`. With a `node_modules` linked from another checkout, the workspace packages come from that checkout and the tests run old code. Each workspace's vitest stops at once with "workspace packages resolve outside this checkout: run npm ci here" (`vitest.global-setup.ts`, `tools/test-setup`).
+
 ## License
 
 MIT. See `LICENSE`.
