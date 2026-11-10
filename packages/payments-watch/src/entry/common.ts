@@ -24,11 +24,11 @@ export const telegramMessenger: Messenger = {
  * encrypted rows in Supabase; `runtime.secret(name)` decrypts them.
  */
 export async function entryDeps() {
-  const { supabaseUrl, familyId, credentialKey } = await loadDeploymentConfig(kodyStorage());
+  const { supabaseUrl, familyId, credentialKey, paymentPhotos = false } = await loadDeploymentConfig(kodyStorage());
   const supabase = { url: supabaseUrl, key: SUPABASE_KEY_PLACEHOLDER, fetch: kodyHost.fetch };
   const resolve = createCredentialResolver(createSupabaseCredentialStore(supabase), await importCredentialKey(credentialKey), familyId);
   const runtime = createKodyRuntime(kodyHost, resolve);
-  return { runtime, storage: createSupabaseStorage(supabase), familyId };
+  return { runtime, storage: createSupabaseStorage(supabase), familyId, paymentPhotos };
 }
 
 /** Dependencies for the Dashboard app: the storage, the Family and the allowlist from the package storage. */
@@ -38,7 +38,7 @@ export async function dashboardDeps(): Promise<DashboardDeps> {
 }
 
 /** Calls the bot API through the external `telegram` package. The token stays in the Kody secret. */
-const telegramClient: TelegramClient = {
+export const telegramClient: TelegramClient = {
   async call(method, params) {
     await request({ method, params, secretName: "TELEGRAM_BOT_TOKEN", confirm: true });
   },

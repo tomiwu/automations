@@ -1,7 +1,7 @@
 import { paymentStream, planPaymentSent } from "@automations/librus-data";
 import type { NewJournalEvent, PaymentSent, StorageAdapter } from "@automations/librus-data";
 
-const PAYMENT_KEY = /^payment:([^:]+):[^:]+(:reminder)?$/;
+export const PAYMENT_KEY = /^payment:([^:]+):[^:]+(:reminder)?$/;
 
 /** Which Payments got a first Notification or a reminder, from the Outbox keys that were delivered. */
 export function sentOfKeys(keys: readonly string[]): Map<string, PaymentSent[]> {

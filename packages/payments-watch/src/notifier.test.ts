@@ -83,6 +83,15 @@ describe("createTelegramNotifier", () => {
     );
   });
 
+  it("starts the caption of a reminder with the reminder marker", async () => {
+    const { calls, notifier } = setup();
+    await notifier.sendPayment(recipient("en"), { child: CHILD, fee, payment, reminder: true }, qr);
+    await notifier.sendPayment(recipient("pl"), { child: CHILD, fee, payment, reminder: true }, qr);
+    expect(String(calls[0]?.params.caption).split("\n")[0]).toBe("Reminder: not paid yet.");
+    expect(String(calls[1]?.params.caption).split("\n")[0]).toBe("Przypomnienie: brak wpłaty.");
+    expect(calls[0]?.params.reply_markup).toBeDefined();
+  });
+
   it("adds two inline buttons with the callback data", async () => {
     const { calls, notifier } = setup();
     await notifier.sendPayment(recipient("en"), { child: CHILD, fee, payment }, qr);

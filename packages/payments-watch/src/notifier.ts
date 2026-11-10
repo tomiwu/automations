@@ -8,6 +8,8 @@ export interface PaymentNotice {
   child: Child;
   fee: Fee;
   payment: Payment;
+  /** True for the reminder. The caption then starts with the reminder marker. */
+  reminder?: boolean;
 }
 
 /** Delivers a Payment and its QR code to a Recipient. Watcher code knows only this port. */
@@ -34,6 +36,7 @@ function captionOf(recipient: Recipient, notice: PaymentNotice): string {
   const { child, fee, payment } = notice;
   const language = recipient.language;
   const lines = [
+    ...(notice.reminder ? [t(language, "payment.reminder_marker")] : []),
     t(language, "payment.caption", {
       child: child.name,
       organizer: fee.organizer,
