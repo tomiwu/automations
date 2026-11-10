@@ -48,7 +48,7 @@ function paymentOf(head: JournalEvent): StoredPayment {
   const p = head.payload as unknown as Omit<StoredPayment, "stream" | "seq" | "eventType" | "lastChanged">;
   return {
     stream: head.stream, seq: head.seq, eventType: head.eventType, lastChanged: head.recordedAt.toISOString(),
-    childId: p.childId, feeId: p.feeId, organizer: p.organizer, month: p.month, dueDay: p.dueDay, status: p.status,
+    childId: head.childId, feeId: p.feeId, organizer: p.organizer, month: p.month, dueDay: p.dueDay, status: p.status,
     amount: p.amount, amountSource: p.amountSource,
     notifiedAt: p.notifiedAt ?? null, remindedAt: p.remindedAt ?? null, decidedAt: p.decidedAt ?? null, decidedBy: p.decidedBy ?? null,
   };

@@ -105,4 +105,16 @@ describe("storedSessionsExport", () => {
     const deps = await setup([]);
     await expect(storedSessionsExport(deps, input)).rejects.toThrow(message);
   });
+
+  it("gives the Journal child_id on each Session and Account", async () => {
+    const deps = await setup([
+      sessionEvent(CHILD1, "a", "2026-10-21"),
+      sessionEvent(CHILD2, "b", "2026-10-22", { service: "edusky", accountId: EDUSKY_ACCOUNT }),
+      sessionEvent(CHILD2, "c", "2026-10-23", {}, { stream: "session:other-key-shape:c" }),
+    ]);
+    const result = await storedSessionsExport(deps);
+    expect(result.sessions.map((s) => [s.id, s.childId])).toEqual([["a", CHILD1], ["b", CHILD2], ["c", CHILD2]]);
+    expect(result.sessions.every((s) => typeof s.childId === "string" && s.childId !== "")).toBe(true);
+    expect(result.accounts.every((a) => [CHILD1, CHILD2].includes(a.childId))).toBe(true);
+  });
 });

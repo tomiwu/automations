@@ -71,7 +71,8 @@ function checkChildId(childId: unknown): string | undefined {
 }
 
 function sessionOf(head: StreamState, childNames: ReadonlyMap<string, string>): StoredSession {
-  const [, childId = "", ...rest] = head.stream.split(":");
+  const [, , ...rest] = head.stream.split(":");
+  const { childId } = head;
   const s = head.state as unknown as Session & { warning: string | null };
   return {
     id: rest.join(":"), stream: head.stream, childId, child: childNames.get(childId) ?? "", activity: s.activity, service: s.service,

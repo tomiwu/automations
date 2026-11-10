@@ -17,6 +17,8 @@ export interface CancelReason {
 
 export interface StoredLesson extends Lesson {
   id: string;
+  /** The Journal `child_id`. */
+  childId: string;
   stream: string;
   cancelled: boolean;
   vanished: boolean;
@@ -29,6 +31,8 @@ export interface StoredLesson extends Lesson {
 
 export interface StoredHomework {
   id: string;
+  /** The Journal `child_id`. */
+  childId: string;
   stream: string;
   category: string;
   isTest: boolean;
@@ -73,7 +77,7 @@ function resolveRange(object: Record<string, unknown>, today: string): Range {
 function lessonOf(head: StreamState): StoredLesson {
   const { date, period, start, end, subject, teacher, room, status, substituteTeacher } = head.state as unknown as Lesson;
   return {
-    id: "", stream: head.stream, date, period, start, end, subject, teacher, room, status, substituteTeacher,
+    id: "", childId: head.childId, stream: head.stream, date, period, start, end, subject, teacher, room, status, substituteTeacher,
     cancelled: status === "cancelled", vanished: head.vanished, seq: head.seq, lastChanged: head.lastChanged.toISOString(), homeworkGiven: [], testAtNextLesson: [],
   };
 }
@@ -81,7 +85,7 @@ function lessonOf(head: StreamState): StoredLesson {
 function homeworkOf(head: StreamState): StoredHomework {
   const s = head.state as Record<string, unknown>;
   return {
-    id: String(s.librusId), stream: head.stream, category: String(s.category), isTest: Boolean(s.isTest), date: String(s.date),
+    id: String(s.librusId), childId: head.childId, stream: head.stream, category: String(s.category), isTest: Boolean(s.isTest), date: String(s.date),
     subject: String(s.subject), content: String(s.content), teacher: String(s.teacher),
     lessonNo: (s.lessonNo as string | null) ?? null, start: (s.start as string | null) ?? null, end: (s.end as string | null) ?? null,
     vanished: head.vanished, seq: head.seq, lastChanged: head.lastChanged.toISOString(),

@@ -115,6 +115,7 @@ describe("projectStream and projectHeads", () => {
     const events = [await head("s1", 1, "A1"), await head("s1", 2, "B2", "LessonChanged")];
     expect(projectStream(events)).toEqual({
       stream: "s1",
+      childId: CHILD_ID,
       state: { room: "B2" },
       vanished: false,
       seq: 2,

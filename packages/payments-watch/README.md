@@ -90,7 +90,7 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 ## The `./stored-payments` export
 
 - **Input:** `{ childId?, month? }`. `month` is `YYYY-MM`. It is the current month in the Family time zone by default, and at most 12 months back. Other keys are rejected.
-- **Output:** `{ timezone, month, lastSavedAt, payments, fetches? }`. `payments` are the head states of the `payment:` streams of the month, ordered by `dueDay`. Each has `stream`, `seq`, `eventType`, `lastChanged`, `childId`, `feeId`, `organizer`, `month`, `dueDay` (1 to 28), `status` (`pending`, `paid` or `skipped`), `amount` (grosze), `amountSource`, `notifiedAt`, `remindedAt`, `decidedAt` and `decidedBy`. A reader derives `overdue` from `status`, `month` and `dueDay`.
+- **Output:** `{ timezone, month, lastSavedAt, payments, fetches? }`. `payments` are the head states of the `payment:` streams of the month, ordered by `dueDay`. Each has `stream`, `seq`, `eventType`, `lastChanged`, `childId` (the Journal `child_id`), `feeId`, `organizer`, `month`, `dueDay` (1 to 28), `status` (`pending`, `paid` or `skipped`), `amount` (grosze), `amountSource`, `notifiedAt`, `remindedAt`, `decidedAt` and `decidedBy`. A reader derives `overdue` from `status`, `month` and `dueDay`.
 - `lastSavedAt` maps each Child ID to the time of the last `CheckCompleted` in `check:payments-watch:<childId>`, or `null` before the first check.
 - It never returns a bank account, NIP, title, recipient or source URL.
 - **Fetches:** the config, the payment heads and the check heads. This is 3 Supabase fetches. There is no organizer or Librus fetch.

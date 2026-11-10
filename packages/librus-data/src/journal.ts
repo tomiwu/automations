@@ -130,6 +130,8 @@ export async function checkEvent(input: CheckInput): Promise<NewJournalEvent> {
 /** The current state of one stream. */
 export interface StreamState {
   stream: string;
+  /** The Journal `child_id` of the stream. */
+  childId: string;
   state: Record<string, unknown>;
   vanished: boolean;
   seq: number;
@@ -139,6 +141,7 @@ export interface StreamState {
 
 const stateOf = (event: JournalEvent): StreamState => ({
   stream: event.stream,
+  childId: event.childId,
   state: event.payload,
   vanished: event.eventType.endsWith("Vanished"),
   seq: event.seq,
