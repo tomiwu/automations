@@ -30,7 +30,10 @@ npm ci
 npm run typecheck
 npm test
 npm run crap   # fails if a function has a CRAP score of 6 or more
+npm run test:sql:local   # migration changed: SQL tests on a throwaway postgres:17
 ```
+
+When you change a file in `supabase/migrations`, run `npm run test:sql:local` before the push. It needs podman or docker, and `psql` in the `PATH`.
 
 Requirements: Node 22 or later. The repository uses npm workspaces.
 

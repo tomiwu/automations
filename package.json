@@ -10,6 +10,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "crap": "npm run crap --workspaces --if-present",
+    "test:sql:local": "bash scripts/test-sql-local.sh",
     "sandcastle": "npx tsx .sandcastle/main.mts"
   },
   "devDependencies": {
