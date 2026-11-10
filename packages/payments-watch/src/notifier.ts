@@ -12,16 +12,23 @@ export interface PaymentNotice {
   reminder?: boolean;
 }
 
-/** Delivers a Payment and its QR code to a Recipient. Watcher code knows only this port. */
+/** Delivers a Payment and its QR code to a Recipient. Watcher code knows only this port. Gives the Telegram message ID when known. */
 export interface Notifier {
-  sendPayment(recipient: Recipient, notice: PaymentNotice, qr: ZbpQr): Promise<void>;
+  sendPayment(recipient: Recipient, notice: PaymentNotice, qr: ZbpQr): Promise<number | void>;
 }
 
 export type TelegramParams = Record<string, string | number | boolean | Uint8Array | object>;
 
-/** Calls one method of the Telegram bot API. */
+/** Calls one method of the Telegram bot API. It gives the result of the call, when there is one. */
 export interface TelegramClient {
-  call(method: string, params: TelegramParams): Promise<void>;
+  call(method: string, params: TelegramParams): Promise<unknown>;
+}
+
+/** Reads `message_id` from a Telegram result, or from the `{ ok, result }` envelope of the bot API. */
+export function messageIdOf(response: unknown): number | undefined {
+  const record = (response ?? {}) as Record<string, unknown>;
+  const id = record.message_id ?? record.messageId;
+  return typeof id === "number" ? id : record.result === undefined ? undefined : messageIdOf(record.result);
 }
 
 const pad = (value: number): string => String(value).padStart(2, "0");
@@ -70,12 +77,12 @@ function buttonsOf(recipient: Recipient, payment: Payment) {
 export function createTelegramNotifier(client: TelegramClient): Notifier {
   return {
     async sendPayment(recipient, notice, qr) {
-      await client.call("sendPhoto", {
+      return messageIdOf(await client.call("sendPhoto", {
         chat_id: recipient.telegram_chat_id,
         photo: qr.png,
         caption: captionOf(recipient, notice),
         reply_markup: buttonsOf(recipient, notice.payment),
-      });
+      }));
     },
   };
 }
@@ -98,6 +105,7 @@ export function createTelegramHttpClient(fetchFn: FetchFn, token: string): Teleg
         body: formOf(params),
       });
       if (!response.ok) throw new Error(`Telegram ${method} failed with status ${response.status}`);
+      return response.json().catch(() => undefined);
     },
   };
 }

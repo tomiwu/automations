@@ -30,7 +30,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
   /** Queues the entry unless its key exists. Returns true if the entry is new. */
   const enqueue = (entry: NewNotification): boolean => {
     if (outbox.has(entry.key)) return false;
-    outbox.set(entry.key, { ...entry, queuedAt: now(), deliveredAt: null });
+    outbox.set(entry.key, { ...entry, queuedAt: now(), deliveredAt: null, messageId: null });
     return true;
   };
   const deliver = (key: string): void => {
@@ -105,6 +105,12 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
     pendingNotifications: async (familyId) =>
       [...outbox.values()].filter((entry) => entry.familyId === familyId && entry.deliveredAt === null),
     markDelivered: async (key) => deliver(key),
+    recordMessageId: async (key, messageId) => {
+      const entry = outbox.get(key);
+      if (entry) entry.messageId = messageId;
+    },
+    sentMessages: async (familyId) =>
+      [...outbox.values()].filter((entry) => entry.familyId === familyId && entry.messageId !== null).map((entry) => ({ ...entry })),
     markDeliveredMany: async (keys) => keys.forEach(deliver),
     loadConfig: async (familyId) => {
       const config = configs.get(familyId);

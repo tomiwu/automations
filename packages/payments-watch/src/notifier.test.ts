@@ -164,3 +164,17 @@ describe("createTelegramHttpClient", () => {
     expect((error as Error).message).toBe("Telegram sendPhoto failed with status 400");
   });
 });
+
+describe("messageIdOf", () => {
+  it.each([
+    [{ message_id: 5 }, 5],
+    [{ ok: true, result: { message_id: 6 } }, 6],
+    [{ ok: true, messageId: 7 }, 7],
+    [undefined, undefined],
+    ["text", undefined],
+    [{ ok: true }, undefined],
+  ])("reads the message ID from %j", async (response, expected) => {
+    const { messageIdOf } = await import("./notifier.ts");
+    expect(messageIdOf(response)).toBe(expected);
+  });
+});

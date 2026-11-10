@@ -45,6 +45,10 @@ const OPERATORS: Record<string, (column: string, operand: string) => Predicate> 
   eq: (column, operand) => (row) => String(row[column]) === operand,
   is: (column) => (row) => row[column] === null,
   in: inPredicate,
+  not: (column, operand) => {
+    const inner = predicateFor(column, operand);
+    return (row) => !inner(row);
+  },
   gte: (column, operand) => compare(column, checkDate(operand), (a, b) => a >= b),
   lte: (column, operand) => compare(column, checkDate(operand), (a, b) => a <= b),
   lt: (column, operand) => compare(column, checkDate(operand), (a, b) => a < b),
@@ -116,7 +120,7 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
       return { id: randomUUID(), status: "pending", created_at: time, ...empty };
     }
     if (name === "journal_events") return { recorded_at: time };
-    return { queued_at: time, delivered_at: null, first_seen: time };
+    return { queued_at: time, delivered_at: null, message_id: null, first_seen: time };
   };
 
   const insert = (name: string, body: Row[], ignoreDuplicates: boolean): Row[] => {

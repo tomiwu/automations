@@ -1,7 +1,8 @@
 import type { StorageAdapter } from "@automations/librus-data";
 import { isFetchCapError, type Runtime } from "@automations/shared";
 import { deliverPending, type Messenger } from "@tomiwu/librus-watch";
-import type { Notifier } from "./notifier.ts";
+import { editCancelledMessages } from "./cancel-edit.ts";
+import type { Notifier, TelegramClient } from "./notifier.ts";
 import { deliverPaymentPhotos, withoutPaymentEntries } from "./payment-delivery.ts";
 import { recordSent } from "./sent-journal.ts";
 import { runPayments } from "./engine.ts";
@@ -21,6 +22,8 @@ export interface RunDeps {
    * delivery does not see them. Without it, they go out as text (the old path).
    */
   notifier?: Notifier;
+  /** With a client, the sent QR messages of a cancelled Payment are edited (payments contract v0.2 section 3b, PC4). */
+  client?: TelegramClient;
 }
 
 /** Sends the Payment photos. Returns the sent keys; a failure goes to `failures`. */
@@ -33,6 +36,16 @@ async function deliverPhotos(deps: RunDeps, storage: StorageAdapter, failures: s
   } catch (error) {
     failures.push(`photos: ${messageOf(error)}`);
     return [];
+  }
+}
+
+/** Edits the QR messages of the cancelled Payments. A failure goes to `failures`. */
+async function editCancelled(deps: RunDeps, failures: string[]): Promise<void> {
+  if (!deps.client) return;
+  try {
+    await editCancelledMessages({ storage: deps.storage, familyId: deps.familyId, client: deps.client, log: (m) => deps.runtime.log("warn", m) });
+  } catch (error) {
+    failures.push(`cancel edit: ${messageOf(error)}`);
   }
 }
 
@@ -62,6 +75,7 @@ export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
   } catch (error) {
     failures.push(`payments: ${messageOf(error)}`);
   }
+  await editCancelled(deps, failures);
   const delivered: string[] = await deliverPhotos(deps, storage, failures);
   const textStorage = deps.notifier ? withoutPaymentEntries(storage) : storage;
   const watching: StorageAdapter = {

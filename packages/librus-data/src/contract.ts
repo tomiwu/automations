@@ -249,6 +249,16 @@ function outboxTests(create: () => Promise<ContractHarness>): void {
     expect((await storage.pendingNotifications(FAMILY_ID)).map((item) => item.key)).toEqual(["k2"]);
   });
 
+  it("stores the Telegram message ID of an entry and lists only entries that have one", async () => {
+    const { storage } = await create();
+    await storage.enqueueNotifications([entry("k1"), entry("k2"), entry("k3", OTHER_FAMILY_ID)]);
+    await storage.recordMessageId("k1", 4242);
+    await storage.recordMessageId("k3", 7);
+    const sent = await storage.sentMessages(FAMILY_ID);
+    expect(sent.map((item) => [item.key, item.messageId])).toEqual([["k1", 4242]]);
+    expect((await storage.pendingNotifications(FAMILY_ID)).map((item) => [item.key, item.messageId])).toEqual([["k1", 4242], ["k2", null]]);
+  });
+
   it("lists only pending entries of the Family", async () => {
     const { storage } = await create();
     await storage.enqueueNotification(entry("k1"));

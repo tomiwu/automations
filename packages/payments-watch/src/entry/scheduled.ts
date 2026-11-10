@@ -16,7 +16,7 @@ export default async function scheduled(input: unknown = {}): Promise<{ ok: true
   const deps = await entryDeps();
   const source = createWebFeeSource(deps);
   const notifier = deps.paymentPhotos ? createTelegramNotifier(telegramClient) : undefined;
-  const failures = await runPaymentsWatch({ ...deps, messenger: telegramMessenger, source, notifier });
+  const failures = await runPaymentsWatch({ ...deps, messenger: telegramMessenger, source, notifier, client: deps.paymentPhotos ? telegramClient : undefined });
   if (failures.length > 0) throw new Error(failures.join("; "));
   return { ok: true };
 }
