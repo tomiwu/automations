@@ -46,6 +46,8 @@ exit 1`,
     gh: `echo "token: ${FAKE_TOKEN}"; case "$1" in auth) exit \${GH_AUTH_RC:-0} ;; repo) exit \${GH_REPO_RC:-0} ;; *) echo "gh version 0" ;; esac`,
     claude: "echo 1.0.0",
     agent: "echo 1.0.0",
+    node: "echo v22.0.0",
+    git: "echo git version 2.0.0",
   };
   for (const [name, body] of Object.entries(commands)) {
     if (!options.omit?.includes(name)) executable(join(stub, name), body);
