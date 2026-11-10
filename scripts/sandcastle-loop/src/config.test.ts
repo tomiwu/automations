@@ -16,6 +16,28 @@ describe("loadConfig", () => {
     expect(c.image).toBeUndefined();
     expect(c.maxIterations).toBe(10);
     expect(c.promptDir).toBe("/prompts");
+    expect(c.sandboxReady).toBe("npm ci --no-audit --no-fund");
+    expect(c.sandboxReady).not.toContain("|| true");
+    expect(c).toMatchObject({ gh: "gh", git: "git", checksLock: undefined, ciLogFilter: undefined, doctor: "/doctor.sh", ciRerun: true });
+    expect(c.retryDelaysMs).toEqual([5000, 15000, 45000, 90000]);
+  });
+
+  it("reads the repo-specific settings (e1003 deliberate differences)", () => {
+    const c = loadConfig({
+      LOOP_SANDBOX_READY: "cargo build --all-targets", LOOP_GH: "/workspace/bin/ghx", LOOP_GIT: "/workspace/bin/gitx",
+      LOOP_RETRY_DELAYS: "1,2", LOOP_CHECKS_LOCK: "/tmp/esphome-compile.lock", LOOP_CI_LOG_FILTER: "grep -v Downloading",
+      LOOP_DOCTOR: "/custom/doctor.sh", LOOP_CI_RERUN: "0",
+    }, "/w/r", "/p/prompts");
+    expect(c).toMatchObject({
+      sandboxReady: "cargo build --all-targets", gh: "/workspace/bin/ghx", git: "/workspace/bin/gitx", retryDelaysMs: [1000, 2000],
+      checksLock: "/tmp/esphome-compile.lock", ciLogFilter: "grep -v Downloading", doctor: "/custom/doctor.sh", ciRerun: false,
+    });
+  });
+
+  it("turns off the hook and the doctor with an empty value", () => {
+    const c = loadConfig({ LOOP_SANDBOX_READY: "", LOOP_DOCTOR: "" }, "/w/r", "/p/prompts");
+    expect(c.sandboxReady).toBe("");
+    expect(c.doctor).toBe("");
   });
 
   it("reads the environment", () => {

@@ -7,6 +7,8 @@
 //   3. Run the implementer agent, then the reviewer agent.
 //   4. Run LOOP_CHECKS in the sandbox. If a check fails, run the fixer agent (MAX_FIX_ATTEMPTS).
 //   5. Push the branch, open a PR, wait for CI, squash-merge, close the issue.
+// Before iteration 1 the preflight doctor (doctor.sh) runs. When it fails, no agent starts.
+// Host gh and git push/pull calls are retried (LOOP_RETRY_DELAYS), so one network error does not stop the loop.
 // The loop stops when no issue is ready, or when an issue cannot pass.
 // See README.md in this directory for the environment variables.
 //
@@ -21,16 +23,46 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type ModelSpec } from "./src/config.ts";
 import { issueText, nextIssue, type Exec } from "./src/issues.ts";
+import { withLock } from "./src/lock.ts";
 import { ModelOrder, withFallback } from "./src/models.ts";
+import { preflight } from "./src/preflight.ts";
+import { retrySync, retryingExec } from "./src/retry.ts";
 
 const config = loadConfig(process.env, process.cwd(), join(dirname(fileURLToPath(import.meta.url)), "prompts"));
 const repoFlags = config.repo ? ["--repo", config.repo] : [];
 
-const sh: Exec = (cmd, args) =>
-  execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }).trim();
+// "gh" and "git" in this file are the host commands LOOP_GH and LOOP_GIT (wrappers are allowed).
+const hostCommand = (cmd: string): string => (cmd === "gh" ? config.gh : cmd === "git" ? config.git : cmd);
+const retry = { delaysMs: config.retryDelaysMs, log: console.log };
 
+const rawSh: Exec = (cmd, args) =>
+  execFileSync(hostCommand(cmd), args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }).trim();
+const sh: Exec = retryingExec(rawSh, new Set(["gh", "git"]), retry);
+
+// A read that may fail without a stop. It is retried; after the last attempt it gives the output it has.
 function quiet(cmd: string, args: string[]): string {
-  return spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout.trim();
+  const once = () => {
+    const r = spawnSync(hostCommand(cmd), args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    if (r.status !== 0) throw new Error(`${cmd} ${args.slice(0, 2).join(" ")} exited ${r.status}`);
+    return r.stdout.trim();
+  };
+  try {
+    return retrySync(`${cmd} ${args.slice(0, 2).join(" ")}`, once, retry);
+  } catch {
+    return "";
+  }
+}
+
+// A step that may fail (for example `gh pr update-branch`). It is retried; returns true on success.
+function tryStep(cmd: string, args: string[]): boolean {
+  try {
+    retrySync(`${cmd} ${args.slice(0, 2).join(" ")}`, () => {
+      if (spawnSync(hostCommand(cmd), args, { stdio: "inherit" }).status !== 0) throw new Error(`${cmd} failed`);
+    }, retry);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const queueOptions = (done: Set<number>) =>
@@ -42,8 +74,16 @@ if (process.env.DRY_RUN) {
   process.exit(0);
 }
 
+const doctorOk = preflight(
+  () => (config.doctor ? spawnSync("bash", [config.doctor], { stdio: "inherit", env: process.env }).status ?? 1 : 0),
+  process.env.LOOP_DOCTOR_DONE === "1",
+  console.log,
+);
+if (!doctorOk) process.exit(1);
+
 const order = new ModelOrder(config.models);
-const hooks = { sandbox: { onSandboxReady: [{ command: "npm ci --no-audit --no-fund || true" }] } };
+// The hook has no ignore-failure suffix: a failed sandbox-ready hook stops the sandbox, so no agent works in a broken sandbox.
+const hooks = config.sandboxReady ? { sandbox: { onSandboxReady: [{ command: config.sandboxReady }] } } : {};
 const sandboxProvider = () => (config.image ? podman({ imageName: config.image }) : podman());
 
 function agentFor(spec: ModelSpec) {
@@ -59,8 +99,10 @@ function runPhase(sandbox: sandcastle.Sandbox, options: RunOptions, text: string
     sandbox.run({ idleTimeoutSeconds: 1800, ...options, promptArgs, agent: agentFor(spec) }), console.log);
 }
 
+// LOOP_CHECKS_LOCK: a box-wide lock file, so only one heavy check runs at a time on the box.
 async function runChecks(sandbox: sandcastle.Sandbox): Promise<{ ok: boolean; log: string }> {
-  const r = await sandbox.exec(`(${config.checks}) > /tmp/check.log 2>&1; rc=$?; tail -n 150 /tmp/check.log; exit $rc`);
+  const r = await withLock(config.checksLock, () =>
+    sandbox.exec(`(${config.checks}) > /tmp/check.log 2>&1; rc=$?; tail -n 150 /tmp/check.log; exit $rc`));
   return { ok: r.exitCode === 0, log: `## checks (\`${config.checks}\`)\n${r.stdout}\n` };
 }
 
@@ -90,14 +132,35 @@ async function waitCi(url: string): Promise<boolean> {
   return false;
 }
 
+function failedRunIds(url: string): string[] {
+  const jq = '.[] | select(.conclusion == "failure") | .databaseId';
+  return quiet("gh", ["run", "list", ...repoFlags, "--commit", headSha(url), "--json", "databaseId,conclusion", "--jq", jq]).split("\n").filter(Boolean);
+}
+
+// LOOP_CI_LOG_FILTER: an optional shell filter (stdin to stdout) that removes download noise from a CI log.
+function filtered(log: string): string {
+  if (!config.ciLogFilter) return log;
+  const r = spawnSync("bash", ["-c", config.ciLogFilter], { input: log, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return r.status === 0 ? r.stdout : log;
+}
+
 // Collect the last lines of the log of each failed CI job of a PR.
 function failedCiLog(url: string): string {
-  const jq = '.[] | select(.conclusion == "failure") | .databaseId';
-  const ids = quiet("gh", ["run", "list", ...repoFlags, "--commit", headSha(url), "--json", "databaseId,conclusion", "--jq", jq]).split("\n").filter(Boolean);
-  return ids.map((id) => {
-    const raw = quiet("gh", ["run", "view", id, ...repoFlags, "--log-failed"]);
-    return `## CI run ${id}\n${raw.replace(/\x1b\[[0-9;]*m/g, "").split("\n").slice(-150).join("\n")}`;
+  return failedRunIds(url).map((id) => {
+    const raw = filtered(quiet("gh", ["run", "view", id, ...repoFlags, "--log-failed"]).replace(/\x1b\[[0-9;]*m/g, ""));
+    return `## CI run ${id}\n${raw.split("\n").slice(-150).join("\n")}`;
   }).join("\n");
+}
+
+// A failed CI can be a network error. Re-run the failed jobs one time before the fixer runs (LOOP_CI_RERUN=0 turns it off).
+async function rerunOnce(url: string): Promise<boolean> {
+  if (!config.ciRerun) return false;
+  const ids = failedRunIds(url);
+  if (!ids.length) return false;
+  console.log(`CI failed for ${url}. Re-run the failed jobs one time before the fixer.`);
+  for (const id of ids) tryStep("gh", ["run", "rerun", id, ...repoFlags, "--failed"]);
+  await sleep(20_000);
+  return waitCi(url);
 }
 
 function prompt(name: string): string {
@@ -128,8 +191,8 @@ for (let iteration = 1; iteration <= config.maxIterations; iteration++) {
   let passed = Boolean(existing);
   if (existing) {
     console.log(`Resume the open PR ${existing.url}.`);
-    spawnSync("git", ["fetch", "origin", branch]);
-    spawnSync("git", ["branch", "-f", branch, `origin/${branch}`]);
+    tryStep("git", ["fetch", "origin", branch]);
+    spawnSync(config.git, ["branch", "-f", branch, `origin/${branch}`]);
   } else {
     const sandbox = await sandcastle.createSandbox({ branch, sandbox: sandboxProvider(), hooks });
     try {
@@ -185,17 +248,17 @@ for (let iteration = 1; iteration <= config.maxIterations; iteration++) {
   // main can require the CI checks on an up-to-date branch. Update the branch and retry.
   let mergedOk = false;
   for (let attempt = 0; attempt <= config.maxFixAttempts && !mergedOk; attempt++) {
-    spawnSync("gh", ["pr", "update-branch", url], { stdio: "inherit" });
+    tryStep("gh", ["pr", "update-branch", url]);
     await sleep(20_000);
-    if (await waitCi(url)) {
-      mergedOk = spawnSync("gh", ["pr", "merge", url, "--squash", "--delete-branch"], { stdio: "inherit" }).status === 0;
+    if (await waitCi(url) || (attempt === 0 && await rerunOnce(url))) {
+      mergedOk = tryStep("gh", ["pr", "merge", url, "--squash", "--delete-branch"]);
       continue;
     }
     if (attempt === config.maxFixAttempts) break;
     // CI failed. Give the CI log to the fixer agent, push the fix, and wait for CI again.
     console.log(`CI failed for ${url}. Run the fixer (attempt ${attempt + 1}).`);
-    spawnSync("git", ["fetch", "origin", branch]);
-    spawnSync("git", ["branch", "-f", branch, `origin/${branch}`]);
+    tryStep("git", ["fetch", "origin", branch]);
+    spawnSync(config.git, ["branch", "-f", branch, `origin/${branch}`]);
     const fixBox = await sandcastle.createSandbox({ branch, sandbox: sandboxProvider(), hooks });
     try {
       await runPhase(fixBox, {
@@ -215,7 +278,7 @@ for (let iteration = 1; iteration <= config.maxIterations; iteration++) {
   const state = sh("gh", ["issue", "view", String(issue.number), ...repoFlags, "--json", "state", "--jq", ".state"]);
   if (state !== "CLOSED") sh("gh", ["issue", "close", String(issue.number), ...repoFlags, "--comment", `Merged in ${url}.`]);
   console.log(`Merged ${url}. Issue #${issue.number} is closed.`);
-  spawnSync("git", ["branch", "-D", branch]);
+  spawnSync(config.git, ["branch", "-D", branch]);
   merged.add(issue.number);
 }
 

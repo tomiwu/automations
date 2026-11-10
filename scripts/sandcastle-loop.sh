@@ -6,6 +6,8 @@
 #   LOOP_IMAGE    sandbox image name (the script checks that it exists)
 # Run the script from a checkout of the target repository.
 #   REDACT_ENV_FILE  dotenv file whose values the loop masks in its output (default: .sandcastle/.env)
+#   LOOP_STORAGE_CONF podman storage config for this repo (exported as CONTAINERS_STORAGE_CONF)
+#   LOOP_DOCTOR      preflight doctor command (default: sandcastle-loop/doctor.sh; empty: no doctor)
 # The loop output goes through a redaction filter. Log files get mode 600.
 set -euo pipefail
 umask 077
@@ -40,10 +42,22 @@ export XDG_RUNTIME_DIR=/tmp/xdg-runtime-loop
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
+if [ -n "${LOOP_STORAGE_CONF:-}" ]; then export CONTAINERS_STORAGE_CONF="$LOOP_STORAGE_CONF"; fi
+
 if [ -n "${LOOP_IMAGE:-}" ] && ! podman image exists "$LOOP_IMAGE"; then
   echo "The image $LOOP_IMAGE does not exist. Build it first." >&2
   exit 1
 fi
+
+# Preflight doctor: no loop and no agent start when a check fails.
+DOCTOR="${LOOP_DOCTOR-$SCRIPT_DIR/sandcastle-loop/doctor.sh}"
+if [ -n "$DOCTOR" ]; then
+  if ! env -u GH_TOKEN -u GITHUB_TOKEN bash -c "$DOCTOR"; then
+    echo "The doctor failed. The loop does not start." >&2
+    exit 1
+  fi
+fi
+export LOOP_DOCTOR_DONE=1
 
 if ! "$CHECK_SECRETS" "$LOG_DIR"; then
   echo "A log in $LOG_DIR contains a token. Remove the token and start again." >&2
