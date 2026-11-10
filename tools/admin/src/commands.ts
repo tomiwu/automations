@@ -1,6 +1,7 @@
 import { encryptCredential, decryptCredential, importCredentialKey, isValidNip, isValidNrb, newCredentialKey } from "@automations/shared";
 import { comparePaymentsProjection, paymentStream, type ProjectionRow } from "@automations/librus-data";
 import { oneOf, parseArgs, required, secretName, weekday } from "./args.ts";
+import { dayOffPayload, familyOf, headOf, isoDate, manualStream, nextEvent } from "./day-off.ts";
 import { signWatcherKey } from "./jwt.ts";
 import { rekey } from "./rekey.ts";
 import type { RestClient, Row } from "./rest.ts";
@@ -324,6 +325,52 @@ const paymentsConsistency: Command = async (flags, _positional, deps) => {
   if (differences.length > 0) throw new Error(`${differences.length} difference(s) between the Journal and the payments table`);
 };
 
+async function appendOrReport(deps: AdminDeps, event: Awaited<ReturnType<typeof nextEvent>>, flags: Flags, done: string): Promise<void> {
+  if (event === null) {
+    deps.print("No change: the Journal head has this content already");
+    return;
+  }
+  if (flags["dry-run"] === "true") {
+    deps.print(`Dry run, nothing written: ${JSON.stringify(event)}`);
+    return;
+  }
+  await deps.rest().insert("journal_events", [event]);
+  deps.print(`${done}: ${event.stream} (seq ${event.seq})`);
+}
+
+/**
+ * Confirms a day off that a school announced only in a message. It appends one `dayOff` Item event to
+ * `item:manualDaysOff:<child>:<from>`. It never changes or deletes an event.
+ */
+const addDayOff: Command = async (flags, _positional, deps) => {
+  const childId = required(flags, "child");
+  const from = isoDate(required(flags, "from"), "from");
+  const to = isoDate(optional(flags, "to") ?? from, "to");
+  if (to < from) throw new Error("Option --to must not be before --from");
+  const sourceStream = required(flags, "source-stream");
+  const rest = deps.rest();
+  const familyId = await familyOf(rest, childId);
+  if ((await headOf(rest, familyId, sourceStream)) === undefined) throw new Error(`No stream ${sourceStream} in the Journal`);
+  const payload = dayOffPayload({ childId, from, to, reason: required(flags, "reason"), sourceStream });
+  const stream = manualStream(childId, from);
+  const event = await nextEvent({ family_id: familyId, child_id: childId, stream, day: from }, payload, await headOf(rest, familyId, stream));
+  await appendOrReport(deps, event, flags, "Added day off");
+};
+
+/** Withdraws a manual day off: one `ItemChanged` event with `withdrawn: true`. */
+const removeDayOff: Command = async (flags, _positional, deps) => {
+  const childId = required(flags, "child");
+  const from = isoDate(required(flags, "from"), "from");
+  const rest = deps.rest();
+  const familyId = await familyOf(rest, childId);
+  const stream = manualStream(childId, from);
+  const head = await headOf(rest, familyId, stream);
+  if (head === undefined) throw new Error(`No manual day off ${stream} in the Journal`);
+  const payload = { ...(head.payload as Record<string, unknown>), withdrawn: true };
+  const event = await nextEvent({ family_id: familyId, child_id: childId, stream, day: from }, payload, head);
+  await appendOrReport(deps, event, flags, "Withdrew day off");
+};
+
 const COMMANDS: Record<string, Command> = {
   rekey: rekeyCommand,
   "new-credential-key": newKey,
@@ -340,6 +387,8 @@ const COMMANDS: Record<string, Command> = {
   "set-fee": setFee,
   "list-fees": listFees,
   "payments-consistency": paymentsConsistency,
+  "add-day-off": addDayOff,
+  "remove-day-off": removeDayOff,
   "disable-account": disableAccount,
   "import-seed": importSeed,
   "make-watcher-key": makeWatcherKey,

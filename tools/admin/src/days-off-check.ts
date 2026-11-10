@@ -37,8 +37,8 @@ export interface DaysOffResult {
   lines: string[];
 }
 
-/** The day-off Item streams of the producer (`item:<watcher>:<childId>:<id>`, contract 8a D6). */
-export const DAY_OFF_STREAM = /^item:(schoolFreeDays|classFreeDays):[^:]+:[^:]+$/;
+/** The day-off Item streams of the producer (`item:<watcher>:<childId>:<id>`, contract 8a D6; `manualDaysOff` is D7). */
+export const DAY_OFF_STREAM = /^item:(schoolFreeDays|classFreeDays|manualDaysOff):[^:]+:[^:]+$/;
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
@@ -66,7 +66,7 @@ function streamLine(stream: string, histories: readonly CheckHistory[]): { ok: b
   const history = histories.find((h) => h.stream === stream);
   const items = history?.events.filter((event) => event.kind === "dayOff") ?? [];
   const ok = DAY_OFF_STREAM.test(stream) && items.length > 0;
-  return { ok, line: `${ok ? "OK" : "FAIL"} journal ${mask(stream)}: ${items.length} dayOff event(s)${DAY_OFF_STREAM.test(stream) ? "" : " (not an item:schoolFreeDays|classFreeDays stream)"}` };
+  return { ok, line: `${ok ? "OK" : "FAIL"} journal ${mask(stream)}: ${items.length} dayOff event(s)${DAY_OFF_STREAM.test(stream) ? "" : " (not an item:schoolFreeDays|classFreeDays|manualDaysOff stream)"}` };
 }
 
 function journalLines(input: DaysOffInput): { ok: boolean; lines: string[] } {

@@ -28,6 +28,8 @@ The CLI never takes a secret value as an argument. `--login-secret` and `--passw
 | `set-fee` | `--family`, `--child`, `--organizer`, `--recipient-name`, `--account` (NRB, 26 digits, checksum checked), `--title`, `--due-day` (1-28), `--nip` (optional, checksum checked), `--notify-day` (default 10, less than due day), `--reminder-day` (default 14), `--amounts` (`YYYY-MM=grosze,...`), `--source-url`, `--account-id` |
 | `list-fees` | `--family` (optional) |
 | `payments-consistency` | `--family`. Read only. Compares the Journal heads of the `payment:` streams with the `payments` table. It prints each difference (stream, Payment id, field) and no amounts. It fails when there is a difference. |
+| `add-day-off` | `--child`, `--from`, `--to` (optional), `--reason`, `--source-stream`, `--dry-run`. See "Manual day off from a message". |
+| `remove-day-off` | `--child`, `--from`, `--dry-run`. See "Manual day off from a message". |
 | `list` | `--family` (optional) |
 | `disable-account` | `--id` |
 | `import-seed <file>` | A JSON file with the keys `families`, `children`, `accounts`, `activities`, `recipients`, `fees`. Each value is a list of table rows. |
@@ -42,6 +44,22 @@ The CLI never takes a secret value as an argument. `--login-secret` and `--passw
 Each `add-*` command prints the ID of the new row. `add-account` also prints the Kody secrets that you must enter.
 
 Keep the seed file on your own computer. Never put it in the repository.
+
+## Manual day off from a message
+
+A school can announce a day off only in a free-text message. Librus then gives no day-off entry, so the Lessons of those days stay `normal`. The Watchers never cancel a Lesson from free text (contract 8a D4). A parent confirms the day off by hand:
+
+```
+admin add-day-off --child <childId> --from 2026-11-12 [--to 2026-11-13] --reason "day off (message)" \
+  --source-stream item:messages:<childId>:<id> [--dry-run]
+admin remove-day-off --child <childId> --from 2026-11-12 [--dry-run]
+```
+
+- `add-day-off` appends one `ItemRecorded` event of kind `dayOff` to the stream `item:manualDaysOff:<childId>:<from>`. `./stored-lessons` then cancels the Lessons of the days with `cancelReason.reason = "day_off"` (contract 8a D7).
+- It checks that `--source-stream` exists in the Journal and that the dates are real. The same command again writes nothing.
+- `remove-day-off` appends an `ItemChanged` event with `withdrawn: true`. The Lessons are `normal` again. The Journal stays append-only: nothing is changed or deleted.
+- `--dry-run` prints the event and writes nothing.
+- `check-days-off` accepts `item:manualDaysOff:*` streams as a day-off source.
 
 ## Rotate the credential key in one step
 

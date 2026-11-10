@@ -69,6 +69,10 @@ Use `./stored-lessons` and `./stream-history` for the calendar sync. They read S
 - It works for the streams `lesson:`, `homework:`, `session:`, `item:` and `check:`.
 - **Fetches:** 1 Supabase fetch. There is no Librus fetch.
 
+## Manual day off from a message
+
+A day off that a school announces only in a message has no `SchoolFreeDays` or `ClassFreeDays` entry. After a parent runs `admin add-day-off`, the Journal has a `dayOff` Item in the stream `item:manualDaysOff:<childId>:<from>` (contract 8a D7). `./stored-lessons` reads it like a Librus day off: each Lesson of the days gets `status: "cancelled"`, `cancelled: true` and `cancelReason: { reason: "day_off", sourceStream: "item:manualDaysOff:<childId>:<from>", sourceId: "<from>" }`. A head with `withdrawn: true` (from `admin remove-day-off`) cancels nothing. No Watcher reads the scope `manualDaysOff:<childId>`, so a pass never marks these streams as vanished. Free text still never cancels a Lesson by itself. See `tools/admin/README.md`.
+
 ## Calendar plan (`src/calendar-plan.ts`)
 
 `planCalendar(state, existing)` is the pure create/update plan of the calendar sync (kids calendar contract sections 3, 4, 8a and 8b). It uses no network and no clock. The sync routine can call it or copy the same rules.
