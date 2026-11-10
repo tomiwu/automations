@@ -34,6 +34,14 @@ export LOOP_IMAGE="$(LOOP_REPO=tomiwu/automations scripts/sandcastle-loop/build-
 - Container (a throwaway container of `LOOP_IMAGE` as the agent user): `$HOME` is writable, `/tmp` has mode 1777, `mkdir /tmp/claude-$(id -u)` works, `git`, `node`, `gh` and the agent CLI of each provider in `LOOP_MODELS` (`claude`, Cursor `agent`) answer `--version`, then `LOOP_DOCTOR_EXTRA`.
 - `doctor.sh host` and `doctor.sh container` run one part only.
 
+## Model fallback
+
+The order is Claude -> Cursor CLI Composer 2.5 -> Grok in the Cursor CLI. Only local CLIs run; the loop never calls a Cursor cloud agent.
+
+- The Grok id is `GROK_CURSOR_MODEL` in `src/config.ts` (`grok-4.5-high`, the id that the e1003-firmware loop uses). Check it with `agent --list-models` when the Cursor key works, and change it there or in `LOOP_MODELS`.
+- On a limit error of any agent (credit, quota, usage or rate limit, "hit your ... limit", "5-hour limit", "resets"), the loop changes to the next model, runs the same phase again and logs `MODEL SWITCH <from> -> <to> (<reason>)`.
+- When all models are limited, the loop logs `ALL MODELS LIMITED. Wait N min`, sleeps until the earliest reset time in the errors ("resets 4:30am", "resets at 16:05", or an ISO time; else 30 minutes), then starts again with the first model. It does not exit.
+
 ## Network errors
 
 Each host `gh` call and each `git push`, `pull` and `fetch` is retried (`LOOP_RETRY_DELAYS`). A log line `RETRY <command>: attempt N failed, retry in Ns` shows each retry. A failed CI is re-run one time before the fixer gets the log.
@@ -53,7 +61,7 @@ To see the next issue and run no agent: `DRY_RUN=1 npx tsx scripts/sandcastle-lo
 | --- | --- | --- |
 | `LOOP_REPO` | the current git repository | `owner/name` of the repository |
 | `LOOP_LABEL` | `Sandcastle` | Label of the issues to work on |
-| `LOOP_MODELS` | `claude:claude-sonnet-5-5,cursor:composer-2.5` | Ordered list `provider:model`. Providers: `claude`, `cursor`. On a credit or limit error the loop changes to the next model. |
+| `LOOP_MODELS` | `claude:claude-sonnet-5-5,cursor:composer-2.5,cursor:grok-4.5-high` | Ordered list `provider:model`. Providers: `claude` (Claude Code CLI), `cursor` (local Cursor `agent` CLI). See "Model fallback". |
 | `LOOP_LOG_DIR` | `/workspace/loops/<repo name>` | Directory for the logs, the lock and the pid file |
 | `LOOP_CHECKS` | `npm ci --no-audit --no-fund && npm run typecheck && npm test && npm run crap` | Command that runs in the sandbox. Exit code 0 means the checks pass. |
 | `LOOP_IMAGE` | the Sandcastle default | Name of the Podman image for the sandbox |
