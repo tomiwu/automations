@@ -36,6 +36,14 @@ export interface LoopConfig {
   doctor: string;
   /** Re-run a failed CI one time before the fixer runs (network errors are not for the fixer). */
   ciRerun: boolean;
+  /** What the loop does when no issue is ready: `groom` (propose triage issues, sleep, check again) or `stop`. */
+  idle: "groom" | "stop";
+  /** Sleep between two idle checks, in milliseconds. */
+  idleMs: number;
+  /** Label of the groomer proposals. It is not the loop label. */
+  triageLabel: string;
+  /** File with the personal strings (one for each line) that a proposal must not contain. */
+  denylistFile: string | undefined;
 }
 
 // Tomasz's order (9.11): Claude -> Cursor CLI Composer 2.5 -> Grok in the Cursor CLI. Local CLIs only.
@@ -96,6 +104,23 @@ export function loadConfig(env: Record<string, string | undefined>, cwd: string,
     skip: new Set((env.SKIP_ISSUES ?? "").split(",").filter(Boolean).map(Number)),
     promptDir: text(env, "LOOP_PROMPT_DIR", defaultPromptDir),
     ...hostSettings(env, defaultPromptDir),
+    ...idleSettings(env),
+  };
+}
+
+function idleMode(value: string | undefined): "groom" | "stop" {
+  if (value === undefined || value === "" || value === "groom") return "groom";
+  if (value === "stop") return "stop";
+  throw new Error(`Bad LOOP_IDLE: ${value}. Use groom or stop.`);
+}
+
+/** What the loop does on an empty queue. */
+function idleSettings(env: Record<string, string | undefined>): Pick<LoopConfig, "idle" | "idleMs" | "triageLabel" | "denylistFile"> {
+  return {
+    idle: idleMode(env.LOOP_IDLE),
+    idleMs: numberFrom(env.LOOP_IDLE_MINUTES, 30) * 60_000,
+    triageLabel: text(env, "LOOP_TRIAGE_LABEL", "needs-triage"),
+    denylistFile: optional(env, "LOOP_DENYLIST_FILE"),
   };
 }
 

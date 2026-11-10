@@ -9,7 +9,9 @@
 //   5. Push the branch, open a PR, wait for CI, squash-merge, close the issue.
 // Before iteration 1 the preflight doctor (doctor.sh) runs. When it fails, no agent starts.
 // Host gh and git push/pull calls are retried (LOOP_RETRY_DELAYS), so one network error does not stop the loop.
-// The loop stops when no issue is ready, or when an issue cannot pass.
+// When no issue is ready (LOOP_IDLE=groom, the default), a read-only groomer proposes at most 3 issues with the
+// triage label, the loop sleeps (LOOP_IDLE_MINUTES) and checks the queue again. LOOP_IDLE=stop stops instead.
+// The loop stops when an issue cannot pass.
 // See README.md in this directory for the environment variables.
 //
 // Usage:
@@ -19,13 +21,16 @@
 import * as sandcastle from "@ai-hero/sandcastle";
 import { podman } from "@ai-hero/sandcastle/sandboxes/podman";
 import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type ModelSpec } from "./src/config.ts";
+import { idleStep } from "./src/groom.ts";
 import { issueText, nextIssue, type Exec } from "./src/issues.ts";
 import { withLock } from "./src/lock.ts";
 import { ModelOrder, withFallback } from "./src/models.ts";
 import { preflight } from "./src/preflight.ts";
+import { secretValuesFromEnv } from "./src/redact.ts";
 import { retrySync, retryingExec } from "./src/retry.ts";
 
 const config = loadConfig(process.env, process.cwd(), join(dirname(fileURLToPath(import.meta.url)), "prompts"));
@@ -167,6 +172,37 @@ function prompt(name: string): string {
   return join(config.promptDir, name);
 }
 
+function lines(path: string | undefined): string[] {
+  return path && existsSync(path) ? readFileSync(path, "utf8").split("\n").map((l) => l.trim()).filter(Boolean) : [];
+}
+
+function logTail(): string {
+  const current = join(config.logDir, "current.log");
+  return existsSync(current) ? readFileSync(current, "utf8").split("\n").slice(-80).join("\n") : "(no log)";
+}
+
+// The read-only groomer: one agent run in a throwaway sandbox. Its commits are never pushed.
+async function groom(openTitles: string[]): Promise<string> {
+  const branch = `sandcastle/groom-${Date.now()}`;
+  const sandbox = await sandcastle.createSandbox({ branch, sandbox: sandboxProvider(), hooks });
+  try {
+    const result = await runPhase(sandbox, {
+      name: "groomer", maxIterations: 1, promptFile: prompt("groom-prompt.md"),
+      promptArgs: { OPEN_ISSUES: openTitles.map((t) => `- ${t}`).join("\n") || "(none)", LOG_TAIL: logTail() },
+    }, "");
+    return result.stdout;
+  } finally {
+    await sandbox.close();
+    spawnSync(config.git, ["branch", "-D", branch]);
+  }
+}
+
+const idle = () => idleStep({
+  exec: sh, repo: config.repo, triageLabel: config.triageLabel, groom,
+  denylist: lines(config.denylistFile), secretValues: secretValuesFromEnv(process.env),
+  sleep: (ms) => sleep(ms).then(() => undefined), idleMs: config.idleMs, log: console.log,
+});
+
 const merged = new Set<number>();
 console.log(`Models: ${config.models.map((m) => `${m.provider}:${m.model}`).join(", ")}`);
 
@@ -179,7 +215,13 @@ for (let iteration = 1; iteration <= config.maxIterations; iteration++) {
     await sleep(30_000);
     issue = nextIssue(sh, queueOptions(merged), console.log);
   }
-  if (!issue) { console.log("No ready issue. Stopping."); break; }
+  if (!issue && config.idle === "stop") { console.log("No ready issue. Stopping (LOOP_IDLE=stop)."); break; }
+  if (!issue) {
+    console.log("No ready issue. Groom, sleep and check again.");
+    await idle();
+    iteration--; // An idle step does not use an iteration.
+    continue;
+  }
   console.log(`\n=== Iteration ${iteration}/${config.maxIterations}: issue #${issue.number} ${issue.title} ===\n`);
 
   const text = issueText(sh, config.repo, issue.number);
