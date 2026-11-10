@@ -5,7 +5,8 @@
 # stdout has only the tag.
 #
 # Environment:
-#   LOOP_REPO           owner/name (default: the name of the git repository in the current directory)
+#   LOOP_REPO           owner/name (default: the name in the origin URL, else the name of the top directory;
+#                       a worktree directory name such as automations-170 is not the repo name)
 #   LOOP_CONTAINERFILE  Containerfile (default: Containerfile in this directory; another repo sets its own)
 #   LOOP_BUILD_CONTEXT  build context (default: the directory of the Containerfile)
 #   LOOP_IMAGE_NAME     image name (default: sandcastle)
@@ -23,7 +24,8 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/xdg-runtime-loop}"
 if [ -n "${LOOP_REPO:-}" ]; then
   REPO="${LOOP_REPO##*/}"
 else
-  REPO="$(basename "$(git rev-parse --show-toplevel)")"
+  ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
+  if [ -n "$ORIGIN" ]; then ORIGIN="${ORIGIN%.git}"; REPO="${ORIGIN##*[/:]}"; else REPO="$(basename "$(git rev-parse --show-toplevel)")"; fi
 fi
 [ -f "$CONTAINERFILE" ] || { echo "The Containerfile $CONTAINERFILE does not exist." >&2; exit 1; }
 SHA="$(git hash-object "$CONTAINERFILE" | cut -c1-7)"
