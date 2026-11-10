@@ -43,8 +43,11 @@ describe.skipIf(!url)("0014_payment_refund_check.sql", () => {
   });
 
   it("lets the watcher set the flag without a status change", () => {
-    expect(asWatcher(db, `update payments set refund_check_at = now() where fee_id = '${fee}'`).ok).toBe(true);
-    expect(psql(db, `select status from payments where fee_id = '${fee}' and refund_check_at is not null`).output).toContain("paid");
+    // asWatcher ends with a rollback, so the read must be in the same watcher transaction as the update.
+    const result = asWatcher(db, `update payments set refund_check_at = now() where fee_id = '${fee}'; select status || ':' || (refund_check_at is not null) from payments where fee_id = '${fee}'`);
+    expect(result.ok).toBe(true);
+    expect(result.output).toContain("UPDATE 1");
+    expect(result.output).toContain("paid:true");
   });
 
   it("keeps the Journal append-only", () => {
