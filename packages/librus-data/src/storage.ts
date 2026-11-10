@@ -190,4 +190,6 @@ export interface StorageAdapter {
   ): Promise<boolean>;
   /** Sets the status of a `pending` Payment to `cancelled`. `decidedAt` and `decidedBy` stay. Returns false if nothing changed. */
   cancelPendingPayment(id: string): Promise<boolean>;
+  /** Sets the status of a `cancelled` Payment back to `pending`. Returns false if nothing changed. */
+  reopenCancelledPayment(id: string): Promise<boolean>;
 }

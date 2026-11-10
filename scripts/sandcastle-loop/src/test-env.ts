@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -56,10 +56,19 @@ export function hermeticEnv(stubs: Record<string, string> = {}, options: Hermeti
   return { stubDir, home, env: { PATH: `${stubDir}:${SYSTEM_PATH}`, HOME: home, ...options.env }, stub, cleanup };
 }
 
+// A zombie (ended, but not yet reaped by an init that does not wait) is not alive.
+const isZombie = (pid: number): boolean => {
+  try {
+    return /^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8"));
+  } catch {
+    return false;
+  }
+};
+
 const alive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
-    return true;
+    return !isZombie(pid);
   } catch {
     return false;
   }

@@ -7,8 +7,8 @@
  */
 import type { Fee, StorageAdapter } from "@automations/librus-data";
 import { isFetchCapError, localDate, t, type MessageKey, type Runtime } from "@automations/shared";
-import { createConfigFeeSource, type FeeAmount, type FeeSource } from "./fee-source.ts";
-import { organizerTypeOf, parseFeePage } from "./organizer-parsers.ts";
+import { createConfigFeeSource, type FeeAmount, type FeeSource, type PageObservation } from "./fee-source.ts";
+import { type FeePageReading, organizerTypeOf, readFeePage, type ChargeState } from "./organizer-parsers.ts";
 
 /** Time limit of one request, in milliseconds. */
 const REQUEST_TIMEOUT_MS = 25_000;
@@ -27,10 +27,25 @@ function failureReason(message: string): string {
   return detail.length > FAILURE_DETAIL_MAX ? `${detail.slice(0, FAILURE_DETAIL_MAX - 1)}…` : detail;
 }
 
-async function pageAmount(runtime: Runtime, url: string, month: string): Promise<number | undefined> {
+async function pageReading(runtime: Runtime, url: string, month: string): Promise<FeePageReading & { host: string }> {
   const response = await runtime.fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (response.status !== 200) throw new Error(`Organizer page: request failed (HTTP ${response.status})`);
-  return parseFeePage(organizerTypeOf(url), await response.text(), month);
+  const host = organizerTypeOf(url);
+  return { ...readFeePage(host, await response.text(), month), host };
+}
+
+const CANDIDATES = {
+  cancelled: { reason: "organizer_void", code: "charge_cancelled" },
+  absent: { reason: "organizer_void", code: "charge_absent" },
+  withdrawn: { reason: "organizer_withdrawn", code: "child_withdrawn" },
+} as const;
+
+/** A good page is HTTP OK with at least one charge in it. An `empty` page gives no observation and never counts. */
+function observationOf(reading: { state: ChargeState; host: string }): PageObservation | undefined {
+  if (reading.state === "empty") return undefined;
+  if (reading.state === "listed") return { kind: "listed" };
+  const { reason, code } = CANDIDATES[reading.state];
+  return { kind: "candidate", reason, evidence: `${reading.host}:${code}` };
 }
 
 /** One notice: the key prefix (the day and the chat ID follow) and the message. */
@@ -82,18 +97,23 @@ function merge(fee: Fee, month: string, page: number, config: FeeAmount | undefi
 export function createWebFeeSource(deps: WebFeeSourceDeps): FeeSource {
   const configSource = createConfigFeeSource();
   let capped = false;
+  const observations = new Map<string, PageObservation>();
   const onError = async (fee: Fee, error: unknown): Promise<void> => {
     capped = isFetchCapError(error);
     await (capped ? notifyCap(deps, fee) : notifyFailure(deps, fee, error));
   };
   return {
+    observationFor: (fee, month) => observations.get(`${fee.id}:${month}`),
     async amountFor(fee, month) {
       const config = await configSource.amountFor(fee, month);
+      observations.delete(`${fee.id}:${month}`);
       if (!fee.sourceUrl) return config;
       if (capped) return (await notifyCap(deps, fee), config);
       try {
-        const page = await pageAmount(deps.runtime, fee.sourceUrl, month);
-        return page === undefined ? config : merge(fee, month, page, config);
+        const reading = await pageReading(deps.runtime, fee.sourceUrl, month);
+        const observation = observationOf(reading);
+        if (observation) observations.set(`${fee.id}:${month}`, observation);
+        return reading.amount === undefined ? config : merge(fee, month, reading.amount, config);
       } catch (error) {
         await onError(fee, error);
         return config;

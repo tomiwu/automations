@@ -1,10 +1,12 @@
 export { buildZbpQr, buildZbpText, cleanField, isValidNip, isValidNrb } from "./zbp.ts";
 export type { ZbpInput, ZbpQr } from "./zbp.ts";
 export { createConfigFeeSource } from "./fee-source.ts";
-export type { FeeAmount, FeeSource } from "./fee-source.ts";
+export type { FeeAmount, FeeSource, PageObservation } from "./fee-source.ts";
 export { parseOrganizerAmount } from "./page-parse.ts";
-export { organizerTypeOf, parseFeePage } from "./organizer-parsers.ts";
+export { organizerTypeOf, parseFeePage, readFeePage } from "./organizer-parsers.ts";
 export type { OrganizerType } from "./organizer-parsers.ts";
+export { CANCEL_AFTER } from "./organizer-cancel.ts";
+export type { CounterStore } from "./organizer-cancel.ts";
 export { createWebFeeSource } from "./page-source.ts";
 export type { WebFeeSourceDeps } from "./page-source.ts";
 export { formatAmount, runPayments } from "./engine.ts";

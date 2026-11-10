@@ -12,8 +12,19 @@ export interface FeeAmount {
   configAmount?: number;
 }
 
+/**
+ * What the page of the last `amountFor` call showed about the charge. `listed`: the charge is there.
+ * `candidate`: the charge may be void or the Child may be withdrawn; `evidence` is the host class and the observation
+ * code (no personal data). A page that was not read well (failed, capped, skipped, empty) gives no observation.
+ */
+export type PageObservation =
+  | { kind: "listed" }
+  | { kind: "candidate"; reason: "organizer_void" | "organizer_withdrawn"; evidence: string };
+
 export interface FeeSource {
   amountFor(fee: Fee, month: string): Promise<FeeAmount | undefined>;
+  /** The observation of the last `amountFor` call for the Fee and the month. It makes no fetch. */
+  observationFor?(fee: Fee, month: string): PageObservation | undefined;
 }
 
 /** Fee source that reads the `amounts` of the Fee row. */

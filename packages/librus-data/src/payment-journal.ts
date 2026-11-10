@@ -127,6 +127,32 @@ export async function planPaymentCancelled(
   };
 }
 
+const CANCEL_FIELDS = ["cancelReason", "cancelledAt", "cancelEvidence"] as const;
+
+/**
+ * `PaymentDue` on the stream of a head that an Organizer cancelled, when the charge is listed again (payments contract
+ * v0.2 section 3b, R1 to R3). The payload is the head payload with `status: "pending"` and no cancel fields.
+ * Else null: only `organizer_void` and `organizer_withdrawn` can re-appear; a `fee_disabled` cancel stays.
+ */
+export async function planPaymentReappeared(head: JournalEvent): Promise<NewJournalEvent | null> {
+  const reason = head.payload.cancelReason;
+  if (head.payload.status !== "cancelled" || (reason !== "organizer_void" && reason !== "organizer_withdrawn")) return null;
+  const payload: Record<string, unknown> = { ...head.payload, status: "pending" };
+  for (const field of CANCEL_FIELDS) delete payload[field];
+  return {
+    familyId: head.familyId,
+    childId: head.childId,
+    stream: head.stream,
+    seq: head.seq + 1,
+    kind: "payment",
+    day: head.day,
+    eventType: "PaymentDue",
+    payload,
+    contentHash: await contentHash(payload),
+    source: SOURCE,
+  };
+}
+
 /** The `CheckCompleted` event of one pass of `payments-watch`. There is one check stream for each Child. */
 export function checkCompletedForPayments(
   familyId: string,
