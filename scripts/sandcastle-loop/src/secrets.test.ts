@@ -78,19 +78,60 @@ describe("check-no-secrets.sh", () => {
   });
 });
 
+// The start script runs the loop in the background. Wait until it ends, so the temp dir can go.
+function waitForLoop(logDir: string): void {
+  const pidFile = join(logDir, "loop.pid");
+  if (!existsSync(pidFile)) return;
+  const pid = Number(readFileSync(pidFile, "utf8"));
+  for (let i = 0; i < 100; i++) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+    spawnSync("sleep", ["0.05"]);
+  }
+}
+
 describe("sandcastle-loop.sh", () => {
-  it("creates the log file with mode 600", () => {
+  function start(doctor: string) {
     const dir = tempDir();
     const logDir = join(dir, "logs");
-    executable(join(dir, "npx"), "exit 0");
+    const marker = join(dir, "npx-called");
+    executable(join(dir, "npx"), `touch "${marker}"; exit 0`);
+    executable(join(dir, "doctor"), doctor);
     const result = spawnSync(join(scriptsDir, "sandcastle-loop.sh"), [], {
-      env: { PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "owner/example", LOOP_LOG_DIR: logDir },
+      env: { PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "owner/example", LOOP_LOG_DIR: logDir, LOOP_DOCTOR: join(dir, "doctor") },
       encoding: "utf8",
     });
+    waitForLoop(logDir);
+    return { result, logDir, marker };
+  }
+
+  it("creates the log file with mode 600", () => {
+    const { result, logDir } = start("exit 0");
     expect(result.status).toBe(0);
     const logs = readdirSync(logDir).filter((f) => /^\d{8}-\d{4}\.log$/.test(f));
     expect(logs).toHaveLength(1);
     expect((statSync(join(logDir, logs[0]!)).mode & 0o777).toString(8)).toBe("600");
     expect(existsSync(join(logDir, "current.log"))).toBe(true);
+  });
+
+  it("does not start the loop when the doctor fails", () => {
+    const { result, logDir, marker } = start('echo "DOCTOR FAIL: podman info -> fix: podman system migrate"; exit 1');
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("DOCTOR FAIL: podman info");
+    expect(result.stderr).toContain("The doctor failed. The loop does not start.");
+    expect(existsSync(join(logDir, "loop.pid"))).toBe(false);
+    expect(existsSync(marker)).toBe(false);
+  });
+});
+
+describe("main.mts", () => {
+  const main = readFileSync(join(root, "main.mts"), "utf8");
+
+  it("has no `|| true` in the sandbox-ready hook and runs the doctor before the agents", () => {
+    expect(main).not.toContain("|| true");
+    expect(main.indexOf("preflight(")).toBeLessThan(main.indexOf("createSandbox("));
   });
 });

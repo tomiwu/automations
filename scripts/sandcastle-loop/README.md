@@ -13,6 +13,18 @@ LOOP_REPO=owner/name /path/to/automations/scripts/sandcastle-loop.sh
 
 `sandcastle-loop.sh` takes a lock and a pid file per repository, sets `XDG_RUNTIME_DIR=/tmp/xdg-runtime-loop`, checks `LOOP_IMAGE`, and starts `main.mts` with `setsid nohup`. It removes `GH_TOKEN` and `GITHUB_TOKEN` from the environment of the loop. The log is `<LOOP_LOG_DIR>/<YYYYMMDD-HHMM>.log`. The link `current.log` points to the newest log.
 
+## Preflight doctor
+
+`doctor.sh` runs before the loop starts (`sandcastle-loop.sh`) and before iteration 1 (`main.mts`, skipped when the start script ran it). When a check fails it prints `DOCTOR FAIL: <check> -> fix: <command>`, exits 1, and no agent starts.
+
+- Host: `node_modules/@ai-hero/sandcastle` exists, `podman info` works with `XDG_RUNTIME_DIR`, `podman image exists $LOOP_IMAGE`, `gh auth status` and `gh repo view $LOOP_REPO` (the output is not shown, so no token is printed).
+- Container (a throwaway container of `LOOP_IMAGE` as the agent user): `$HOME` is writable, `/tmp` has mode 1777, `mkdir /tmp/claude-$(id -u)` works, `git`, `node`, `gh` and the agent CLI of each provider in `LOOP_MODELS` (`claude`, Cursor `agent`) answer `--version`, then `LOOP_DOCTOR_EXTRA`.
+- `doctor.sh host` and `doctor.sh container` run one part only.
+
+## Network errors
+
+Each host `gh` call and each `git push`, `pull` and `fetch` is retried (`LOOP_RETRY_DELAYS`). A log line `RETRY <command>: attempt N failed, retry in Ns` shows each retry. A failed CI is re-run one time before the fixer gets the log.
+
 ## Secrets in logs
 
 - All output of the loop goes through `redact-filter.mts`. It masks every value of `REDACT_ENV_FILE` (default `.sandcastle/.env`), the value of every environment variable with a name that ends in `_TOKEN`, `_KEY` or `_SECRET`, the patterns `sk-ant-`, `ghp_`, `gho_`, `ghs_`, `github_pat_`, and the value of `<NAME>_TOKEN=` and `<NAME>_KEY=`. The mask is `[REDACTED]`. This also covers the `podman run` command that Sandcastle prints when the command fails.
@@ -38,6 +50,15 @@ To see the next issue and run no agent: `DRY_RUN=1 npx tsx scripts/sandcastle-lo
 | `MAX_FIX_ATTEMPTS` | `3` | Fix attempts for the checks and for the CI |
 | `SKIP_ISSUES` | empty | Comma-separated issue numbers to ignore |
 | `DRY_RUN` | unset | Print the next issue and stop |
+| `LOOP_DOCTOR` | `doctor.sh` in this directory | Preflight doctor. Empty: no doctor. |
+| `LOOP_DOCTOR_EXTRA` | empty | Extra shell command of the container checks (for example toolchain checks of the repo) |
+| `LOOP_SANDBOX_READY` | `npm ci --no-audit --no-fund` | Sandbox-ready hook. A failure stops the sandbox. Empty: no hook. |
+| `LOOP_GH`, `LOOP_GIT` | `gh`, `git` | Host commands or wrappers for GitHub and git |
+| `LOOP_RETRY_DELAYS` | `5,15,45,90` | Seconds between the attempts of a host `gh` call and of `git push`/`pull`/`fetch` (5 attempts) |
+| `LOOP_STORAGE_CONF` | unset | Podman storage config of the repo. The start script and the doctor export it as `CONTAINERS_STORAGE_CONF`. |
+| `LOOP_CHECKS_LOCK` | unset | Box-wide lock file around `LOOP_CHECKS` (`flock`), so only one heavy check runs at a time |
+| `LOOP_CI_RERUN` | `1` | Re-run the failed CI jobs one time before the CI fixer runs. `0` turns it off. |
+| `LOOP_CI_LOG_FILTER` | unset | Shell filter (stdin to stdout) for the failed CI log, for example to remove download noise |
 
 The prompt files can use `{{ISSUE}}`, `{{BRANCH}}`, `{{ISSUE_TEXT}}` (the issue as JSON) and `{{CHECK_LOG}}` (fix prompt only).
 
