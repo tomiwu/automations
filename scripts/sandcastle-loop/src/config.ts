@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
 import { DEFAULT_SORT, parseSort, type SortKey } from "./queue.ts";
-import { DEFAULT_RETRY_DELAYS, parseDelays } from "./retry.ts";
+import { DEFAULT_RETRY_DELAYS, parseDelays, parseTransient } from "./retry.ts";
 
 export interface ModelSpec {
   provider: "claude" | "cursor";
@@ -28,6 +28,8 @@ export interface LoopConfig {
   git: string;
   /** Delays between the attempts of a host gh or git push call, in milliseconds. */
   retryDelaysMs: number[];
+  /** The error texts of a host call that are retried (`DEFAULT_TRANSIENT` plus `LOOP_RETRY_TRANSIENT`). */
+  retryTransient: RegExp[];
   /** Box-wide lock file around the checks, or undefined. */
   checksLock: string | undefined;
   /** Shell filter for the failed CI log (stdin to stdout), or undefined. */
@@ -126,7 +128,7 @@ function idleSettings(env: Record<string, string | undefined>): Pick<LoopConfig,
   };
 }
 
-type HostSettings = Pick<LoopConfig, "sandboxReady" | "gh" | "git" | "retryDelaysMs" | "checksLock" | "ciLogFilter" | "doctor" | "ciRerun">;
+type HostSettings = Pick<LoopConfig, "sandboxReady" | "gh" | "git" | "retryDelaysMs" | "retryTransient" | "checksLock" | "ciLogFilter" | "doctor" | "ciRerun">;
 
 /** The host settings that differ per repository (hook, wrappers, retry, lock, CI log filter, doctor). */
 function hostSettings(env: Record<string, string | undefined>, defaultPromptDir: string): HostSettings {
@@ -135,6 +137,7 @@ function hostSettings(env: Record<string, string | undefined>, defaultPromptDir:
     gh: text(env, "LOOP_GH", "gh"),
     git: text(env, "LOOP_GIT", "git"),
     retryDelaysMs: parseDelays(text(env, "LOOP_RETRY_DELAYS", DEFAULT_RETRY_DELAYS)),
+    retryTransient: parseTransient(env.LOOP_RETRY_TRANSIENT),
     checksLock: optional(env, "LOOP_CHECKS_LOCK"),
     ciLogFilter: optional(env, "LOOP_CI_LOG_FILTER"),
     doctor: setOr(env, "LOOP_DOCTOR", join(dirname(defaultPromptDir), "doctor.sh")),

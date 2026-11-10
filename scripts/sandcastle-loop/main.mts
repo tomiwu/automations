@@ -38,17 +38,24 @@ const repoFlags = config.repo ? ["--repo", config.repo] : [];
 
 // "gh" and "git" in this file are the host commands LOOP_GH and LOOP_GIT (wrappers are allowed).
 const hostCommand = (cmd: string): string => (cmd === "gh" ? config.gh : cmd === "git" ? config.git : cmd);
-const retry = { delaysMs: config.retryDelaysMs, log: console.log };
+const retry = { delaysMs: config.retryDelaysMs, log: console.log, transient: config.retryTransient };
 
-const rawSh: Exec = (cmd, args) =>
-  execFileSync(hostCommand(cmd), args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }).trim();
+// stderr is captured (and still printed), so the retry can tell a transient error from a permanent one.
+const rawSh: Exec = (cmd, args) => {
+  try {
+    return execFileSync(hostCommand(cmd), args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  } catch (error) {
+    process.stderr.write(String((error as { stderr?: unknown }).stderr ?? ""));
+    throw error;
+  }
+};
 const sh: Exec = retryingExec(rawSh, new Set(["gh", "git"]), retry);
 
 // A read that may fail without a stop. It is retried; after the last attempt it gives the output it has.
 function quiet(cmd: string, args: string[]): string {
   const once = () => {
     const r = spawnSync(hostCommand(cmd), args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    if (r.status !== 0) throw new Error(`${cmd} ${args.slice(0, 2).join(" ")} exited ${r.status}`);
+    if (r.status !== 0) throw new Error(`${cmd} ${args.slice(0, 2).join(" ")} exited ${r.status}\n${r.stderr}`);
     return r.stdout.trim();
   };
   try {
@@ -62,7 +69,9 @@ function quiet(cmd: string, args: string[]): string {
 function tryStep(cmd: string, args: string[]): boolean {
   try {
     retrySync(`${cmd} ${args.slice(0, 2).join(" ")}`, () => {
-      if (spawnSync(hostCommand(cmd), args, { stdio: "inherit" }).status !== 0) throw new Error(`${cmd} failed`);
+      const r = spawnSync(hostCommand(cmd), args, { encoding: "utf8", stdio: ["inherit", "inherit", "pipe"] });
+      process.stderr.write(r.stderr ?? "");
+      if (r.status !== 0) throw new Error(`${cmd} failed\n${r.stderr}`);
     }, retry);
     return true;
   } catch {
