@@ -59,7 +59,7 @@ exit 1`,
   });
   boxes.push(box);
   const { stubDir: stub, home, env } = box;
-  return { stub, root, home, tmp, env };
+  return { stub, root, home, tmp, env, writeStub: box.stub };
 }
 
 function run(env: Record<string, string>, ...args: string[]) {
@@ -133,7 +133,7 @@ esac`;
 
   function hostRun(models: string, extra: Record<string, string> = {}, agent: string | null = listingAgent) {
     const box = fakeBox({ omit: agent === null ? ["agent"] : [] });
-    if (agent !== null) executable(join(box.stub, "agent"), agent);
+    if (agent !== null) box.writeStub("agent", agent);
     return run({ ...box.env, LOOP_MODELS: models, ...extra }, "host");
   }
 
