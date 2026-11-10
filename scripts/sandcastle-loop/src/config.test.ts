@@ -21,6 +21,13 @@ describe("loadConfig", () => {
     expect(c.sandboxReady).not.toContain("|| true");
     expect(c).toMatchObject({ gh: "gh", git: "git", checksLock: undefined, ciLogFilter: undefined, doctor: "/doctor.sh", ciRerun: true });
     expect(c.retryDelaysMs).toEqual([5000, 15000, 45000, 90000]);
+    expect(c.retryTransient).toHaveLength(8);
+  });
+
+  it("adds the LOOP_RETRY_TRANSIENT pattern", () => {
+    const c = loadConfig({ LOOP_RETRY_TRANSIENT: "proxy busy" }, "/w/r", "/p");
+    expect(c.retryTransient).toHaveLength(9);
+    expect(c.retryTransient.at(-1)!.test("Proxy Busy")).toBe(true);
   });
 
   it("reads the repo-specific settings (e1003 deliberate differences)", () => {

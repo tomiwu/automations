@@ -54,7 +54,7 @@ There is always something to do. When no issue is ready and `LOOP_IDLE=groom`:
 
 ## Network errors
 
-Each host `gh` call and each `git push`, `pull` and `fetch` is retried (`LOOP_RETRY_DELAYS`). A log line `RETRY <command>: attempt N failed, retry in Ns` shows each retry. A failed CI is re-run one time before the fixer gets the log.
+Each host `gh` call and each `git push`, `pull` and `fetch` is retried (`LOOP_RETRY_DELAYS`) when the error is transient (`LOOP_RETRY_TRANSIENT`). A permanent error, for example HTTP 404, HTTP 401 or "Could not resolve to a PullRequest", fails at once. A log line `RETRY <command>: attempt N failed, retry in Ns` shows each retry. A failed CI is re-run one time before the fixer gets the log.
 
 ## Secrets in logs
 
@@ -90,6 +90,7 @@ To see the next issue and run no agent: `DRY_RUN=1 npx tsx scripts/sandcastle-lo
 | `LOOP_SANDBOX_READY` | `npm ci --no-audit --no-fund` | Sandbox-ready hook. A failure stops the sandbox. Empty: no hook. |
 | `LOOP_GH`, `LOOP_GIT` | `gh`, `git` | Host commands or wrappers for GitHub and git |
 | `LOOP_RETRY_DELAYS` | `5,15,45,90` | Seconds between the attempts of a host `gh` call and of `git push`/`pull`/`fetch` (5 attempts) |
+| `LOOP_RETRY_TRANSIENT` | unset | One more regex (case-insensitive) of a transient error. The default list: connection reset, unexpected/early EOF, TLS handshake, timeouts, DNS, HTTP 5xx, HTTP 429, GitHub secondary rate limit. Other errors are not retried. |
 | `LOOP_STORAGE_CONF` | unset | Podman storage config of the repo. The start script and the doctor export it as `CONTAINERS_STORAGE_CONF`. |
 | `LOOP_CHECKS_LOCK` | unset | Box-wide lock file around `LOOP_CHECKS` (`flock`), so only one heavy check runs at a time |
 | `LOOP_CI_RERUN` | `1` | Re-run the failed CI jobs one time before the CI fixer runs. `0` turns it off. |
