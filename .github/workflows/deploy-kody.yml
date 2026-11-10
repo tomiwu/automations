@@ -125,87 +125,11 @@ jobs:
           PKG: "@tomiwu/${{ matrix.package }}"
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          # When publish exceeds the inline budget, Kody returns status=dispatched
-          # with a workflow_id. Poll that run to completion so a later durable
-          # failure (for example checks_failed on artifact rebuild) fails this job
-          # instead of leaving a green Deploy to Kody run. One re-publish on
-          # durable error, because Kody says a re-run repairs missing artifacts.
-          set -euo pipefail
+          # When Kody hands the publish off to a background job, the script reads the job status
+          # (workflowRunList, needs the token scope job:read). Without that scope it publishes again each
+          # 10 s: Kody dedupes an active publish and answers already_published when it is done.
           echo "Publishing $PKG (automations SHA $SHA)"
-          publish_once() {
-            npx -y "$KODY_CLI" package publish "$PKG"
-          }
-          await_dispatched() {
-            local workflow_id="$1"
-            local attempt=0
-            local max_attempts=30
-            local status="" last_error="" enqueued=""
-            echo "Publish dispatched; waiting for workflow $workflow_id"
-            while [ "$attempt" -lt "$max_attempts" ]; do
-              attempt=$((attempt + 1))
-              npx -y "$KODY_CLI" api workflowRunList \
-                --params "{\"workflow_id\":\"$workflow_id\"}" > "$RUNNER_TEMP/wf.json"
-              # The CLI prints the output directly or inside "result"; read both.
-              wf='(.workflows // .result.workflows // [])[0]'
-              status=$(jq -r "$wf.status // empty" "$RUNNER_TEMP/wf.json")
-              last_error=$(jq -r "$wf.last_error // empty" "$RUNNER_TEMP/wf.json")
-              enqueued=$(jq -r "$wf.enqueued_commit // empty" "$RUNNER_TEMP/wf.json")
-              if [ "$attempt" = 1 ] && [ -z "$status" ]; then
-                echo "workflowRunList keys: $(jq -c 'keys' "$RUNNER_TEMP/wf.json")"
-              fi
-              echo "poll $attempt/$max_attempts status=${status:-unknown} enqueued_commit=${enqueued:-n/a}"
-              case "$status" in
-                complete)
-                  jq "$wf | {id, status, completed_at, enqueued_commit, last_error}" "$RUNNER_TEMP/wf.json"
-                  return 0
-                  ;;
-                errored|terminated|cancelled)
-                  echo "::error::Kody publish workflow $workflow_id ended with status=$status"
-                  if [ -n "$last_error" ]; then
-                    echo "::error::last_error=$last_error"
-                    printf '%s\n' "$last_error"
-                  fi
-                  return 1
-                  ;;
-              esac
-              sleep 10
-            done
-            echo "::error::Timed out waiting for Kody publish workflow $workflow_id"
-            jq '.' "$RUNNER_TEMP/wf.json" || true
-            return 1
-          }
-          finish_publish() {
-            local out_file="$1"
-            local status
-            status=$(jq -r '.status // empty' "$out_file")
-            jq '{status, published_commit, previous_commit, message, pending_secret_package_approvals, workflow_id}' "$out_file"
-            case "$status" in
-              published|already_published)
-                return 0
-                ;;
-              dispatched)
-                local workflow_id
-                workflow_id=$(jq -r '.workflow_id // empty' "$out_file")
-                if [ -z "$workflow_id" ]; then
-                  echo "::error::Publish returned dispatched without workflow_id"
-                  return 1
-                fi
-                await_dispatched "$workflow_id"
-                return $?
-                ;;
-              *)
-                echo "::error::Unexpected publish status=${status:-empty}"
-                return 1
-                ;;
-            esac
-          }
-          publish_once > "$RUNNER_TEMP/publish.json"
-          if finish_publish "$RUNNER_TEMP/publish.json"; then
-            exit 0
-          fi
-          echo "First publish failed after durable handoff or unexpected status; retrying once"
-          publish_once > "$RUNNER_TEMP/publish-retry.json"
-          finish_publish "$RUNNER_TEMP/publish-retry.json"
+          node tools/kody-deploy/kody-publish.mjs "$PKG"
       - name: Report a package that was not deployed
         if: failure() || cancelled()
         env:

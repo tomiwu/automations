@@ -23,6 +23,7 @@ Each watcher package exports entry files (`./scheduled`, `./configure` and the e
 - `Deploy to Kody` runs after CI is green on main. A newer run cancels an older one (`cancel-in-progress: true`). The newer run deploys every package from the newer commit.
 - Each job has `timeout-minutes: 30`, the check step 10 and the publish step 20.
 - The publish check retries on 5xx and timeouts (`tools/kody-deploy/kody-check.mjs`). The check of `librus-watch` takes about 60 s and can end in a gateway 503 although the tree is good. A deploy then goes on with a warning, because publish runs the same checks.
+- Publish uses `tools/kody-deploy/kody-publish.mjs`. A publish that Kody moves to a background job is followed with `workflowRunList`, when the token has the scope `job:read`. Otherwise the script publishes again every 10 s until Kody answers `already_published`. Adding `job:read` to `KODY_DEPLOY_TOKEN` is an owner step and optional.
 - A failed or cancelled job writes `not deployed: <package> at <sha>` as an error and in the job summary.
 
 ## Secrets and credentials

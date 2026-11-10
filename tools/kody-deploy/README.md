@@ -7,6 +7,11 @@ Helper scripts of `.github/workflows/deploy-kody.yml`.
   - Exit codes: 0 when the checks pass, 1 when they fail or the request is refused, 3 when Kody did not answer.
   - In a deploy the workflow goes on after exit 3 with a warning, because publish runs the same checks. A dry run fails.
   - The token comes only from `KODY_API_TOKEN` and is never printed.
+- `kody-publish.mjs <@owner/name>` publishes one package (Open API `packageList` and `packagePublishExternalPush`, the same as `kody package publish`) and waits until it is done.
+  - `published` or `already_published` ends at once with exit 0.
+  - `dispatched` (Kody moved the publish to a background job): it reads the job status with `workflowRunList` every 10 s (`KODY_PUBLISH_POLL_MS`) until `complete`. A failed job gets one more publish.
+  - `workflowRunList` needs the token scope `job:read`. The deploy token does not have it (Kody answers `insufficient_scope`). The script then stops reading the status at once and publishes again every 10 s. Kody dedupes an active publish, and a finished one answers `already_published`. So a done package ends in less than 1 minute.
+  - It waits at most 5 minutes (`KODY_PUBLISH_WAIT_MS`). It fails at once on a refusal (`checks_failed`, `locked`, `approval_required`, `not_fast_forward`) or a 4xx, and tries again on 5xx.
 
 ## Local CI (`scripts/ci-local.sh`)
 
