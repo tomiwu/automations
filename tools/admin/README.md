@@ -27,6 +27,7 @@ The CLI never takes a secret value as an argument. `--login-secret` and `--passw
 | `add-recipient` | `--family`, `--chat-id`, `--language`, `--children` (comma-separated Child IDs) |
 | `set-fee` | `--family`, `--child`, `--organizer`, `--recipient-name`, `--account` (NRB, 26 digits, checksum checked), `--title`, `--due-day` (1-28), `--nip` (optional, checksum checked), `--notify-day` (default 10, less than due day), `--reminder-day` (default 14), `--amounts` (`YYYY-MM=grosze,...`), `--source-url`, `--account-id` |
 | `list-fees` | `--family` (optional) |
+| `payments-consistency` | `--family`. Read only. Compares the Journal heads of the `payment:` streams with the `payments` table. It prints each difference (stream, Payment id, field) and no amounts. It fails when there is a difference. |
 | `list` | `--family` (optional) |
 | `disable-account` | `--id` |
 | `import-seed <file>` | A JSON file with the keys `families`, `children`, `accounts`, `activities`, `recipients`, `fees`. Each value is a list of table rows. |

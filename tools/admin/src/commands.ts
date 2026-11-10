@@ -1,4 +1,5 @@
 import { encryptCredential, decryptCredential, importCredentialKey, isValidNip, isValidNrb, newCredentialKey } from "@automations/shared";
+import { comparePaymentsProjection, paymentStream, type ProjectionRow } from "@automations/librus-data";
 import { oneOf, parseArgs, required, secretName, weekday } from "./args.ts";
 import { signWatcherKey } from "./jwt.ts";
 import { rekey } from "./rekey.ts";
@@ -286,6 +287,43 @@ const rekeyCommand: Command = async (flags, _positional, deps) => {
   if (bad > 0) throw new Error(`${bad} credential(s) are not ok`);
 };
 
+
+const isoText = (value: unknown): string | null => (value === null || value === undefined ? null : new Date(String(value)).toISOString());
+
+function rowOf(row: Row, childOf: Map<string, string>): ProjectionRow[] {
+  const childId = childOf.get(String(row.fee_id));
+  if (childId === undefined) return [];
+  return [{
+    id: String(row.id),
+    stream: paymentStream(childId, String(row.fee_id), String(row.month)),
+    status: String(row.status),
+    amount: Number(row.amount),
+    amountSource: String(row.amount_source),
+    notifiedAt: isoText(row.notified_at),
+    remindedAt: isoText(row.reminded_at),
+  }];
+}
+
+/**
+ * Read only. Compares the Journal heads of the `payment:` streams with the `payments` table and prints
+ * each difference (stream, Payment id, field). It prints no amounts and no Fee details.
+ */
+const paymentsConsistency: Command = async (flags, _positional, deps) => {
+  const family = `family_id=eq.${encodeURIComponent(required(flags, "family"))}`;
+  const rest = deps.rest();
+  const fees = await rest.select("fees", `select=id,child_id&${family}`);
+  const childOf = new Map(fees.map((fee) => [String(fee.id), String(fee.child_id)]));
+  const payments = await rest.select("payments", `select=id,fee_id,month,status,amount,amount_source,notified_at,reminded_at&${family}`);
+  const heads = await rest.select("journal_heads", `select=stream,payload&kind=eq.payment&${family}`);
+  const differences = comparePaymentsProjection(
+    heads.map((head) => ({ stream: String(head.stream), payload: (head.payload ?? {}) as Record<string, unknown> })),
+    payments.flatMap((row) => rowOf(row, childOf)),
+  );
+  deps.print(`Payments: ${payments.length}, Journal heads: ${heads.length}, differences: ${differences.length}`);
+  for (const item of differences) deps.print(`${item.problem}  ${item.stream}  ${item.paymentId ?? "-"}  ${item.field ?? ""}`.trimEnd());
+  if (differences.length > 0) throw new Error(`${differences.length} difference(s) between the Journal and the payments table`);
+};
+
 const COMMANDS: Record<string, Command> = {
   rekey: rekeyCommand,
   "new-credential-key": newKey,
@@ -301,6 +339,7 @@ const COMMANDS: Record<string, Command> = {
   list,
   "set-fee": setFee,
   "list-fees": listFees,
+  "payments-consistency": paymentsConsistency,
   "disable-account": disableAccount,
   "import-seed": importSeed,
   "make-watcher-key": makeWatcherKey,
