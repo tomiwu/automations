@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { hermeticEnv, waitForExit, type Hermetic } from "./test-env.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const scriptsDir = join(root, "..");
@@ -23,7 +24,17 @@ function executable(path: string, body: string): void {
   chmodSync(path, 0o755);
 }
 
+/** A hermetic environment whose stub directory is `dir` (the stubs of the test) plus links to real programs. */
+function linked(dir: string, real: string[] = []): Record<string, string> {
+  const box = hermeticEnv({}, { real });
+  boxes.push(box);
+  return { ...box.env, PATH: `${dir}:${box.env.PATH}` };
+}
+
+const boxes: Hermetic[] = [];
+
 afterEach(() => {
+  boxes.splice(0).forEach((box) => box.cleanup());
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 
@@ -38,7 +49,7 @@ describe("redact-filter with a failing podman", () => {
       "bash",
       ["-c", `podman run image 2>&1 | "${tsx}" "${join(root, "redact-filter.mts")}" > "${log}"`],
       {
-        env: { PATH: `${dir}:${process.env.PATH}`, FAKE_OAUTH: FAKE_TOKEN, FAKE_PLAIN, REDACT_ENV_FILE: envFile },
+        env: { ...linked(dir, ["node"]), FAKE_OAUTH: FAKE_TOKEN, FAKE_PLAIN, REDACT_ENV_FILE: envFile },
         encoding: "utf8",
       },
     );
@@ -81,16 +92,7 @@ describe("check-no-secrets.sh", () => {
 // The start script runs the loop in the background. Wait until it ends, so the temp dir can go.
 function waitForLoop(logDir: string): void {
   const pidFile = join(logDir, "loop.pid");
-  if (!existsSync(pidFile)) return;
-  const pid = Number(readFileSync(pidFile, "utf8"));
-  for (let i = 0; i < 100; i++) {
-    try {
-      process.kill(pid, 0);
-    } catch {
-      return;
-    }
-    spawnSync("sleep", ["0.05"]);
-  }
+  if (existsSync(pidFile)) waitForExit(Number(readFileSync(pidFile, "utf8")));
 }
 
 describe("sandcastle-loop.sh", () => {
@@ -101,7 +103,7 @@ describe("sandcastle-loop.sh", () => {
     executable(join(dir, "npx"), `touch "${marker}"; exit 0`);
     executable(join(dir, "doctor"), doctor);
     const result = spawnSync(join(scriptsDir, "sandcastle-loop.sh"), [], {
-      env: { PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "owner/example", LOOP_LOG_DIR: logDir, LOOP_DOCTOR: join(dir, "doctor") },
+      env: { ...linked(dir), LOOP_REPO: "owner/example", LOOP_LOG_DIR: logDir, LOOP_DOCTOR: join(dir, "doctor") },
       encoding: "utf8",
     });
     waitForLoop(logDir);

@@ -1,36 +1,39 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { hermeticEnv, type Hermetic } from "./test-env.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const script = join(root, "build-image.sh");
 const containerfile = join(root, "Containerfile");
 const dirs: string[] = [];
 
+const boxes: Hermetic[] = [];
+
 afterEach(() => {
+  boxes.splice(0).forEach((box) => box.cleanup());
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-// A stub podman that writes its arguments to a file. It builds nothing.
-function stubPodman(): { dir: string; args: () => string[] } {
-  const dir = mkdtempSync(join(tmpdir(), "loop-image-"));
-  dirs.push(dir);
-  const out = join(dir, "args");
-  writeFileSync(join(dir, "podman"), `#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "${out}"\necho "STEP 1/20: FROM node"\n`);
-  chmodSync(join(dir, "podman"), 0o755);
-  return { dir, args: () => readFileSync(out, "utf8").trim().split("\n") };
+// A stub podman that writes its arguments to a file. It builds nothing. git is the real git.
+function stubPodman(): { dir: string; env: Record<string, string>; args: () => string[] } {
+  const box = hermeticEnv({}, { real: ["git"] });
+  boxes.push(box);
+  const out = join(box.stubDir, "args");
+  box.stub("podman", `for a in "$@"; do echo "$a"; done > "${out}"\necho "STEP 1/20: FROM node"`);
+  return { dir: box.stubDir, env: box.env, args: () => readFileSync(out, "utf8").trim().split("\n") };
 }
 
 const shortSha = (path: string) => execFileSync("git", ["hash-object", path], { encoding: "utf8" }).trim().slice(0, 7);
 
 describe("build-image.sh", () => {
   it("builds with the tag sandcastle:<repo>-<short sha of the Containerfile> and prints only the tag", () => {
-    const { dir, args } = stubPodman();
+    const { env, args } = stubPodman();
     const r = spawnSync("bash", [script], {
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "example-owner/example-repo", LOOP_MODELS: "claude:model-a" },
+      env: { ...env, LOOP_REPO: "example-owner/example-repo", LOOP_MODELS: "claude:model-a" },
       encoding: "utf8",
     });
     const tag = `sandcastle:example-repo-${shortSha(containerfile)}`;
@@ -44,14 +47,13 @@ describe("build-image.sh", () => {
   });
 
   it("takes the repo name from the origin URL, not from a worktree directory name", () => {
-    const { dir } = stubPodman();
+    const { env: stubEnv } = stubPodman();
     const work = mkdtempSync(join(tmpdir(), "loop-wt-"));
     const wt = join(work, "example-repo-170");
     mkdirSync(wt);
     spawnSync("git", ["init", "-q", wt]);
     spawnSync("git", ["-C", wt, "remote", "add", "origin", "git@github.com:example-owner/example-repo.git"]);
-    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${dir}:${process.env.PATH}` };
-    delete env.LOOP_REPO;
+    const env = { ...stubEnv };
     const r = spawnSync("bash", [script], { cwd: wt, env, encoding: "utf8" });
     rmSync(work, { recursive: true, force: true });
     expect(r.status).toBe(0);
@@ -59,11 +61,11 @@ describe("build-image.sh", () => {
   });
 
   it("uses the Containerfile, context and image name of another repository", () => {
-    const { dir, args } = stubPodman();
+    const { dir, env, args } = stubPodman();
     const own = join(dir, "Containerfile");
     writeFileSync(own, "FROM scratch\n");
     const r = spawnSync("bash", [script], {
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "o/other", LOOP_CONTAINERFILE: own, LOOP_IMAGE_NAME: "box", LOOP_BUILD_CONTEXT: "/ctx" },
+      env: { ...env, LOOP_REPO: "o/other", LOOP_CONTAINERFILE: own, LOOP_IMAGE_NAME: "box", LOOP_BUILD_CONTEXT: "/ctx" },
       encoding: "utf8",
     });
     expect(r.stdout.trim()).toBe(`box:other-${shortSha(own)}`);
@@ -72,9 +74,9 @@ describe("build-image.sh", () => {
   });
 
   it("fails when the Containerfile does not exist", () => {
-    const { dir } = stubPodman();
+    const { dir, env } = stubPodman();
     const r = spawnSync("bash", [script], {
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "o/r", LOOP_CONTAINERFILE: join(dir, "missing") },
+      env: { ...env, LOOP_REPO: "o/r", LOOP_CONTAINERFILE: join(dir, "missing") },
       encoding: "utf8",
     });
     expect(r.status).toBe(1);
