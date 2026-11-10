@@ -1,0 +1,86 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it } from "vitest";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const script = join(root, "build-image.sh");
+const containerfile = join(root, "Containerfile");
+const dirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
+// A stub podman that writes its arguments to a file. It builds nothing.
+function stubPodman(): { dir: string; args: () => string[] } {
+  const dir = mkdtempSync(join(tmpdir(), "loop-image-"));
+  dirs.push(dir);
+  const out = join(dir, "args");
+  writeFileSync(join(dir, "podman"), `#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "${out}"\necho "STEP 1/20: FROM node"\n`);
+  chmodSync(join(dir, "podman"), 0o755);
+  return { dir, args: () => readFileSync(out, "utf8").trim().split("\n") };
+}
+
+const shortSha = (path: string) => execFileSync("git", ["hash-object", path], { encoding: "utf8" }).trim().slice(0, 7);
+
+describe("build-image.sh", () => {
+  it("builds with the tag sandcastle:<repo>-<short sha of the Containerfile> and prints only the tag", () => {
+    const { dir, args } = stubPodman();
+    const r = spawnSync("bash", [script], {
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "example-owner/example-repo", LOOP_MODELS: "claude:model-a" },
+      encoding: "utf8",
+    });
+    const tag = `sandcastle:example-repo-${shortSha(containerfile)}`;
+    expect(r.status).toBe(0);
+    expect(r.stdout).toBe(`${tag}\n`);
+    expect(r.stderr).toContain("STEP 1/20");
+    const a = args();
+    expect(a.slice(0, 5)).toEqual(["build", "-t", tag, "-f", containerfile]);
+    expect(a).toContain("LOOP_MODELS=claude:model-a");
+    expect(a.at(-1)).toBe(root);
+  });
+
+  it("uses the Containerfile, context and image name of another repository", () => {
+    const { dir, args } = stubPodman();
+    const own = join(dir, "Containerfile");
+    writeFileSync(own, "FROM scratch\n");
+    const r = spawnSync("bash", [script], {
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "o/other", LOOP_CONTAINERFILE: own, LOOP_IMAGE_NAME: "box", LOOP_BUILD_CONTEXT: "/ctx" },
+      encoding: "utf8",
+    });
+    expect(r.stdout.trim()).toBe(`box:other-${shortSha(own)}`);
+    expect(args().slice(3, 5)).toEqual(["-f", own]);
+    expect(args().at(-1)).toBe("/ctx");
+  });
+
+  it("fails when the Containerfile does not exist", () => {
+    const { dir } = stubPodman();
+    const r = spawnSync("bash", [script], {
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, LOOP_REPO: "o/r", LOOP_CONTAINERFILE: join(dir, "missing") },
+      encoding: "utf8",
+    });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("does not exist");
+  });
+});
+
+describe("Containerfile", () => {
+  const text = readFileSync(containerfile, "utf8");
+
+  it("has the permission steps as the last root steps", () => {
+    const lastRoot = text.lastIndexOf("USER root");
+    const after = text.slice(lastRoot);
+    expect(after).toContain("install -d -m 1777 /tmp");
+    expect(after).toContain("chown -R agent:agent /home/agent");
+    expect(after.indexOf("USER ${AGENT_UID}:${AGENT_GID}")).toBeGreaterThan(after.indexOf("chown -R agent:agent"));
+  });
+
+  it("ends with a RUN of the container doctor as the agent user", () => {
+    const runs = [...text.matchAll(/^RUN .*$/gm)].map((m) => m[0]);
+    expect(runs.at(-1)).toContain("doctor.sh container");
+    expect(text).toContain("COPY doctor.sh");
+  });
+});

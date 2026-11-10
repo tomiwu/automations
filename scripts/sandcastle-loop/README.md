@@ -13,6 +13,19 @@ LOOP_REPO=owner/name /path/to/automations/scripts/sandcastle-loop.sh
 
 `sandcastle-loop.sh` takes a lock and a pid file per repository, sets `XDG_RUNTIME_DIR=/tmp/xdg-runtime-loop`, checks `LOOP_IMAGE`, and starts `main.mts` with `setsid nohup`. It removes `GH_TOKEN` and `GITHUB_TOKEN` from the environment of the loop. The log is `<LOOP_LOG_DIR>/<YYYYMMDD-HHMM>.log`. The link `current.log` points to the newest log.
 
+## Sandbox image
+
+Rebuild the image in one command and use the printed tag:
+
+```sh
+export LOOP_IMAGE="$(LOOP_REPO=tomiwu/automations scripts/sandcastle-loop/build-image.sh)"
+```
+
+- `build-image.sh` builds `Containerfile` in this directory and tags it `sandcastle:<repo>-<short sha of the Containerfile>`. Only the tag goes to stdout; the build output goes to stderr.
+- The last root steps of the Containerfile are `install -d -m 1777 /tmp` and `chown -R agent:agent /home/agent`. The last `RUN` is `doctor.sh container` as the agent user, so the build fails when the image is broken.
+- Another repository keeps its own Containerfile (for example extra toolchains) and sets `LOOP_CONTAINERFILE`, `LOOP_BUILD_CONTEXT` (put `doctor.sh` in it) and `LOOP_IMAGE_NAME`. `LOOP_STORAGE_CONF` selects the podman storage. `LOOP_MODELS` is passed as a build arg, so the build checks the agent CLIs.
+- The box wrapper switches to this image after the merge (owner step). `.sandcastle/Containerfile` stays for the current loop.
+
 ## Preflight doctor
 
 `doctor.sh` runs before the loop starts (`sandcastle-loop.sh`) and before iteration 1 (`main.mts`, skipped when the start script ran it). When a check fails it prints `DOCTOR FAIL: <check> -> fix: <command>`, exits 1, and no agent starts.
