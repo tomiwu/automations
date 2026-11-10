@@ -161,11 +161,25 @@ export const projectHeads = (heads: readonly JournalEvent[]): StreamState[] => h
 
 const afterFrom = (day: string, from?: string): boolean => from === undefined || day >= from;
 const beforeTo = (day: string, to?: string): boolean => to === undefined || day <= to;
+const beforeEnd = (day: string, before?: string): boolean => before === undefined || day < before;
 
 /** True if the day is inside the optional bounds. An event with no day is outside any bound. */
 function inRange(day: string | null, filter: JournalFilter): boolean {
-  if (filter.from === undefined && filter.to === undefined) return true;
-  return day !== null && afterFrom(day, filter.from) && beforeTo(day, filter.to);
+  if ([filter.from, filter.to, filter.before].every((bound) => bound === undefined)) return true;
+  return day !== null && afterFrom(day, filter.from) && beforeTo(day, filter.to) && beforeEnd(day, filter.before);
+}
+
+const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+/**
+ * The half-open day range of a month `YYYY-MM`: `from` is its first day, `before` is the first day of the next month
+ * (December goes to January of the next year). Each bound is a real date, so Postgres never gets a day like `-11-31`.
+ */
+export function monthRange(month: string): { from: string; before: string } {
+  const match = MONTH.exec(month);
+  if (!match) throw new Error(`month must be YYYY-MM: ${month}`);
+  const next = new Date(Date.UTC(Number(match[1]), Number(match[2]), 1));
+  return { from: `${month}-01`, before: next.toISOString().slice(0, 10) };
 }
 
 function inList<T>(allowed: readonly T[] | undefined, value: T): boolean {

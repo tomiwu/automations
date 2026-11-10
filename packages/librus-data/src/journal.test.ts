@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkEvent, contentHash, planEvents, projectHeads, projectStream } from "./journal.ts";
+import { checkEvent, contentHash, monthRange, planEvents, projectHeads, projectStream } from "./journal.ts";
 import type { Classifier, Observed } from "./journal.ts";
 import { CHILD_ID, FAMILY_ID } from "./fixtures.ts";
 import type { JournalEvent } from "./storage.ts";
@@ -136,5 +136,21 @@ describe("projectStream and projectHeads", () => {
   it("projects heads one by one", async () => {
     const heads = [await head("s1", 1, "A1"), await head("s2", 3, "C3")];
     expect(projectHeads(heads).map((item) => [item.stream, item.seq])).toEqual([["s1", 1], ["s2", 3]]);
+  });
+});
+
+describe("monthRange", () => {
+  it.each([
+    ["2026-11", "2026-11-01", "2026-12-01"],
+    ["2027-02", "2027-02-01", "2027-03-01"],
+    ["2028-02", "2028-02-01", "2028-03-01"],
+    ["2026-12", "2026-12-01", "2027-01-01"],
+    ["2026-10", "2026-10-01", "2026-11-01"],
+  ])("gives a half-open range of real days for %s", (month, from, before) => {
+    expect(monthRange(month)).toEqual({ from, before });
+  });
+
+  it("rejects a value that is not YYYY-MM", () => {
+    for (const bad of ["2026-13", "2026-00", "2026-1", "2026-11-01", ""]) expect(() => monthRange(bad)).toThrow("YYYY-MM");
   });
 });

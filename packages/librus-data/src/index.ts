@@ -24,7 +24,7 @@ export { createSupabaseStorage, supabaseStorageFromRuntime } from "./supabase.ts
 export type { SupabaseStorage, SupabaseStorageOptions } from "./supabase.ts";
 export { createCredentialResolver, createSupabaseCredentialStore } from "./credentials.ts";
 export type { CredentialStore, SupabaseCredentialStoreOptions } from "./credentials.ts";
-export { checkEvent, contentHash, planEvents, projectHeads, projectStream } from "./journal.ts";
+export { checkEvent, contentHash, monthRange, planEvents, projectHeads, projectStream } from "./journal.ts";
 export { checkCompletedForPayments, paymentPayload, paymentStream, planPaymentDecision, planPaymentDue, planPaymentSent } from "./payment-journal.ts";
 export type { PaymentDecision, PaymentInput, PaymentSent } from "./payment-journal.ts";
 export type { Classifier, Observed, PlanInput, StreamState } from "./journal.ts";

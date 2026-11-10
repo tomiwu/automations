@@ -15,7 +15,7 @@
 | `recordDetails(rows)` | Stores the content of Items in batches. Returns the number of new rows. Same content is ignored; changed content adds a row and the old row stays. It also appends `ItemRecorded` or `ItemChanged` events to the Journal (stream `item:<scope>:<sourceId>`) |
 | `listDetails(familyId, { childId?, from?, to?, since? })` | Stored details, oldest first. They are read from the Item events of the Journal; `firstSeen` is `recordedAt`. `from` and `to` are `YYYY-MM-DD`. Details are never purged |
 | `appendEvents(events)` | Appends Journal events in batches of 100 rows at most. A conflict on `(family_id, stream, seq)` is an error. Returns the number of new events |
-| `listHeads(familyId, filter?)` | The Head (last event) of each stream, read from the view `journal_heads` in one request. The filter has `childId`, `kinds`, `streams`, `from` and `to` |
+| `listHeads(familyId, filter?)` | The Head (last event) of each stream, read from the view `journal_heads` in one request. The filter has `childId`, `kinds`, `streams`, `from`, `to` (included) and `before` (not included). For a month use `monthRange("YYYY-MM")`: `{ from, before }` with the first day of the month and of the next month. Never build a month end like `-31`: Postgres answers 400 for a day that does not exist |
 | `listEvents(familyId, filter?)` | The Journal events that match the filter, oldest first. The filter also has `since` |
 | `loadConfig(familyId)` | `Config` of the Family, read in one request |
 | `listFees(familyId)` | Fees of the Family. The Watcher cannot change them |

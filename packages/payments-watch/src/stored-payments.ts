@@ -1,5 +1,5 @@
 import { localDate, type FetchCount } from "@automations/shared";
-import type { JournalEvent } from "@automations/librus-data";
+import { monthRange, type JournalEvent } from "@automations/librus-data";
 import { checkChildId, checkKeys, inputObject, withFetches, type ExportDeps } from "@tomiwu/librus-watch";
 
 const MAX_MONTHS_BACK = 12;
@@ -79,7 +79,7 @@ export async function storedPaymentsExport(deps: ExportDeps, input: unknown = {}
   const childIds = config.children.map((child) => child.id);
   if (childId !== undefined && !childIds.includes(childId)) throw new Error(`Unknown child: ${childId}.`);
   const scope = childId === undefined ? childIds : [childId];
-  const heads = await deps.storage.listHeads(deps.familyId, { childId, kinds: ["payment"], from: `${month}-01`, to: `${month}-31` });
+  const heads = await deps.storage.listHeads(deps.familyId, { childId, kinds: ["payment"], ...monthRange(month) });
   const checks = await deps.storage.listHeads(deps.familyId, { streams: scope.map((id) => `check:payments-watch:${id}`) });
   return withFetches(deps, {
     timezone, month, lastSavedAt: savedAt(scope, checks), payments: heads.map(paymentOf).sort(byDueDay),
