@@ -25,7 +25,7 @@ export type { SupabaseStorage, SupabaseStorageOptions } from "./supabase.ts";
 export { createCredentialResolver, createSupabaseCredentialStore } from "./credentials.ts";
 export type { CredentialStore, SupabaseCredentialStoreOptions } from "./credentials.ts";
 export { checkEvent, contentHash, monthRange, planEvents, projectHeads, projectStream } from "./journal.ts";
-export { checkCompletedForPayments, paymentPayload, paymentStream, planPaymentCancelled, planPaymentDecision, planPaymentDue, planPaymentSent } from "./payment-journal.ts";
+export { checkCompletedForPayments, paymentPayload, paymentStream, planPaymentCancelled, planPaymentDecision, planPaymentDue, planPaymentReappeared, planPaymentSent } from "./payment-journal.ts";
 export type { PaymentCancelReason, PaymentDecision, PaymentInput, PaymentSent } from "./payment-journal.ts";
 export { COMPARED_FIELDS, comparePaymentsProjection, projectionRows } from "./payments-consistency.ts";
 export type { PaymentDifference, PaymentHead, ProjectionRow } from "./payments-consistency.ts";

@@ -338,6 +338,11 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const query = `${filter("id", "eq", id)}&status=eq.pending`;
       return ((await (await request("PATCH", "payments", query, init)).json()) as Row[]).length > 0;
     },
+    reopenCancelledPayment: async (id) => {
+      const init = { headers: headers({ ...JSON_HEADERS, prefer: "return=representation" }), body: JSON.stringify({ status: "pending" }) };
+      const query = `${filter("id", "eq", id)}&status=eq.cancelled`;
+      return ((await (await request("PATCH", "payments", query, init)).json()) as Row[]).length > 0;
+    },
   };
   return storage;
 }

@@ -28,7 +28,7 @@ export async function entryDeps() {
   const supabase = { url: supabaseUrl, key: SUPABASE_KEY_PLACEHOLDER, fetch: kodyHost.fetch };
   const resolve = createCredentialResolver(createSupabaseCredentialStore(supabase), await importCredentialKey(credentialKey), familyId);
   const runtime = createKodyRuntime(kodyHost, resolve);
-  return { runtime, storage: createSupabaseStorage(supabase), familyId, paymentPhotos };
+  return { runtime, storage: createSupabaseStorage(supabase), familyId, paymentPhotos, counters: kodyStorage() };
 }
 
 /** Dependencies for the Dashboard app: the storage, the Family and the allowlist from the package storage. */

@@ -157,6 +157,12 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       payment.status = "cancelled";
       return true;
     },
+    reopenCancelledPayment: async (id) => {
+      const payment = payments.get(id);
+      if (!payment || payment.status !== "cancelled") return false;
+      payment.status = "pending";
+      return true;
+    },
   };
   return storage;
 }

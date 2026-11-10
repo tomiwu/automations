@@ -7,6 +7,7 @@ import {
   paymentStream,
   planPaymentDecision,
   planPaymentDue,
+  planPaymentReappeared,
   planPaymentSent,
 } from "./payment-journal.ts";
 import type { PaymentInput } from "./payment-journal.ts";
@@ -206,5 +207,28 @@ describe("planPaymentCancelled", () => {
 
   it.each(["paid", "skipped", "cancelled"])("gives null for a %s head", async (status) => {
     expect(await planPaymentCancelled(headWith(status), "fee_disabled", at)).toBeNull();
+  });
+});
+
+describe("planPaymentReappeared", () => {
+  const cancelled = async (reason: string): Promise<JournalEvent> => {
+    const head = await headOf(payment({ notifiedAt: AT }));
+    const base = { ...head, seq: 2, payload: { ...head.payload, status: "cancelled", cancelReason: reason, cancelledAt: AT.toISOString(), cancelEvidence: "plain:charge_absent" } };
+    return { ...base, eventType: "PaymentCancelled" };
+  };
+
+  it.each(["organizer_void", "organizer_withdrawn"])("gives PaymentDue with the pending state for a %s head", async (reason) => {
+    const head = await cancelled(reason);
+    const event = await planPaymentReappeared(head);
+    expect(event).toMatchObject({ stream: head.stream, seq: 3, eventType: "PaymentDue", kind: "payment" });
+    expect(event!.payload).toMatchObject({ status: "pending", amount: 15000, notifiedAt: AT.toISOString() });
+    expect(Object.keys(event!.payload)).not.toContain("cancelReason");
+    expect(Object.keys(event!.payload)).not.toContain("cancelledAt");
+    expect(Object.keys(event!.payload)).not.toContain("cancelEvidence");
+  });
+
+  it("gives null for a fee_disabled head and for a head that is not cancelled", async () => {
+    expect(await planPaymentReappeared(await cancelled("fee_disabled"))).toBeNull();
+    expect(await planPaymentReappeared(await headOf(payment()))).toBeNull();
   });
 });

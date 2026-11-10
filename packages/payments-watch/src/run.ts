@@ -6,6 +6,7 @@ import { deliverPaymentPhotos, withoutPaymentEntries } from "./payment-delivery.
 import { recordSent } from "./sent-journal.ts";
 import { runPayments } from "./engine.ts";
 import type { FeeSource } from "./fee-source.ts";
+import type { CounterStore } from "./organizer-cancel.ts";
 
 export interface RunDeps {
   runtime: Runtime;
@@ -13,6 +14,8 @@ export interface RunDeps {
   messenger: Messenger;
   familyId: string;
   source: FeeSource;
+  /** The package storage for the counters of the Organizer cancel. Without it, an Organizer page cancels nothing. */
+  counters?: CounterStore;
   /**
    * With a Notifier, the Payment Notifications and reminders go out as QR photos with Paid and Skip, and the text
    * delivery does not see them. Without it, they go out as text (the old path).
@@ -55,7 +58,7 @@ export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
   const { runtime, storage, familyId } = deps;
   const failures: string[] = [];
   try {
-    await runPayments({ familyId, storage, source: deps.source, now: runtime.now() });
+    await runPayments({ familyId, storage, source: deps.source, now: runtime.now(), counters: deps.counters });
   } catch (error) {
     failures.push(`payments: ${messageOf(error)}`);
   }
