@@ -15,6 +15,7 @@
     "crap": "crap4ts --exclude .test --fail-on-crap 6"
   },
   "dependencies": {
+    "@automations/librus-data": "*",
     "@automations/shared": "*"
   }
 }

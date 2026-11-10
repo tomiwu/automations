@@ -368,3 +368,45 @@ describe("set-fee and list-fees", () => {
     expect(out.at(-1)).toContain("Example Club");
   });
 });
+
+describe("payments-consistency", () => {
+  const stream = "payment:c1:f1:2026-12";
+  const payment = {
+    id: "p1",
+    fee_id: "f1",
+    month: "2026-12",
+    status: "pending",
+    amount: 15050,
+    amount_source: "config",
+    notified_at: "2026-12-10T08:00:00+00:00",
+    reminded_at: null,
+  };
+  const payload = { status: "pending", amount: 15050, amountSource: "config", notifiedAt: "2026-12-10T08:00:00.000Z", remindedAt: null };
+
+  function seeded(heads: Row[]) {
+    const run = setup();
+    run.store.fees = [{ id: "f1", child_id: "c1" }];
+    run.store.payments = [payment, { ...payment, id: "p9", fee_id: "unknown" }];
+    run.store.journal_heads = heads;
+    return run;
+  }
+
+  it("only reads, and prints the counts when the Journal and the table match", async () => {
+    const { deps, calls, out } = seeded([{ stream, payload }]);
+    await runAdmin(["payments-consistency", "--family", "f 1"], deps);
+    expect(calls.every((call) => call.startsWith("select "))).toBe(true);
+    expect(calls[2]).toContain("kind=eq.payment&family_id=eq.f%201");
+    expect(out).toEqual(["Payments: 2, Journal heads: 1, differences: 0"]);
+  });
+
+  it("prints each difference without values and fails", async () => {
+    const { deps, out } = seeded([{ stream, payload: { ...payload, status: "paid" } }, { stream: "payment:c1:f1:2026-11", payload: null }]);
+    await expect(runAdmin(["payments-consistency", "--family", "f1"], deps)).rejects.toThrow("2 difference(s)");
+    expect(out).toEqual([
+      "Payments: 2, Journal heads: 2, differences: 2",
+      `mismatch  ${stream}  p1  status`,
+      "missing_row  payment:c1:f1:2026-11  -",
+    ]);
+    expect(out.join("\n")).not.toContain("15050");
+  });
+});

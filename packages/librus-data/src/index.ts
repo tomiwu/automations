@@ -27,4 +27,6 @@ export type { CredentialStore, SupabaseCredentialStoreOptions } from "./credenti
 export { checkEvent, contentHash, monthRange, planEvents, projectHeads, projectStream } from "./journal.ts";
 export { checkCompletedForPayments, paymentPayload, paymentStream, planPaymentDecision, planPaymentDue, planPaymentSent } from "./payment-journal.ts";
 export type { PaymentDecision, PaymentInput, PaymentSent } from "./payment-journal.ts";
+export { COMPARED_FIELDS, comparePaymentsProjection, projectionRows } from "./payments-consistency.ts";
+export type { PaymentDifference, PaymentHead, ProjectionRow } from "./payments-consistency.ts";
 export type { Classifier, Observed, PlanInput, StreamState } from "./journal.ts";
