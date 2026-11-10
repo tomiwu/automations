@@ -32,7 +32,7 @@ export LOOP_IMAGE="$(LOOP_REPO=tomiwu/automations scripts/sandcastle-loop/build-
 
 `doctor.sh` runs before the loop starts (`sandcastle-loop.sh`) and before iteration 1 (`main.mts`, skipped when the start script ran it). When a check fails it prints `DOCTOR FAIL: <check> -> fix: <command>`, exits 1, and no agent starts.
 
-- Host: `node_modules/@ai-hero/sandcastle` exists, `podman info` works with `XDG_RUNTIME_DIR`, `podman image exists $LOOP_IMAGE`, `gh auth status` and `gh repo view $LOOP_REPO` (the output is not shown, so no token is printed).
+- Host: `node_modules/@ai-hero/sandcastle` exists, `podman info` works with `XDG_RUNTIME_DIR`, `podman image exists $LOOP_IMAGE`, `gh auth status` and `gh repo view $LOOP_REPO` (the output is not shown, so no token is printed). When `CURSOR_API_KEY` is set and the `agent` CLI is on the host, each `cursor:<id>` of `LOOP_MODELS` (not `cursor:default`) must be in `agent --list-models`, else `DOCTOR FAIL: model cursor:<id> -> fix: set LOOP_MODELS to an id from agent --list-models`. Without the key or the CLI it prints one warning line. The list is not shown. `claude:<id>` is not checked (the Claude CLI has no cheap list command).
 - Container (a throwaway container of `LOOP_IMAGE` as the agent user): `$HOME` is writable, `/tmp` has mode 1777, `mkdir /tmp/claude-$(id -u)` works, `git`, `node`, `gh` and the agent CLI of each provider in `LOOP_MODELS` (`claude`, Cursor `agent`) answer `--version`, then `LOOP_DOCTOR_EXTRA`.
 - `doctor.sh host` and `doctor.sh container` run one part only.
 

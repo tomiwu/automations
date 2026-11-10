@@ -59,7 +59,7 @@ exit 1`,
   });
   boxes.push(box);
   const { stubDir: stub, home, env } = box;
-  return { stub, root, home, tmp, env };
+  return { stub, root, home, tmp, env, writeStub: box.stub };
 }
 
 function run(env: Record<string, string>, ...args: string[]) {
@@ -120,5 +120,59 @@ describe("doctor.sh", () => {
     const r = run({ ...box.env, LOOP_IMAGE: "" });
     expect(r.status).toBe(0);
     expect(r.out).toContain("skip the container checks");
+  });
+});
+
+describe("doctor.sh model check", () => {
+  const FAKE_KEY = "key_FAKE0123456789cursorFAKE";
+  // A stub agent with a model list. It also prints the key, so the test sees that the doctor never shows the list.
+  const listingAgent = `case "$1" in
+  --list-models) echo "Available models"; echo "- auto (Auto)"; echo "- model-b, Model B"; echo "- model-b-fast"; echo "key=$CURSOR_API_KEY" ;;
+  *) echo 1.0.0 ;;
+esac`;
+
+  function hostRun(models: string, extra: Record<string, string> = {}, agent: string | null = listingAgent) {
+    const box = fakeBox({ omit: agent === null ? ["agent"] : [] });
+    if (agent !== null) box.writeStub("agent", agent);
+    return run({ ...box.env, LOOP_MODELS: models, ...extra }, "host");
+  }
+
+  it("passes a known cursor id and never prints the key or the list", () => {
+    const r = hostRun("claude:model-a,cursor:model-b,cursor:default", { CURSOR_API_KEY: FAKE_KEY });
+    expect(r.status).toBe(0);
+    expect(r.out).toContain("doctor ok: cursor models");
+    expect(r.out).not.toContain(FAKE_KEY);
+    expect(r.out).not.toContain("Available models");
+  });
+
+  it("fails with the named line for an unknown id, also when it starts like a known id", () => {
+    for (const id of ["model-x", "model"]) {
+      const r = hostRun(`cursor:model-b,cursor:${id}`, { CURSOR_API_KEY: FAKE_KEY });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain(`DOCTOR FAIL: model cursor:${id} -> fix: set LOOP_MODELS to an id from agent --list-models`);
+      expect(r.out).not.toContain(FAKE_KEY);
+    }
+  });
+
+  it("only warns without a key, and without the agent CLI on the host", () => {
+    const noKey = hostRun("cursor:model-x");
+    expect(noKey.status).toBe(0);
+    expect(noKey.out).toContain("doctor warning: CURSOR_API_KEY is not set");
+    const noCli = hostRun("cursor:model-x", { CURSOR_API_KEY: FAKE_KEY }, null);
+    expect(noCli.status).toBe(0);
+    expect(noCli.out).toContain("doctor warning: the agent CLI is not on the host PATH");
+  });
+
+  it("fails when the model list command fails", () => {
+    const r = hostRun("cursor:model-b", { CURSOR_API_KEY: FAKE_KEY }, `echo "key=$CURSOR_API_KEY" >&2; exit 1`);
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("DOCTOR FAIL: agent --list-models -> fix: check CURSOR_API_KEY");
+    expect(r.out).not.toContain(FAKE_KEY);
+  });
+
+  it("checks nothing without a cursor model", () => {
+    const r = hostRun("claude:model-a", { CURSOR_API_KEY: FAKE_KEY });
+    expect(r.status).toBe(0);
+    expect(r.out).not.toContain("cursor models");
   });
 });

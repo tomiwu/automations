@@ -17,6 +17,7 @@
 #   LOOP_STORAGE_CONF  podman storage config (exported as CONTAINERS_STORAGE_CONF)
 #   LOOP_DOCTOR_EXTRA  extra shell command that runs in the container checks (for example toolchain checks)
 #   LOOP_AGENT_USER    user of the throwaway container (default: agent)
+#   CURSOR_API_KEY     when set, each cursor:<id> in LOOP_MODELS must be in `agent --list-models`
 #   DOCTOR_TMP         directory of the /tmp checks (default: /tmp; tests change it)
 set -uo pipefail
 
@@ -46,6 +47,41 @@ agent_clis() {
   done | sort -u
 }
 
+# The ids of the cursor:<id> entries in LOOP_MODELS. `default` is the CLI default, not an id to check.
+cursor_model_ids() {
+  local entry
+  local IFS=','
+  for entry in ${LOOP_MODELS:-}; do
+    case "$entry" in
+      cursor:default) ;;
+      cursor:*) echo "${entry#cursor:}" ;;
+    esac
+  done
+}
+
+# Each cursor model id must be in the list of the Cursor agent CLI. The output of the CLI is never shown.
+# There is no cheap list command of the Claude CLI, so claude:<id> is not checked.
+model_checks() {
+  local ids tokens id
+  ids="$(cursor_model_ids)"
+  [ -n "$ids" ] || return 0
+  if [ -z "${CURSOR_API_KEY:-}" ]; then
+    echo "doctor warning: CURSOR_API_KEY is not set, so the cursor model ids in LOOP_MODELS are not checked"
+    return 0
+  fi
+  if ! command -v agent >/dev/null 2>&1; then
+    echo "doctor warning: the agent CLI is not on the host PATH, so the cursor model ids in LOOP_MODELS are not checked"
+    return 0
+  fi
+  tokens="$(agent --list-models 2>/dev/null | tr -s ' \t,()' '\n')" \
+    || fail "agent --list-models" "check CURSOR_API_KEY and the agent CLI on the host"
+  for id in $ids; do
+    printf '%s\n' "$tokens" | grep -Fxq -- "$id" \
+      || fail "model cursor:$id" "set LOOP_MODELS to an id from agent --list-models"
+  done
+  ok "cursor models"
+}
+
 host_checks() {
   [ -d "$ROOT/node_modules/@ai-hero/sandcastle" ] || fail "host node_modules/@ai-hero/sandcastle" "cd $ROOT && npm ci"
   ok "node_modules/@ai-hero/sandcastle"
@@ -62,6 +98,7 @@ host_checks() {
       || fail "gh repo view $LOOP_REPO" "$GH auth login (an account with access to $LOOP_REPO)"
   fi
   ok "gh auth"
+  model_checks
 }
 
 container_checks() {
