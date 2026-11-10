@@ -185,15 +185,26 @@ function detailsOf(
 }
 
 /**
+ * The Watchers whose Items cancel Lessons (days off). Their content is stored on each run, also on the
+ * Baseline, so a day off that was in Librus before the first run still cancels its Lessons. The storage
+ * skips content that did not change, so a run with the same days off adds no Journal event.
+ */
+const ALWAYS_STORED: readonly WatcherName[] = ["schoolFreeDays", "classFreeDays"];
+
+/**
  * Runs one Watcher for one Child. The first run of a scope is a silent Baseline: it records the Items,
  * queues nothing and stores no content. Later runs store the content of each new or updated Item, queue
  * one Notification for each Item and each Recipient, then record the Items. The Notification is queued
  * first and its key is the recorded ID, so a crash between the two steps neither loses nor repeats it.
+ * The days-off Watchers (`ALWAYS_STORED`) store their content on every run.
  */
 export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promise<HashedItem[]> {
   const scope = scopeOf(watcher, check.child);
   const current = (await check.source.currentItems(watcher)) as HashedItem[];
   const known = await check.storage.knownItemIds(check.familyId, scope);
+  if (ALWAYS_STORED.includes(watcher)) {
+    await check.storage.recordDetails(detailsOf(check, watcher, scope, current.map((item) => ({ item, change: "new" })), []));
+  }
   if (known.size > 0) {
     const changes = changesOf(current, known);
     const announcements = await (ANNOUNCERS[watcher] as Announce<HashedItem>)(changes, check.source);
