@@ -42,6 +42,14 @@ The order is Claude -> Cursor CLI Composer 2.5 -> Grok in the Cursor CLI. Only l
 - On a limit error of any agent (credit, quota, usage or rate limit, "hit your ... limit", "5-hour limit", "resets"), the loop changes to the next model, runs the same phase again and logs `MODEL SWITCH <from> -> <to> (<reason>)`.
 - When all models are limited, the loop logs `ALL MODELS LIMITED. Wait N min`, sleeps until the earliest reset time in the errors ("resets 4:30am", "resets at 16:05", or an ISO time; else 30 minutes), then starts again with the first model. It does not exit.
 
+## Empty queue
+
+There is always something to do. When no issue is ready and `LOOP_IDLE=groom`:
+
+1. A read-only groomer agent (`prompts/groom-prompt.md`) reads the repository, the open issue titles and the last 80 lines of `current.log`, and outputs at most 3 proposals in a `<proposals>[...]</proposals>` block. Its commits are never pushed.
+2. The host drops a proposal with the title of an open issue, a string of `LOOP_DENYLIST_FILE`, a secret value of the environment or a token shape. It opens the rest (at most 3) with only the label `LOOP_TRIAGE_LABEL`. The owner bot or the owner adds the loop label to accept one.
+3. The loop sleeps `LOOP_IDLE_MINUTES` and checks the queue again. An idle step does not use an iteration.
+
 ## Network errors
 
 Each host `gh` call and each `git push`, `pull` and `fetch` is retried (`LOOP_RETRY_DELAYS`). A log line `RETRY <command>: attempt N failed, retry in Ns` shows each retry. A failed CI is re-run one time before the fixer gets the log.
@@ -71,6 +79,10 @@ To see the next issue and run no agent: `DRY_RUN=1 npx tsx scripts/sandcastle-lo
 | `MAX_FIX_ATTEMPTS` | `3` | Fix attempts for the checks and for the CI |
 | `SKIP_ISSUES` | empty | Comma-separated issue numbers to ignore |
 | `DRY_RUN` | unset | Print the next issue and stop |
+| `LOOP_IDLE` | `groom` | Empty queue: `groom` proposes issues, sleeps and checks again; `stop` stops the loop |
+| `LOOP_IDLE_MINUTES` | `30` | Sleep between two idle checks |
+| `LOOP_TRIAGE_LABEL` | `needs-triage` | Label of the groomer proposals (not the loop label) |
+| `LOOP_DENYLIST_FILE` | unset | Personal strings, one for each line (same list as the CI `DENYLIST`). A proposal with one of them is not opened. |
 | `LOOP_DOCTOR` | `doctor.sh` in this directory | Preflight doctor. Empty: no doctor. |
 | `LOOP_DOCTOR_EXTRA` | empty | Extra shell command of the container checks (for example toolchain checks of the repo) |
 | `LOOP_SANDBOX_READY` | `npm ci --no-audit --no-fund` | Sandbox-ready hook. A failure stops the sandbox. Empty: no hook. |

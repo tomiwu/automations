@@ -35,6 +35,13 @@ describe("loadConfig", () => {
     });
   });
 
+  it("reads the idle settings", () => {
+    expect(loadConfig({}, "/w/r", "/p")).toMatchObject({ idle: "groom", idleMs: 1_800_000, triageLabel: "needs-triage", denylistFile: undefined });
+    expect(loadConfig({ LOOP_IDLE: "stop", LOOP_IDLE_MINUTES: "5", LOOP_TRIAGE_LABEL: "proposal", LOOP_DENYLIST_FILE: "/d" }, "/w/r", "/p"))
+      .toMatchObject({ idle: "stop", idleMs: 300_000, triageLabel: "proposal", denylistFile: "/d" });
+    expect(() => loadConfig({ LOOP_IDLE: "sleep" }, "/w/r", "/p")).toThrow("LOOP_IDLE");
+  });
+
   it("turns off the hook and the doctor with an empty value", () => {
     const c = loadConfig({ LOOP_SANDBOX_READY: "", LOOP_DOCTOR: "" }, "/w/r", "/p/prompts");
     expect(c.sandboxReady).toBe("");
