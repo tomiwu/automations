@@ -119,12 +119,12 @@ function dayOffRange(date: string, text: string | undefined): Pick<DayOff, "from
 }
 
 function dayOffOf(head: StreamState): DayOff | null {
-  const { date, text, sourceId } = head.state as { date?: string | null; text?: string; sourceId?: string };
-  if (head.vanished || !date || sourceId === undefined) return null;
+  const { date, text, sourceId, withdrawn } = head.state as { date?: string | null; text?: string; sourceId?: string; withdrawn?: boolean };
+  if (head.vanished || withdrawn === true || !date || sourceId === undefined) return null;
   return { ...dayOffRange(date, text), reason: { reason: "day_off", sourceStream: head.stream, sourceId: String(sourceId) } };
 }
 
-/** A Lesson inside a day off of Librus is cancelled. A day off wins over the timetable. The Lesson stays in the list. */
+/** A Lesson inside a day off (from Librus, or confirmed with `admin add-day-off`) is cancelled. A day off wins over the timetable. The Lesson stays in the list. */
 function withDaysOff(lessons: StoredLesson[], daysOff: DayOff[]): StoredLesson[] {
   return lessons.map((lesson) => {
     const dayOff = daysOff.find((d) => d.from <= lesson.date && lesson.date <= d.to);

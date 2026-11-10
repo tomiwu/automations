@@ -410,3 +410,94 @@ describe("payments-consistency", () => {
     expect(out.join("\n")).not.toContain("15050");
   });
 });
+
+describe("add-day-off and remove-day-off", () => {
+  const child = "c1";
+  const message = `item:messages:${child}:m1`;
+  const manual = `item:manualDaysOff:${child}:2026-11-12`;
+  const args = ["add-day-off", "--child", child, "--from", "2026-11-12", "--to", "2026-11-13", "--reason", "day off (message)", "--source-stream", message];
+
+  function journal() {
+    const run = setup();
+    run.store.children = [{ id: child, family_id: "f1" }];
+    const heads = new Map<string, Row>([[message, { stream: message, seq: 1, content_hash: "m" }]]);
+    const events: Row[] = [];
+    const rest = run.deps.rest();
+    const wrapped: RestClient = {
+      ...rest,
+      select: async (table, query = "") => {
+        if (table === "children") return query.includes(`id=eq.${child}`) ? rest.select(table, query) : [];
+        if (table !== "journal_heads") return rest.select(table, query);
+        const stream = decodeURIComponent(/stream=eq\.([^&]+)/.exec(query)?.[1] ?? "");
+        const head = heads.get(stream);
+        return head === undefined ? [] : [head];
+      },
+      insert: async (table, rows) => {
+        for (const row of rows) {
+          events.push(row);
+          heads.set(String(row.stream), row);
+        }
+        return rest.insert(table, rows);
+      },
+    };
+    return { ...run, deps: { ...run.deps, rest: () => wrapped }, events };
+  }
+
+  it("appends one ItemRecorded dayOff event with the expected stream and payload", async () => {
+    const { deps, events, out } = journal();
+    await runAdmin(args, deps);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      family_id: "f1", child_id: child, stream: manual, seq: 1, kind: "dayOff", day: "2026-11-12", event_type: "ItemRecorded", source: "admin",
+      payload: { date: "2026-11-12", sourceId: "2026-11-12", sourceStream: message, title: "Dzień wolny", text: "2026-11-12 - 2026-11-13\nday off (message)", scope: `manualDaysOff:${child}` },
+    });
+    expect(out).toEqual([`Added day off: ${manual} (seq 1)`]);
+  });
+
+  it("writes nothing on a second run with the same content", async () => {
+    const { deps, events, out } = journal();
+    await runAdmin(args, deps);
+    await runAdmin(args, deps);
+    expect(events).toHaveLength(1);
+    expect(out.at(-1)).toBe("No change: the Journal head has this content already");
+  });
+
+  it("writes nothing for a missing source stream or a bad date", async () => {
+    const { deps, events } = journal();
+    await expect(runAdmin(args.map((a) => (a === message ? "item:messages:c1:none" : a)), deps)).rejects.toThrow("No stream item:messages:c1:none");
+    await expect(runAdmin(args.map((a) => (a === "2026-11-13" ? "2026-02-30" : a)), deps)).rejects.toThrow("--to must be a real date");
+    await expect(runAdmin(args.map((a) => (a === "2026-11-12" ? "12.11.2026" : a)), deps)).rejects.toThrow("--from must be a real date");
+    await expect(runAdmin([...args.slice(0, 6), "2026-11-01", ...args.slice(7)], deps)).rejects.toThrow("--to must not be before --from");
+    await expect(runAdmin(args.map((a) => (a === child ? "other" : a)), deps)).rejects.toThrow("No Child");
+    expect(events).toEqual([]);
+  });
+
+  it("--dry-run prints the event and writes nothing", async () => {
+    const { deps, events, out } = journal();
+    await runAdmin([...args, "--dry-run"], deps);
+    expect(events).toEqual([]);
+    expect(out[0]).toContain(`Dry run, nothing written: {"family_id":"f1"`);
+    expect(out[0]).toContain(manual);
+  });
+
+  it("remove-day-off appends an ItemChanged event with withdrawn true and deletes nothing", async () => {
+    const { deps, events, calls } = journal();
+    await runAdmin(args, deps);
+    await runAdmin(["remove-day-off", "--child", child, "--from", "2026-11-12"], deps);
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({ stream: manual, seq: 2, event_type: "ItemChanged", payload: { ...(events[0]?.payload as object), withdrawn: true } });
+    expect(calls.some((call) => call.startsWith("update") || call.startsWith("delete"))).toBe(false);
+    await runAdmin(["remove-day-off", "--child", child, "--from", "2026-11-12"], deps);
+    expect(events).toHaveLength(2);
+    await expect(runAdmin(["remove-day-off", "--child", child, "--from", "2026-11-20"], deps)).rejects.toThrow("No manual day off");
+  });
+
+  it("add-day-off after a withdrawal adds the day off again", async () => {
+    const { deps, events } = journal();
+    await runAdmin(args, deps);
+    await runAdmin(["remove-day-off", "--child", child, "--from", "2026-11-12"], deps);
+    await runAdmin(args, deps);
+    expect(events.map((e) => e.seq)).toEqual([1, 2, 3]);
+    expect(events[2]?.payload).not.toHaveProperty("withdrawn");
+  });
+});

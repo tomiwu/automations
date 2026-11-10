@@ -57,7 +57,7 @@ describe("evaluateDaysOff", () => {
     const input = { ...good(), lessons: good().lessons.map((l) => (l.cancelReason ? { ...l, cancelReason: { ...l.cancelReason, sourceStream: bad } } : l)), histories: [{ stream: bad, events: [{ kind: "dayOff", eventType: "ItemSeen", day: null }] }] };
     const result = evaluateDaysOff(input, OPTIONS);
     expect(result.ok).toBe(false);
-    expect(result.lines.at(-1)).toContain("not an item:schoolFreeDays|classFreeDays stream");
+    expect(result.lines.at(-1)).toContain("not an item:schoolFreeDays|classFreeDays|manualDaysOff stream");
   });
 
   it("ignores vanished Lessons", () => {
@@ -88,5 +88,28 @@ describe("helpers", () => {
     expect(unwrap<{ lessons: unknown[] }>({ ok: true, result: { data: { lessons: [] } } }, "lessons")).toEqual({ lessons: [] });
     expect(unwrap({ a: 1 }, "lessons")).toBeUndefined();
     expect(unwrap(null, "lessons")).toBeUndefined();
+  });
+});
+
+describe("manual day off source", () => {
+  const MANUAL = `item:manualDaysOff:${CHILD}:2026-11-12`;
+  const manualLesson = (date: string, period: number): CheckLesson => ({
+    date, period, status: "cancelled", cancelled: true, vanished: false, cancelReason: { reason: "day_off", sourceStream: MANUAL, sourceId: "2026-11-12" },
+  });
+  const manualLessons = (): CheckLesson[] => [1, 2, 3, 4, 5].flatMap((p) => [manualLesson("2026-11-12", p), manualLesson("2026-11-13", p)]);
+  const withManual = (): DaysOffInput => ({
+    lastSavedAt: "2026-11-11T04:30:00.000Z",
+    lessons: manualLessons(),
+    histories: [{ stream: MANUAL, events: [{ kind: "dayOff", eventType: "ItemRecorded", day: "2026-11-12" }] }],
+  });
+
+  it("accepts the manualDaysOff stream", () => {
+    expect(DAY_OFF_STREAM.test(MANUAL)).toBe(true);
+  });
+
+  it("is green with the manual Item and red without it", () => {
+    expect(evaluateDaysOff(withManual(), OPTIONS).ok).toBe(true);
+    const without: DaysOffInput = { ...withManual(), lessons: tenLessons().map((l) => ({ ...l, cancelled: false, status: "normal", cancelReason: undefined })), histories: [] };
+    expect(evaluateDaysOff(without, OPTIONS).ok).toBe(false);
   });
 });
