@@ -1,0 +1,41 @@
+name: Sandbox image
+# Builds the sandbox image of the shared Sandcastle loop and runs the container doctor (the last RUN of the
+# Containerfile). Runs on PRs that change the image files, on main, weekly, and by hand. No secret, no push.
+on:
+  pull_request:
+    paths:
+      - scripts/sandcastle-loop/Containerfile
+      - scripts/sandcastle-loop/doctor.sh
+      - scripts/sandcastle-loop/build-image.sh
+      - .github/workflows/sandbox-image.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/sandcastle-loop/Containerfile
+      - scripts/sandcastle-loop/doctor.sh
+      - scripts/sandcastle-loop/build-image.sh
+      - .github/workflows/sandbox-image.yml
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    name: sandbox image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the image (the last RUN is doctor.sh container)
+        run: |
+          docker build \
+            -f scripts/sandcastle-loop/Containerfile \
+            --build-arg AGENT_UID="$(id -u)" --build-arg AGENT_GID="$(id -g)" \
+            --build-arg LOOP_MODELS=claude:default,cursor:default \
+            -t sandcastle-ci:check \
+            scripts/sandcastle-loop
+      - name: Smoke test as the agent user
+        run: |
+          docker run --rm --entrypoint sh sandcastle-ci:check -c \
+            'id -un && git --version && gh --version | head -1 && command -v claude && command -v agent && test "$(stat -c %a /tmp)" = 1777'

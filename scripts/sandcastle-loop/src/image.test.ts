@@ -113,3 +113,23 @@ describe("Containerfile", () => {
     expect(text).toContain("COPY doctor.sh");
   });
 });
+
+describe("sandbox image CI workflow", () => {
+  const workflow = readFileSync(join(root, "..", "..", ".github", "workflows", "sandbox-image.yml"), "utf8");
+
+  it("runs on PRs that change the image files", () => {
+    for (const path of ["scripts/sandcastle-loop/Containerfile", "scripts/sandcastle-loop/doctor.sh", "scripts/sandcastle-loop/build-image.sh"]) {
+      expect(workflow).toContain(`- ${path}`);
+    }
+    expect(workflow).toMatch(/^\s+pull_request:/m);
+    expect(workflow).toMatch(/^\s+schedule:/m);
+  });
+
+  it("builds this Containerfile with the doctor build arg and uses no secret", () => {
+    expect(workflow).toContain("-f scripts/sandcastle-loop/Containerfile");
+    expect(workflow).toContain("LOOP_MODELS=claude:default,cursor:default");
+    expect(workflow).not.toMatch(/secrets\./);
+    expect(workflow).not.toMatch(/docker push|podman push/);
+  });
+});
+
