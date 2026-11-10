@@ -18,6 +18,13 @@ Four packages run as Kody packages. All are private.
 Kody reads cron expressions in UTC. Do not set a cron time zone.
 Each watcher package exports entry files (`./scheduled`, `./configure` and the exports). `@tomiwu/kradziejka` exports webhooks instead of jobs. Only the entry files import the Kody runtime.
 
+## Deploy workflow behaviour
+
+- `Deploy to Kody` runs after CI is green on main. A newer run cancels an older one (`cancel-in-progress: true`). The newer run deploys every package from the newer commit.
+- Each job has `timeout-minutes: 30`, the check step 10 and the publish step 20.
+- The publish check retries on 5xx and timeouts (`tools/kody-deploy/kody-check.mjs`). The check of `librus-watch` takes about 60 s and can end in a gateway 503 although the tree is good. A deploy then goes on with a warning, because publish runs the same checks.
+- A failed or cancelled job writes `not deployed: <package> at <sha>` as an error and in the job summary.
+
 ## Secrets and credentials
 
 - Kody secret `SUPABASE_KEY` (the watcher key). It is sent as the literal `{{secret:SUPABASE_KEY}}`. Allowed host: `<ref>.supabase.co`, header placement.

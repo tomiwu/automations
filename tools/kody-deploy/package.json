@@ -1,0 +1,12 @@
+{
+  "name": "@automations/kody-deploy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Helper scripts of the Deploy to Kody workflow.",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}
