@@ -2,6 +2,7 @@ import jsQR from "jsqr";
 import QRCode from "qrcode";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
+import { crc32 } from "./png.ts";
 import { buildZbpQr, buildZbpText, cleanField, isValidNip, isValidNrb } from "./zbp.ts";
 
 const NRB = "61109010140000071219812874";
@@ -68,6 +69,25 @@ describe("buildZbpText", () => {
       title: "t".repeat(99),
     });
     expect(text.length).toBeLessThanOrEqual(160);
+  });
+});
+
+describe("PNG chunks", () => {
+  it("has a valid signature and valid chunk CRCs", async () => {
+    const { png } = await buildZbpQr(base);
+    expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+    const types: string[] = [];
+    let offset = 8;
+    while (offset < png.length) {
+      const length = view.getUint32(offset);
+      const body = png.subarray(offset + 4, offset + 8 + length);
+      expect(view.getUint32(offset + 8 + length)).toBe(crc32(body));
+      types.push(new TextDecoder().decode(body.subarray(0, 4)));
+      offset += 12 + length;
+    }
+    expect(types).toEqual(["IHDR", "IDAT", "IEND"]);
+    expect(offset).toBe(png.length);
   });
 });
 
