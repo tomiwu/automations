@@ -353,6 +353,19 @@ function paymentTests(create: () => Promise<ContractHarness>): void {
     expect(await storage.listPayments(FAMILY_ID)).toEqual([decided]);
   });
 
+  it("cancels a pending Payment only, and keeps the decision fields", async () => {
+    const storage = await start();
+    const { id } = await storage.upsertPayment(newPayment());
+    expect(await storage.cancelPendingPayment(id)).toBe(true);
+    expect((await storage.listPayments(FAMILY_ID))[0]).toMatchObject({ status: "cancelled", decidedAt: null, decidedBy: null });
+    expect(await storage.cancelPendingPayment(id)).toBe(false);
+    expect(await storage.setPaymentStatus(id, "paid", "1000001")).toBe(false);
+    const paid = await storage.upsertPayment(newPayment({ month: "2025-02" }));
+    await storage.setPaymentStatus(paid.id, "paid", "1000001");
+    expect(await storage.cancelPendingPayment(paid.id)).toBe(false);
+    expect(await storage.cancelPendingPayment("00000000-0000-4000-8000-00000000dead")).toBe(false);
+  });
+
   it("updates the amount of a pending Payment only", async () => {
     const storage = await start();
     const { id } = await storage.upsertPayment(newPayment());

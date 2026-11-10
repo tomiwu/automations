@@ -15,7 +15,7 @@ export interface StoredPayment {
   organizer: string;
   month: string;
   dueDay: number;
-  status: "pending" | "paid" | "skipped";
+  status: "pending" | "paid" | "skipped" | "cancelled";
   amount: number;
   amountSource: string;
   notifiedAt: string | null;

@@ -151,6 +151,12 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       Object.assign(payment, { status, decidedBy, decidedAt: now() });
       return true;
     },
+    cancelPendingPayment: async (id) => {
+      const payment = payments.get(id);
+      if (!payment || payment.status !== "pending") return false;
+      payment.status = "cancelled";
+      return true;
+    },
   };
   return storage;
 }

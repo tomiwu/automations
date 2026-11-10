@@ -101,6 +101,7 @@ describe("buildDashboard", () => {
     expect(buildDashboard({ children, fees, payments: [], today: "2026-02-10" })).toEqual({
       paid: [],
       unpaid: [],
+      cancelled: [],
       nextDue: [],
       spendByMonth: [],
       spendBySchoolYear: [],

@@ -8,6 +8,9 @@ export type PaymentInput = NewPayment & Partial<Pick<Payment, "status" | "notifi
 
 export type PaymentDecision = "paid" | "skipped";
 
+/** Why a Payment is cancelled (payments contract v0.2 section 3b, PC6). */
+export type PaymentCancelReason = "fee_disabled" | "organizer_void" | "organizer_withdrawn";
+
 /** The stream of the Payment of one Fee in one month (`YYYY-MM`). */
 export const paymentStream = (childId: string, feeId: string, month: string): string =>
   `payment:${childId}:${feeId}:${month}`;
@@ -90,6 +93,34 @@ export async function planPaymentDecision(
     kind: "payment",
     day: head.day,
     eventType: decision === "paid" ? "PaymentPaid" : "PaymentSkipped",
+    payload,
+    contentHash: await contentHash(payload),
+    source: SOURCE,
+  };
+}
+
+/**
+ * `PaymentCancelled` for a pending head (payments contract v0.2 section 3b). The payload is the full state:
+ * the head payload with `status: "cancelled"`, `cancelReason`, `cancelledAt` and an optional `cancelEvidence`.
+ * `decidedAt` and `decidedBy` stay: a cancel is not a human decision. Else null: paid, skipped and cancelled are final.
+ */
+export async function planPaymentCancelled(
+  head: JournalEvent,
+  reason: PaymentCancelReason,
+  at: Date,
+  evidence?: string,
+): Promise<NewJournalEvent | null> {
+  if (head.payload.status !== "pending") return null;
+  const payload: Record<string, unknown> = { ...head.payload, status: "cancelled", cancelReason: reason, cancelledAt: at.toISOString() };
+  if (evidence !== undefined) payload.cancelEvidence = evidence;
+  return {
+    familyId: head.familyId,
+    childId: head.childId,
+    stream: head.stream,
+    seq: head.seq + 1,
+    kind: "payment",
+    day: head.day,
+    eventType: "PaymentCancelled",
     payload,
     contentHash: await contentHash(payload),
     source: SOURCE,
