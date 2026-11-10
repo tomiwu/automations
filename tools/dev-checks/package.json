@@ -1,0 +1,14 @@
+{
+  "name": "@automations/dev-checks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local checks before a push: npm run check and npm run crap:changed.",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "crap": "crap4ts --exclude .test --exclude cli --fail-on-crap 6"
+  }
+}
