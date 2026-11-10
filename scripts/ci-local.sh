@@ -68,7 +68,7 @@ check_parity() {
   local missing=0 line
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    if ! printf '%s\n' "$STEP_MAP" | grep -qF -- "$line|"; then echo "PARITY FAIL: workflow step has no local step: $line"; missing=1; fi
+    if ! grep -qF -- "$line|" <<<"$STEP_MAP"; then echo "PARITY FAIL: workflow step has no local step: $line"; missing=1; fi
   done < <(workflow_steps)
   [ "$missing" = 0 ] && echo "parity ok: $(workflow_steps | wc -l) workflow steps mapped"
   return "$missing"
