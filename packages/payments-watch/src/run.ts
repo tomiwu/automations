@@ -1,5 +1,5 @@
 import type { StorageAdapter } from "@automations/librus-data";
-import type { Runtime } from "@automations/shared";
+import { isFetchCapError, type Runtime } from "@automations/shared";
 import { deliverPending, type Messenger } from "@tomiwu/librus-watch";
 import { recordSent } from "./sent-journal.ts";
 import { runPayments } from "./engine.ts";
@@ -16,8 +16,20 @@ export interface RunDeps {
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
+ * Logs each failure. A failure on the Kody fetch limit is a warning, not a failure of the pass: the next pass
+ * does the work again. Returns the other failures.
+ */
+function reportFailures(runtime: Runtime, failures: readonly string[]): string[] {
+  for (const failure of failures) {
+    runtime.log(isFetchCapError(failure) ? "warn" : "error", isFetchCapError(failure) ? `fetch cap: ${failure}` : failure);
+  }
+  return failures.filter((failure) => !isFetchCapError(failure));
+}
+
+/**
  * Runs one scheduled pass: the Payment engine, then the delivery of the Outbox to the Recipients.
- * Returns the failure texts. The caller rejects when the list is not empty.
+ * Returns the failure texts. The caller rejects when the list is not empty. A failure on the Kody fetch
+ * limit is logged but not returned, so the job does not fail on the weekly cap.
  */
 export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
   const { runtime, storage, familyId } = deps;
@@ -52,6 +64,5 @@ export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
   } catch (error) {
     failures.push(`journal: ${messageOf(error)}`);
   }
-  for (const failure of failures) runtime.log("error", failure);
-  return failures;
+  return reportFailures(runtime, failures);
 }

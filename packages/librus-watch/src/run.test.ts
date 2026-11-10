@@ -1,8 +1,8 @@
 import { createMemoryStorage } from "@automations/librus-data";
-import { fakeRuntime } from "@automations/shared";
+import { countFetches, createFetchBudget, fakeRuntime, LEDGER_KEY, type LedgerStore } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import type { Messenger } from "./deliver.ts";
-import { librusTargets, runLibrusWatch, type RunDeps } from "./run.ts";
+import { librusTargets, OPTIONAL_WATCHERS, runLibrusWatch, type RunDeps } from "./run.ts";
 import { ACCOUNT1, CHILD1, CHILD2, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
 
 function setup(mutate: (config: ReturnType<typeof testConfig>) => void = () => {}) {
@@ -146,5 +146,62 @@ describe("runLibrusWatch", () => {
     const failures = await runLibrusWatch({ ...deps, createSource: undefined });
     expect(failures.length).toBeGreaterThan(0);
     expect(runtime.requests.length).toBeGreaterThan(0);
+  });
+});
+
+function ledgerStore(used: number): LedgerStore & { data: Map<string, unknown> } {
+  const data = new Map<string, unknown>([[LEDGER_KEY, JSON.stringify({ week: "2026-01-05", used })]]);
+  return { data, get: async (key) => data.get(key), set: async (key, value) => void data.set(key, value) };
+}
+
+describe("runLibrusWatch fetch reserve", () => {
+  async function watchedAfter(used: number, reserve?: number) {
+    const { deps, source, runtime } = setup();
+    const store = ledgerStore(used);
+    const budget = createFetchBudget({ store, now: () => runtime.now() });
+    const read: string[] = [];
+    const current = source.currentItems;
+    source.currentItems = async (watcher, since) => (read.push(watcher), current(watcher, since));
+    await runLibrusWatch({ ...deps, budget, fetchReserve: reserve });
+    return { read, logs: runtime.logs.map((l) => l.message) };
+  }
+
+  it("skips the optional Watchers below the reserve and logs one line", async () => {
+    const { read, logs } = await watchedAfter(2400);
+    for (const watcher of OPTIONAL_WATCHERS) expect(read).not.toContain(watcher);
+    expect(read).toEqual(expect.arrayContaining(["homework", "substitutions", "lessons", "schoolFreeDays", "classFreeDays"]));
+    expect(logs).toContain("budget reserve: skipped grades, messages, announcements, trips, absences, meetings");
+  });
+
+  it("changes nothing above the reserve", async () => {
+    const { read, logs } = await watchedAfter(100);
+    expect(read).toEqual(expect.arrayContaining([...OPTIONAL_WATCHERS]));
+    expect(logs.some((line) => line.startsWith("budget reserve"))).toBe(false);
+  });
+
+  it("uses the reserve of the config", async () => {
+    const { read } = await watchedAfter(2400, 50);
+    expect(read).toContain("grades");
+  });
+
+  it("adds the fetches of the run to the ledger and marks a plan-limit error", async () => {
+    const { deps, source, runtime } = setup();
+    const store = ledgerStore(10);
+    const budget = createFetchBudget({ store, now: () => runtime.now() });
+    const counter = countFetches(async () => new Response("ok"));
+    await counter.fetch("https://example.test/a");
+    source.currentItems = async () => {
+      throw Object.assign(new Error("Plan limit reached"), { name: "EntitlementLimitError" });
+    };
+    await runLibrusWatch({ ...deps, budget, counter });
+    expect(JSON.parse(store.data.get(LEDGER_KEY) as string)).toEqual({ week: "2026-01-05", used: 11, capHitDay: "2026-01-05" });
+  });
+
+  it("logs a ledger failure and does not fail the run", async () => {
+    const { deps, runtime } = setup();
+    const budget = { remaining: async () => 2500, record: async () => Promise.reject(new Error("storage down")) };
+    const counter = countFetches(async () => new Response("ok"));
+    expect(await runLibrusWatch({ ...deps, budget, counter })).toEqual([]);
+    expect(runtime.logs.map((l) => l.message)).toContain("fetch ledger: storage down");
   });
 });

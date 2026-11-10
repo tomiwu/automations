@@ -1,4 +1,14 @@
-import { localDate, t, type Config, type Runtime } from "@automations/shared";
+import {
+  belowReserve,
+  formatReserveSkip,
+  isFetchCapError,
+  localDate,
+  t,
+  type Config,
+  type FetchBudget,
+  type FetchCounter,
+  type Runtime,
+} from "@automations/shared";
 import type { StorageAdapter } from "@automations/librus-data";
 import { deliverPending, type Messenger } from "@tomiwu/librus-watch";
 import type { ActiveNowOptions } from "./activenow-source.ts";
@@ -19,6 +29,32 @@ export interface RunDeps {
   createSource?: CreateSource;
   /** The cache of the ActiveNow Sessions. */
   activeNow?: ActiveNowOptions;
+  /** Counts the fetches of the run, for the weekly ledger. */
+  counter?: FetchCounter;
+  /** The weekly fetch ledger. Below the reserve, ActiveNow uses its cache and does not fetch again. */
+  budget?: FetchBudget;
+  /** Fetches to keep free in the week. The default is 150. */
+  fetchReserve?: number;
+}
+
+/** The time between two ActiveNow fetches when the budget is below the reserve: one week. */
+export const RESERVE_ACTIVENOW_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Below the reserve, the ActiveNow refresh is optional: a cached Account is not fetched again. */
+export async function withReserve(deps: RunDeps): Promise<RunDeps> {
+  if (!deps.activeNow?.store || !(await belowReserve(deps.budget, deps.fetchReserve))) return deps;
+  deps.runtime.log("warn", formatReserveSkip(["activenow refresh"]));
+  return { ...deps, activeNow: { ...deps.activeNow, ttlMs: RESERVE_ACTIVENOW_TTL_MS } };
+}
+
+/** Adds the fetches of the run to the ledger, and marks the day when a fetch failed on the plan limit. */
+async function recordFetches(deps: RunDeps, failures: readonly string[]): Promise<void> {
+  if (!deps.budget || !deps.counter) return;
+  try {
+    await deps.budget.record(deps.counter.count().total, failures.some(isFetchCapError));
+  } catch (error) {
+    deps.runtime.log("warn", `fetch ledger: ${messageOf(error)}`);
+  }
 }
 
 /** Returns the scope of the Items of one Account. */
@@ -94,7 +130,8 @@ async function journalStep(deps: RunDeps, config: Config, accounts: AccountSessi
  * Edusky Account, and delivers the Outbox. A bad Account gives one error and the other Accounts still
  * run. Returns all failure texts. The caller rejects when the list is not empty.
  */
-export async function runActivitiesWatch(deps: RunDeps): Promise<string[]> {
+export async function runActivitiesWatch(input: RunDeps): Promise<string[]> {
+  const deps = await withReserve(input);
   const config = await deps.storage.loadConfig(deps.familyId);
   const { targets, errors } = activityTargets(config);
   const failures = [...errors];
@@ -117,5 +154,6 @@ export async function runActivitiesWatch(deps: RunDeps): Promise<string[]> {
     failures.push(`deliver: ${messageOf(error)}`);
   }
   for (const failure of failures) deps.runtime.log("error", failureReason(failure));
+  await recordFetches(deps, failures);
   return failures;
 }

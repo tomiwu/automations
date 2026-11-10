@@ -1,10 +1,14 @@
 import {
+  belowReserve,
   formatFetchCount,
+  formatReserveSkip,
+  isFetchCapError,
   localDate,
   validateConfig,
   type Account,
   type Child,
   type Config,
+  type FetchBudget,
   type FetchCounter,
   type RawConfig,
   type Recipient,
@@ -12,13 +16,13 @@ import {
 } from "@automations/shared";
 import type { StorageAdapter } from "@automations/librus-data";
 import { deliverPending, redactSecretPlaceholders, type Messenger } from "./deliver.ts";
-import { checkChild, type ChildCheck } from "./engine.ts";
+import { checkChild, WATCHERS_IN_ORDER, type ChildCheck } from "./engine.ts";
 import { appendLibrusJournal } from "./journal-librus.ts";
 import { formatAccountError, formatLoginError } from "./format.ts";
 import { nameOptionsFor, type NameStore } from "./names-cache.ts";
 import { runMorningReport, type AfterSchool } from "./morning-report.ts";
 import { createLibrusSource } from "./source.ts";
-import type { HomeworkItem, LibrusSource } from "./types.ts";
+import type { HomeworkItem, LibrusSource, WatcherName } from "./types.ts";
 
 const FAILURE_DETAIL_MAX = 300;
 
@@ -34,6 +38,33 @@ export interface RunDeps {
   nameStore?: NameStore;
   /** Counts the fetches of the run. With it the run logs `fetches total=N <host>=n` at the end. */
   counter?: FetchCounter;
+  /** The weekly fetch ledger. Below the reserve, the run skips the optional Watchers. */
+  budget?: FetchBudget;
+  /** Fetches to keep free in the week. The default is 150. */
+  fetchReserve?: number;
+}
+
+/**
+ * The Watchers that a run skips when the fetch budget is below the reserve. The others feed the Journal,
+ * the calendars and the Morning report, so they always run.
+ */
+export const OPTIONAL_WATCHERS: readonly WatcherName[] = ["grades", "messages", "announcements", "trips", "absences", "meetings"];
+
+/** The Watchers of this run. Below the reserve, it logs one line with the skipped Watchers. */
+export async function watchersFor(deps: RunDeps): Promise<readonly WatcherName[]> {
+  if (!(await belowReserve(deps.budget, deps.fetchReserve))) return WATCHERS_IN_ORDER;
+  deps.runtime.log("warn", formatReserveSkip(OPTIONAL_WATCHERS));
+  return WATCHERS_IN_ORDER.filter((watcher) => !OPTIONAL_WATCHERS.includes(watcher));
+}
+
+/** Adds the fetches of the run to the ledger, and marks the day when a fetch failed on the plan limit. */
+async function recordFetches(deps: RunDeps, failures: readonly string[]): Promise<void> {
+  if (!deps.budget || !deps.counter) return;
+  try {
+    await deps.budget.record(deps.counter.count().total, failures.some(isFetchCapError));
+  } catch (error) {
+    deps.runtime.log("warn", `fetch ledger: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /** One Librus Account with its Child and the Recipients of that Child. */
@@ -104,7 +135,12 @@ async function journalStep(
   }
 }
 
-async function runTarget(deps: RunDeps, config: Config, target: LibrusTarget): Promise<string[]> {
+async function runTarget(
+  deps: RunDeps,
+  config: Config,
+  target: LibrusTarget,
+  watchers: readonly WatcherName[],
+): Promise<string[]> {
   const { runtime, storage, familyId } = deps;
   const timezone = config.family.timezone;
   const source = deps.createSource?.(target.account, timezone) ??
@@ -114,7 +150,7 @@ async function runTarget(deps: RunDeps, config: Config, target: LibrusTarget): P
     });
   const log = (message: string) => runtime.log("info", `account ${target.account.id}: ${message}`);
   const check: ChildCheck = { familyId, child: target.child, recipients: target.recipients, storage, source, log };
-  const { failures, homework } = await checkChild(check);
+  const { failures, homework } = await checkChild(check, watchers);
   failures.push(...(await journalStep(deps, config, target, source, homework, log)));
   if (failures.length > 0) await notifyFailure(deps, target, failures, localDate(runtime.now(), timezone));
   try {
@@ -160,9 +196,11 @@ export async function runLibrusWatch(deps: RunDeps): Promise<string[]> {
   const config = await deps.storage.loadConfig(deps.familyId);
   const { targets, errors } = librusTargets(config);
   const failures = [...errors];
-  for (const target of targets) failures.push(...(await runTarget(deps, config, target)));
+  const watchers = await watchersFor(deps);
+  for (const target of targets) failures.push(...(await runTarget(deps, config, target, watchers)));
   failures.push(...(await deliverAll(deps, config)));
   for (const failure of failures) deps.runtime.log("error", redactSecretPlaceholders(failure));
   if (deps.counter) deps.runtime.log("info", formatFetchCount(deps.counter.count()));
+  await recordFetches(deps, failures);
   return failures;
 }
