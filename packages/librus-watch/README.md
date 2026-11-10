@@ -69,6 +69,18 @@ Use `./stored-lessons` and `./stream-history` for the calendar sync. They read S
 - It works for the streams `lesson:`, `homework:`, `session:`, `item:` and `check:`.
 - **Fetches:** 1 Supabase fetch. There is no Librus fetch.
 
+## Calendar plan (`src/calendar-plan.ts`)
+
+`planCalendar(state, existing)` is the pure create/update plan of the calendar sync (kids calendar contract sections 3, 4, 8a and 8b). It uses no network and no clock. The sync routine can call it or copy the same rules.
+
+- `state`: the Lessons of `./stored-lessons` (with the homework marks of each slot) and the sessions of `./stored-sessions`. Each entry has the `calendarId` and the title `prefix` of its Child, and `vanished: true` when the stream head says so.
+- `existing`: the Google events of the window (`summary`, `description`, local `start` and `end`, `location`, `id`).
+- The result is `{ creates, updates }`. There is no delete (W5).
+- The key of an event is its calendar and the marker on the last line of the description (`[librus-lesson: YYYY-MM-DD-nr]`, `[activity: <service>-<YYYY-MM-DD>-<HH:MM>]`). An event without a marker belongs to the owner and is never touched (W6). An event that the state does not name is left as it is.
+- Status tokens: `[ODWOŁANA]`, `[ODWOŁANA] (dzień wolny)` (`cancelReason.reason = "day_off"`), `[ODWOŁANE]`, `[usunięte?]`. The title is built again from the state on each run, so a token is never added twice.
+- A second run on the same state plans nothing (tested).
+- Not covered yet: dated Librus items (`[librus-msg: <id>]`), the 120-character title limit and the homework popup.
+
 ## The `./events` export
 
 - **Input:** `{ childId?, from?, to?, since? }`. `from` and `to` are `YYYY-MM-DD` and filter on the event date. `since` is an ISO time and filters on `firstSeen` (default: 7 days ago). Other keys are rejected.
