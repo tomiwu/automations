@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  test: { fileParallelism: false, include: ["src/**/*.test.ts"], coverage: { provider: "v8", reporter: ["json", "text"] } },
+  test: { fileParallelism: false, globalSetup: ["src/global-setup.ts"], include: ["src/**/*.test.ts"], coverage: { provider: "v8", reporter: ["json", "text"] } },
 });
