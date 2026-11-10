@@ -10,6 +10,7 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - The recipient is cut to 20 characters. The title is cut to 32 characters. A character that is not allowed becomes a space.
 - The full text has 160 characters or less.
 - `buildZbpQr` gives `{ text, png }`. The PNG uses UTF-8, error correction L and a border of 4 modules.
+- The package must not use a CommonJS `require` of a Node built-in (the Kody ESM bundle fails at load time). The PNG is encoded in `src/png.ts` and the QR matrix comes from the `qrcode` core. `src/kody-bundle.test.ts` checks every Kody entry.
 
 ## Fee sources
 

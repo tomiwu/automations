@@ -1,5 +1,6 @@
 import { isValidNip, isValidNrb } from "@automations/shared";
-import QRCode from "qrcode";
+import { create as createQr } from "qrcode/lib/core/qrcode.js";
+import { encodeGrayPng } from "./png.ts";
 
 export { isValidNip, isValidNrb };
 
@@ -22,6 +23,8 @@ const TEXT_MAX = 160;
 const AMOUNT_MIN_DIGITS = 6;
 const QR_MARGIN_MODULES = 4;
 const QR_SCALE = 6;
+const BLACK = 0;
+const WHITE = 255;
 const DISALLOWED = /[^A-Za-z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ .,\-/():+?']/g;
 
 export function cleanField(value: string, max: number): string {
@@ -51,13 +54,24 @@ export function buildZbpText(input: ZbpInput): string {
   return text;
 }
 
+function isDark(modules: { size: number; get(row: number, col: number): number }, x: number, y: number): boolean {
+  const row = Math.floor(y / QR_SCALE) - QR_MARGIN_MODULES;
+  const col = Math.floor(x / QR_SCALE) - QR_MARGIN_MODULES;
+  const inside = row >= 0 && col >= 0 && row < modules.size && col < modules.size;
+  return inside && Boolean(modules.get(row, col));
+}
+
+function renderPixels(text: string): { size: number; pixels: Uint8Array } {
+  const { modules } = createQr(text, { errorCorrectionLevel: "L" });
+  const size = (modules.size + 2 * QR_MARGIN_MODULES) * QR_SCALE;
+  const pixels = Uint8Array.from({ length: size * size }, (_, i) =>
+    isDark(modules, i % size, Math.floor(i / size)) ? BLACK : WHITE,
+  );
+  return { size, pixels };
+}
+
 export async function buildZbpQr(input: ZbpInput): Promise<ZbpQr> {
   const text = buildZbpText(input);
-  const png = await QRCode.toBuffer(text, {
-    type: "png",
-    errorCorrectionLevel: "L",
-    margin: QR_MARGIN_MODULES,
-    scale: QR_SCALE,
-  });
-  return { text, png };
+  const { size, pixels } = renderPixels(text);
+  return { text, png: await encodeGrayPng(size, size, pixels) };
 }
