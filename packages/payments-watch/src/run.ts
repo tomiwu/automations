@@ -26,6 +26,8 @@ export interface RunDeps {
   client?: TelegramClient;
 }
 
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
 /** Sends the Payment photos. Returns the sent keys; a failure goes to `failures`. */
 async function deliverPhotos(deps: RunDeps, storage: StorageAdapter, failures: string[]): Promise<string[]> {
   if (!deps.notifier) return [];
@@ -48,8 +50,6 @@ async function editCancelled(deps: RunDeps, failures: string[]): Promise<void> {
     failures.push(`cancel edit: ${messageOf(error)}`);
   }
 }
-
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
  * Logs each failure. A failure on the Kody fetch limit is a warning, not a failure of the pass: the next pass
