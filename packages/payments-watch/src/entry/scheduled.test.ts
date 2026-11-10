@@ -32,9 +32,13 @@ storage.setFee({
   enabled: true,
 });
 
+const photoCalls: string[] = [];
+let paymentPhotos = false;
+
 vi.mock("./common.ts", () => ({
-  entryDeps: async () => ({ runtime: fakeRuntime({ now: new Date("2026-01-12T08:00:00Z") }), storage, familyId: FAMILY_ID }),
+  entryDeps: async () => ({ runtime: fakeRuntime({ now: new Date("2026-01-12T08:00:00Z") }), storage, familyId: FAMILY_ID, paymentPhotos }),
   telegramMessenger: { send: async (chatId: string, text: string) => void sent.push(`${chatId}|${text}`) },
+  telegramClient: { call: async (method: string, params: { chat_id: string }) => void photoCalls.push(`${method}|${params.chat_id}`) },
 }));
 
 const { default: scheduled } = await import("./scheduled.ts");
@@ -57,5 +61,16 @@ describe("scheduled entry", () => {
   it("rejects when the pass failed", async () => {
     vi.spyOn(storage, "listFees").mockRejectedValueOnce(new Error("db down"));
     await expect(scheduled({})).rejects.toThrow("payments: db down");
+  });
+
+  it("sends QR photos and no Payment text when paymentPhotos is on", async () => {
+    paymentPhotos = true;
+    const fresh = await storage.listPayments(FAMILY_ID);
+    for (const payment of fresh) await storage.setPaymentStatus(payment.id, "skipped", "test");
+    storage.setFee({ ...(await storage.listFees(FAMILY_ID))[0]!, id: "00000000-0000-4000-8000-0000000000f2" });
+    expect(await scheduled()).toEqual({ ok: true });
+    expect(photoCalls).toEqual(["sendPhoto|1000001"]);
+    expect(sent).toEqual([]);
+    paymentPhotos = false;
   });
 });

@@ -73,6 +73,12 @@ describe("deployment config", () => {
     }
   });
 
+  it("accepts the optional paymentPhotos flag", () => {
+    expect(parseDeploymentConfig({ ...config, paymentPhotos: true }).paymentPhotos).toBe(true);
+    expect(parseDeploymentConfig(config)).not.toHaveProperty("paymentPhotos");
+    expect(() => parseDeploymentConfig({ ...config, paymentPhotos: "yes" })).toThrow("paymentPhotos");
+  });
+
   it("accepts an optional fetch reserve and rejects a bad one", () => {
     expect(parseDeploymentConfig({ ...config, fetchReserve: 200 }).fetchReserve).toBe(200);
     expect(parseDeploymentConfig({ ...config, fetchReserve: 0 }).fetchReserve).toBe(0);

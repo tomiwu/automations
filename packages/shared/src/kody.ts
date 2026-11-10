@@ -69,13 +69,15 @@ export interface DeploymentConfig {
   credentialKey: string;
   /** Hours between two fetches of one ActiveNow Account. Optional; the default is 24. */
   activenowCacheHours?: number;
+  /** payments-watch: send the Payment Notifications and reminders as QR photos with Paid and Skip. Optional; default false (text). */
+  paymentPhotos?: boolean;
   /** Fetches that the watchers keep free in the week for the time-critical jobs. Optional; the default is 150. */
   fetchReserve?: number;
 }
 
 export const DEPLOYMENT_CONFIG_KEY = "deployment-config";
 
-const CONFIG_KEYS = new Set(["supabaseUrl", "familyId", "credentialKey", "activenowCacheHours", "fetchReserve"]);
+const CONFIG_KEYS = new Set(["supabaseUrl", "familyId", "credentialKey", "activenowCacheHours", "fetchReserve", "paymentPhotos"]);
 
 function configObject(raw: unknown): Record<string, unknown> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("The config must be an object.");
@@ -125,6 +127,12 @@ function reserveOf(value: unknown): { fetchReserve?: number } {
   return { fetchReserve: value as number };
 }
 
+function photosOf(value: unknown): { paymentPhotos?: boolean } {
+  if (value === undefined) return {};
+  if (typeof value !== "boolean") throw new Error("paymentPhotos must be true or false.");
+  return { paymentPhotos: value };
+}
+
 /** Validates a deployment config. Unknown keys are rejected. */
 export function parseDeploymentConfig(raw: unknown): DeploymentConfig {
   const config = configObject(raw);
@@ -133,6 +141,7 @@ export function parseDeploymentConfig(raw: unknown): DeploymentConfig {
     familyId: idOf(config.familyId),
     credentialKey: keyOf(config.credentialKey),
     ...hoursOf(config.activenowCacheHours),
+    ...photosOf(config.paymentPhotos),
     ...reserveOf(config.fetchReserve),
   };
 }

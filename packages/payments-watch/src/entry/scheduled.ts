@@ -1,10 +1,12 @@
+import { createTelegramNotifier } from "../notifier.ts";
 import { createWebFeeSource } from "../page-source.ts";
 import { runPaymentsWatch } from "../run.ts";
-import { entryDeps, telegramMessenger } from "./common.ts";
+import { entryDeps, telegramClient, telegramMessenger } from "./common.ts";
 
 /**
  * Runs one scheduled pass: the Payment engine and the delivery of the Outbox. It reads the config from
- * Supabase. It takes no input.
+ * Supabase. It takes no input. With `paymentPhotos: true` in the deployment config, the Payment Notifications and
+ * reminders go out as QR photos with Paid and Skip; else as text.
  * It rejects when the engine or the delivery failed.
  */
 export default async function scheduled(input: unknown = {}): Promise<{ ok: true }> {
@@ -13,7 +15,8 @@ export default async function scheduled(input: unknown = {}): Promise<{ ok: true
   }
   const deps = await entryDeps();
   const source = createWebFeeSource(deps);
-  const failures = await runPaymentsWatch({ ...deps, messenger: telegramMessenger, source });
+  const notifier = deps.paymentPhotos ? createTelegramNotifier(telegramClient) : undefined;
+  const failures = await runPaymentsWatch({ ...deps, messenger: telegramMessenger, source, notifier });
   if (failures.length > 0) throw new Error(failures.join("; "));
   return { ok: true };
 }

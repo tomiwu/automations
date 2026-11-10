@@ -1,6 +1,8 @@
 import type { StorageAdapter } from "@automations/librus-data";
 import { isFetchCapError, type Runtime } from "@automations/shared";
 import { deliverPending, type Messenger } from "@tomiwu/librus-watch";
+import type { Notifier } from "./notifier.ts";
+import { deliverPaymentPhotos, withoutPaymentEntries } from "./payment-delivery.ts";
 import { recordSent } from "./sent-journal.ts";
 import { runPayments } from "./engine.ts";
 import type { FeeSource } from "./fee-source.ts";
@@ -11,6 +13,24 @@ export interface RunDeps {
   messenger: Messenger;
   familyId: string;
   source: FeeSource;
+  /**
+   * With a Notifier, the Payment Notifications and reminders go out as QR photos with Paid and Skip, and the text
+   * delivery does not see them. Without it, they go out as text (the old path).
+   */
+  notifier?: Notifier;
+}
+
+/** Sends the Payment photos. Returns the sent keys; a failure goes to `failures`. */
+async function deliverPhotos(deps: RunDeps, storage: StorageAdapter, failures: string[]): Promise<string[]> {
+  if (!deps.notifier) return [];
+  try {
+    const { sent, failure } = await deliverPaymentPhotos({ storage, familyId: deps.familyId, notifier: deps.notifier, log: (m) => deps.runtime.log("info", m) });
+    if (failure !== undefined) failures.push(`photos: ${messageOf(failure)}`);
+    return sent;
+  } catch (error) {
+    failures.push(`photos: ${messageOf(error)}`);
+    return [];
+  }
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -39,9 +59,10 @@ export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
   } catch (error) {
     failures.push(`payments: ${messageOf(error)}`);
   }
-  const delivered: string[] = [];
+  const delivered: string[] = await deliverPhotos(deps, storage, failures);
+  const textStorage = deps.notifier ? withoutPaymentEntries(storage) : storage;
   const watching: StorageAdapter = {
-    ...storage,
+    ...textStorage,
     markDeliveredMany: async (keys) => {
       await storage.markDeliveredMany(keys);
       delivered.push(...keys);
