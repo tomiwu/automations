@@ -95,6 +95,14 @@ To see the next issue and run no agent: `DRY_RUN=1 npx tsx scripts/sandcastle-lo
 | `LOOP_CHECKS_LOCK` | unset | Box-wide lock file around `LOOP_CHECKS` (`flock`), so only one heavy check runs at a time |
 | `LOOP_CI_RERUN` | `1` | Re-run the failed CI jobs one time before the CI fixer runs. `0` turns it off. |
 | `LOOP_CI_LOG_FILTER` | unset | Shell filter (stdin to stdout) for the failed CI log, for example to remove download noise |
+| `LOOP_CONTAINERFILE` | `Containerfile` in this directory | Containerfile of `build-image.sh`. Another repository sets its own. |
+| `LOOP_BUILD_CONTEXT` | the directory of the Containerfile | Build context of `build-image.sh` |
+| `LOOP_IMAGE_NAME` | `sandcastle` | Image name of `build-image.sh` |
+| `LOOP_AGENT_USER` | `agent` | User of the throwaway container of the doctor |
+| `LOOP_ROOT` | the repository root (two levels above `doctor.sh`) | Root directory of the host checks of the doctor |
+| `LOOP_DOCTOR_DONE` | set by `sandcastle-loop.sh` | `1`: the start script ran the doctor already, so `main.mts` does not run it again. Do not set it by hand. |
+
+A test (`src/env-table.test.ts`) fails when the code reads a `LOOP_*` name that has no row here, or when a row names a variable that the code does not read.
 
 The prompt files can use `{{ISSUE}}`, `{{BRANCH}}`, `{{ISSUE_TEXT}}` (the issue as JSON) and `{{CHECK_LOG}}` (fix prompt only).
 

@@ -20,7 +20,7 @@ export interface LoopConfig {
   maxFixAttempts: number;
   skip: Set<number>;
   promptDir: string;
-  /** Command of the sandbox-ready hook. Empty: no hook. A failure stops the sandbox (no `|| true`). */
+  /** Command of the sandbox-ready hook. Empty: no hook. A failure stops the sandbox (the failure is never ignored). */
   sandboxReady: string;
   /** gh command or wrapper on the host. */
   gh: string;
