@@ -1,4 +1,4 @@
-import { importCredentialKey } from "@automations/shared";
+import { countFetches, createFetchBudget, importCredentialKey } from "@automations/shared";
 import { SUPABASE_KEY_PLACEHOLDER, createKodyRuntime, kodyHost, kodyStorage, loadDeploymentConfig } from "@automations/shared/kody";
 import { createCredentialResolver, createSupabaseCredentialStore, createSupabaseStorage } from "@automations/librus-data";
 import { splitForTelegram, type Messenger } from "@tomiwu/librus-watch";
@@ -19,10 +19,12 @@ export const telegramMessenger: Messenger = {
  * encrypted rows in Supabase; `runtime.secret(name)` decrypts them.
  */
 export async function entryDeps() {
-  const { supabaseUrl, familyId, credentialKey, activenowCacheHours } = await loadDeploymentConfig(kodyStorage());
-  const supabase = { url: supabaseUrl, key: SUPABASE_KEY_PLACEHOLDER, fetch: kodyHost.fetch };
+  const { supabaseUrl, familyId, credentialKey, activenowCacheHours, fetchReserve } = await loadDeploymentConfig(kodyStorage());
+  const counter = countFetches(kodyHost.fetch);
+  const supabase = { url: supabaseUrl, key: SUPABASE_KEY_PLACEHOLDER, fetch: counter.fetch };
   const resolve = createCredentialResolver(createSupabaseCredentialStore(supabase), await importCredentialKey(credentialKey), familyId);
-  const runtime = createKodyRuntime(kodyHost, resolve);
+  const runtime = createKodyRuntime({ ...kodyHost, fetch: counter.fetch }, resolve);
   const activeNow = { store: kodyStorage(), ...(activenowCacheHours === undefined ? {} : { ttlMs: activenowCacheHours * 3_600_000 }) };
-  return { runtime, storage: createSupabaseStorage(supabase), familyId, activeNow };
+  const budget = createFetchBudget({ store: kodyStorage(), now: () => new Date() });
+  return { runtime, storage: createSupabaseStorage(supabase), familyId, activeNow, counter, budget, fetchReserve };
 }

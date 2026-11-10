@@ -87,6 +87,7 @@ The Kody free plan allows 2500 outbound fetches in a UTC week. This package keep
 - **One config read.** `loadConfig` reads the Family and its Children, Accounts, Activities and Recipients in one request. The credentials of the Family load in one request on the first `runtime.secret` call. A run needs 2 Supabase requests for config and credentials.
 - **Per run.** A scheduled run needs about 2 Supabase requests for config and credentials, plus the Librus pages of each enabled Watcher, plus batched Supabase writes. `./events` needs only Supabase requests. The counter in the log shows the real numbers.
 - **Batched writes.** `enqueueNotifications` and `markDeliveredMany` write many Outbox entries in one request. Delivery marks the sent entries once at the end of the run.
+- **Reserve.** Each scheduled run adds its count to a weekly ledger in the package storage (`fetch-ledger`). When `2500 - used` is below `fetchReserve` (`./configure`, default 150), or a fetch failed on the plan limit today, the run skips the optional Watchers (`OPTIONAL_WATCHERS`: grades, messages, announcements, trips, absences, meetings) and logs `budget reserve: skipped <watchers>`. See `docs/kody-deploy.md`.
 
 ## Not in this package
 

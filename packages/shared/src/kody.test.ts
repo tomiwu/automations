@@ -73,6 +73,15 @@ describe("deployment config", () => {
     }
   });
 
+  it("accepts an optional fetch reserve and rejects a bad one", () => {
+    expect(parseDeploymentConfig({ ...config, fetchReserve: 200 }).fetchReserve).toBe(200);
+    expect(parseDeploymentConfig({ ...config, fetchReserve: 0 }).fetchReserve).toBe(0);
+    expect(parseDeploymentConfig(config)).not.toHaveProperty("fetchReserve");
+    for (const bad of [-1, 2501, 1.5, "150"]) {
+      expect(() => parseDeploymentConfig({ ...config, fetchReserve: bad })).toThrow("fetchReserve");
+    }
+  });
+
   it("rejects bad input", () => {
     expect(() => parseDeploymentConfig(null)).toThrow("object");
     expect(() => parseDeploymentConfig([])).toThrow("object");

@@ -32,3 +32,16 @@ export { decryptCredential, encryptCredential, importCredentialKey, newCredentia
 export { isValidNip, isValidNrb } from "./checksums.ts";
 export { countFetches, formatFetchCount } from "./fetch-counter.ts";
 export type { FetchCount, FetchCounter } from "./fetch-counter.ts";
+export {
+  DEFAULT_FETCH_RESERVE,
+  LEDGER_KEY,
+  WEEKLY_FETCH_LIMIT,
+  belowReserve,
+  createFetchBudget,
+  formatReserveSkip,
+  isFetchCapError,
+  loadLedger,
+  utcDay,
+  utcWeekOf,
+} from "./fetch-budget.ts";
+export type { FetchBudget, FetchBudgetOptions, FetchLedger, LedgerStore } from "./fetch-budget.ts";

@@ -1,7 +1,7 @@
 import { createMemoryStorage } from "@automations/librus-data";
-import { fakeRuntime } from "@automations/shared";
+import { countFetches, createFetchBudget, fakeRuntime, LEDGER_KEY, type LedgerStore } from "@automations/shared";
 import { describe, expect, it } from "vitest";
-import { runActivitiesWatch, scopeOf, type RunDeps } from "./run.ts";
+import { RESERVE_ACTIVENOW_TTL_MS, runActivitiesWatch, scopeOf, withReserve, type RunDeps } from "./run.ts";
 import type { CreateSource } from "./source.ts";
 import { activityTargets } from "./targets.ts";
 import { EDUSKY_ACCOUNT, FAMILY_ID, NOW_ACCOUNT, fakeSessionSource, session, testConfig, type FakeSessionSource } from "./test-fixtures.ts";
@@ -125,5 +125,52 @@ describe("runActivitiesWatch", () => {
 
   it("builds the scope from the Service and the Account", () => {
     expect(scopeOf(activityTargets(testConfig()).targets[1]!)).toBe(`edusky:${EDUSKY_ACCOUNT}`);
+  });
+});
+
+function ledgerStore(used: number): LedgerStore & { data: Map<string, unknown> } {
+  const data = new Map<string, unknown>([[LEDGER_KEY, JSON.stringify({ week: "2026-10-19", used })]]);
+  return { data, get: async (key) => data.get(key), set: async (key, value) => void data.set(key, value) };
+}
+
+describe("runActivitiesWatch fetch reserve", () => {
+  const cache = { get: async () => undefined, set: async () => undefined };
+
+  it("below the reserve keeps the ActiveNow cache for a week and logs one line", async () => {
+    const { deps, runtime } = setup();
+    const budget = createFetchBudget({ store: ledgerStore(2400), now: () => runtime.now() });
+    const next = await withReserve({ ...deps, budget, activeNow: { store: cache, ttlMs: 1000 } });
+    expect(next.activeNow).toEqual({ store: cache, ttlMs: RESERVE_ACTIVENOW_TTL_MS });
+    expect(runtime.logs.map((l) => l.message)).toContain("budget reserve: skipped activenow refresh");
+  });
+
+  it("above the reserve, or without a cache, changes nothing", async () => {
+    const { deps, runtime } = setup();
+    const budget = createFetchBudget({ store: ledgerStore(100), now: () => runtime.now() });
+    const above = { ...deps, budget, activeNow: { store: cache, ttlMs: 1000 } };
+    expect(await withReserve(above)).toBe(above);
+    const low = createFetchBudget({ store: ledgerStore(2400), now: () => runtime.now() });
+    const noCache = { ...deps, budget: low };
+    expect(await withReserve(noCache)).toBe(noCache);
+    expect(runtime.logs.some((l) => l.message.startsWith("budget reserve"))).toBe(false);
+  });
+
+  it("adds the fetches of the run to the ledger and marks a plan-limit error", async () => {
+    const { deps, sources, runtime } = setup();
+    const store = ledgerStore(10);
+    const counter = countFetches(async () => new Response("ok"));
+    await counter.fetch("https://example.test/a");
+    await counter.fetch("https://example.test/b");
+    sources.get(NOW_ACCOUNT)!.error = new Error("EntitlementLimitError: Plan limit reached");
+    await runActivitiesWatch({ ...deps, counter, budget: createFetchBudget({ store, now: () => runtime.now() }) });
+    expect(JSON.parse(store.data.get(LEDGER_KEY) as string)).toEqual({ week: "2026-10-19", used: 12, capHitDay: "2026-10-20" });
+  });
+
+  it("logs a ledger failure and does not fail the run", async () => {
+    const { deps, runtime } = setup();
+    const budget = { remaining: async () => 2500, record: async () => Promise.reject(new Error("storage down")) };
+    const counter = countFetches(async () => new Response("ok"));
+    expect(await runActivitiesWatch({ ...deps, budget, counter })).toEqual([]);
+    expect(runtime.logs.map((l) => l.message)).toContain("fetch ledger: storage down");
   });
 });

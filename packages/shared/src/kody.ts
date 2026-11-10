@@ -69,11 +69,13 @@ export interface DeploymentConfig {
   credentialKey: string;
   /** Hours between two fetches of one ActiveNow Account. Optional; the default is 24. */
   activenowCacheHours?: number;
+  /** Fetches that the watchers keep free in the week for the time-critical jobs. Optional; the default is 150. */
+  fetchReserve?: number;
 }
 
 export const DEPLOYMENT_CONFIG_KEY = "deployment-config";
 
-const CONFIG_KEYS = new Set(["supabaseUrl", "familyId", "credentialKey", "activenowCacheHours"]);
+const CONFIG_KEYS = new Set(["supabaseUrl", "familyId", "credentialKey", "activenowCacheHours", "fetchReserve"]);
 
 function configObject(raw: unknown): Record<string, unknown> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("The config must be an object.");
@@ -113,6 +115,16 @@ function hoursOf(value: unknown): { activenowCacheHours?: number } {
   return { activenowCacheHours: value };
 }
 
+const MAX_RESERVE = 2500;
+
+function reserveOf(value: unknown): { fetchReserve?: number } {
+  if (value === undefined) return {};
+  if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > MAX_RESERVE) {
+    throw new Error("fetchReserve must be a whole number of fetches from 0 to 2500.");
+  }
+  return { fetchReserve: value as number };
+}
+
 /** Validates a deployment config. Unknown keys are rejected. */
 export function parseDeploymentConfig(raw: unknown): DeploymentConfig {
   const config = configObject(raw);
@@ -121,6 +133,7 @@ export function parseDeploymentConfig(raw: unknown): DeploymentConfig {
     familyId: idOf(config.familyId),
     credentialKey: keyOf(config.credentialKey),
     ...hoursOf(config.activenowCacheHours),
+    ...reserveOf(config.fetchReserve),
   };
 }
 
