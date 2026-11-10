@@ -116,7 +116,7 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
   const defaultsOf = (name: string): Row => {
     const time = current.toISOString();
     if (name === "payments") {
-      const empty = { notified_at: null, reminded_at: null, decided_at: null, decided_by: null };
+      const empty = { notified_at: null, reminded_at: null, decided_at: null, decided_by: null, refund_check_at: null };
       return { id: randomUUID(), status: "pending", created_at: time, ...empty };
     }
     if (name === "journal_events") return { recorded_at: time };

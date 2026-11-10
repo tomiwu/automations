@@ -130,12 +130,16 @@ function actionCell(context: Context, row: DashboardRow): string {
   return `<td>${decisionForm(context, row, "paid")}${decisionForm(context, row, "skip")}</td>`;
 }
 
+function refundCell(language: Language, row: DashboardRow): string {
+  return `<td>${row.refundCheck ? escapeHtml(t(language, "dashboard.refund_check")) : ""}</td>`;
+}
+
 function viewHtml(context: Context, view: Dashboard): string {
   const lang = context.language;
   return [
     section(lang, "dashboard.unpaid", [...ROW_HEAD, "dashboard.col.actions"], view.unpaid.map(rowCells), view.unpaid.map((row) => actionCell(context, row))),
     section(lang, "dashboard.next_due", ROW_HEAD, view.nextDue.map(rowCells)),
-    section(lang, "dashboard.paid", ROW_HEAD, view.paid.map(rowCells)),
+    section(lang, "dashboard.paid", [...ROW_HEAD, "dashboard.col.refund"], view.paid.map(rowCells), view.paid.map((row) => refundCell(lang, row))),
     section(lang, "dashboard.cancelled", ROW_HEAD, view.cancelled.map(rowCells)),
     section(lang, "dashboard.spend_month", ["dashboard.col.child", "dashboard.col.month", "dashboard.col.amount"],
       view.spendByMonth.map((s) => [s.child, s.month, formatAmount(s.total)])),

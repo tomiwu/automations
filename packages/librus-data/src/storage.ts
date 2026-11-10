@@ -141,6 +141,8 @@ export interface Payment extends NewPayment {
   remindedAt: Date | null;
   decidedAt: Date | null;
   decidedBy: string | null;
+  /** When payments-watch saw that the Organizer no longer lists this `paid` charge. Null when not flagged. */
+  refundCheckAt: Date | null;
   createdAt: Date;
 }
 
@@ -196,6 +198,8 @@ export interface StorageAdapter {
   ): Promise<boolean>;
   /** Sets the status of a `pending` Payment to `cancelled`. `decidedAt` and `decidedBy` stay. Returns false if nothing changed. */
   cancelPendingPayment(id: string): Promise<boolean>;
+  /** Sets `refundCheckAt` of a `paid` Payment that has no such time yet. The status stays. Returns false if nothing changed. */
+  flagRefundCheck(id: string, at: Date): Promise<boolean>;
   /** Sets the status of a `cancelled` Payment back to `pending`. Returns false if nothing changed. */
   reopenCancelledPayment(id: string): Promise<boolean>;
 }

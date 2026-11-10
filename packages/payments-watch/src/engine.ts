@@ -155,6 +155,24 @@ async function cancelOrganizer(context: RunContext, { watched, reason, evidence 
   await context.storage.cancelPendingPayment(payment.id);
 }
 
+/**
+ * A `paid` Payment that the Organizer no longer lists (PC2): no Journal event and no status change. The projection gets the
+ * refund-check flag, and each Recipient of the Child gets one notice. Only the first setting of the flag queues the notices.
+ */
+async function flagRefund(context: RunContext, { watched }: CancelDue): Promise<void> {
+  const { fee, payment } = watched;
+  if (!(await context.storage.flagRefundCheck(payment.id, context.now))) return;
+  const child = context.config.children.find((candidate) => candidate.id === fee.childId);
+  for (const recipient of context.config.recipients.filter((r) => r.child_ids.includes(fee.childId))) {
+    await context.storage.enqueueNotification({
+      key: `refund-check:${payment.id}:${recipient.telegram_chat_id}`,
+      familyId: payment.familyId,
+      chatId: recipient.telegram_chat_id,
+      text: t(recipient.language, "payment.refund_check.notice", { child: child?.name ?? "", organizer: fee.organizer, month: payment.month }),
+    });
+  }
+}
+
 /** A cancelled Payment whose charge is listed again gets a new `PaymentDue` and is `pending` again (R1 to R3). */
 async function reappear(context: RunContext, { fee, payment }: Watched): Promise<void> {
   const head = context.heads.get(paymentStream(fee.childId, fee.id, payment.month));
@@ -165,7 +183,7 @@ async function reappear(context: RunContext, { fee, payment }: Watched): Promise
 }
 
 async function planOrganizer(context: RunContext, step: CounterStep): Promise<void> {
-  for (const item of step.due) await cancelOrganizer(context, item);
+  for (const item of step.due) await (item.watched.payment.status === "paid" ? flagRefund(context, item) : cancelOrganizer(context, item));
   for (const item of step.listed) await reappear(context, item);
 }
 
@@ -236,7 +254,7 @@ async function handleFees(context: RunContext, run: PaymentRun, fees: readonly F
  * pending Payment in the current month gets `PaymentCancelled` (`fee_disabled`) and the status `cancelled`. An Organizer
  * page that lists the charge as void, or does not list it, or shows the Child as withdrawn, gives a candidate cancel.
  * After `CANCEL_AFTER` successful passes in a row with the same candidate, the pending Payment gets `PaymentCancelled`
- * (`organizer_void` or `organizer_withdrawn`). A listed charge resets the count, and brings back a cancelled Payment with `PaymentDue`.
+ * (`organizer_void` or `organizer_withdrawn`). A paid Payment with the same candidate gets only the refund-check flag and one notice for each Recipient (no event, the status stays `paid`). A listed charge resets the count, and brings back a cancelled Payment with `PaymentDue`.
  * The pass also writes the Journal: `PaymentDue` or `PaymentChanged` for a pending Payment, and one
  * `CheckCompleted` for each Child with an enabled Fee when the pass did not fail. All events go in one append.
  */

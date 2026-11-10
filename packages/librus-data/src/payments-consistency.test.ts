@@ -58,6 +58,7 @@ describe("projectionRows", () => {
     remindedAt: null,
     decidedAt: null,
     decidedBy: null,
+    refundCheckAt: null,
     createdAt: new Date("2026-12-10T08:00:00Z"),
   };
 

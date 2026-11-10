@@ -131,6 +131,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
         remindedAt: null,
         decidedAt: null,
         decidedBy: null,
+        refundCheckAt: null,
         createdAt: now(),
       };
       payments.set(made.id, made);
@@ -161,6 +162,12 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       const payment = payments.get(id);
       if (!payment || payment.status !== "pending") return false;
       payment.status = "cancelled";
+      return true;
+    },
+    flagRefundCheck: async (id, at) => {
+      const payment = payments.get(id);
+      if (!payment || payment.status !== "paid" || payment.refundCheckAt !== null) return false;
+      payment.refundCheckAt = at;
       return true;
     },
     reopenCancelledPayment: async (id) => {

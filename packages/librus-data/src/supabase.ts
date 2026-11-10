@@ -161,6 +161,7 @@ function toPayment(row: Row): Payment {
     remindedAt: toDate(row.reminded_at),
     decidedAt: toDate(row.decided_at),
     decidedBy: row.decided_by === null ? null : String(row.decided_by),
+    refundCheckAt: toDate(row.refund_check_at),
     createdAt: new Date(String(row.created_at)),
   };
 }
@@ -345,6 +346,8 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const query = `${filter("id", "eq", id)}&status=eq.pending`;
       return ((await (await request("PATCH", "payments", query, init)).json()) as Row[]).length > 0;
     },
+    flagRefundCheck: async (id, at) =>
+      patchPayment(`${filter("id", "eq", id)}&status=eq.paid&refund_check_at=is.null`, { refund_check_at: at.toISOString() }),
     reopenCancelledPayment: async (id) => {
       const init = { headers: headers({ ...JSON_HEADERS, prefer: "return=representation" }), body: JSON.stringify({ status: "pending" }) };
       const query = `${filter("id", "eq", id)}&status=eq.cancelled`;
