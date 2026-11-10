@@ -13,6 +13,13 @@ LOOP_REPO=owner/name /path/to/automations/scripts/sandcastle-loop.sh
 
 `sandcastle-loop.sh` takes a lock and a pid file per repository, sets `XDG_RUNTIME_DIR=/tmp/xdg-runtime-loop`, checks `LOOP_IMAGE`, and starts `main.mts` with `setsid nohup`. It removes `GH_TOKEN` and `GITHUB_TOKEN` from the environment of the loop. The log is `<LOOP_LOG_DIR>/<YYYYMMDD-HHMM>.log`. The link `current.log` points to the newest log.
 
+## Secrets in logs
+
+- All output of the loop goes through `redact-filter.mts`. It masks every value of `REDACT_ENV_FILE` (default `.sandcastle/.env`), the value of every environment variable with a name that ends in `_TOKEN`, `_KEY` or `_SECRET`, the patterns `sk-ant-`, `ghp_`, `gho_`, `ghs_`, `github_pat_`, and the value of `<NAME>_TOKEN=` and `<NAME>_KEY=`. The mask is `[REDACTED]`. This also covers the `podman run` command that Sandcastle prints when the command fails.
+- `sandcastle-loop.sh` sets `umask 077`: log files have mode 600, the log directory has mode 700.
+- `check-no-secrets.sh <dir>` exits 1 when a `*.log` file in `<dir>` matches a token pattern. It prints only the file path and the number of matches. The start script runs it before the loop starts (a match stops the start) and after the loop ends (the result is added to the log).
+- Pass secrets to the loop by environment inheritance, never as arguments in a command line.
+
 To see the next issue and run no agent: `DRY_RUN=1 npx tsx scripts/sandcastle-loop/main.mts`.
 
 ## Environment
