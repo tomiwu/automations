@@ -11,6 +11,8 @@
 #   ci.yml secrets     gitleaks git --redact --verbose --exit-code 1 . ; deny-list check (DENYLIST or DENYLIST_FILE)
 #   migrate.yml        tools/migrate/apply.sh on a scratch database, two times (the second run applies nothing)
 #   deploy-kody.yml    tools/kody-stage/stage.mjs for each package of the matrix (the Kody API steps are SKIP)
+#   sandbox-image.yml  podman build of the sandbox Containerfile and the smoke test, only when the branch changes a
+#                      file of its `paths` filter (like the pull_request trigger), or with CI_LOCAL_SANDBOX_IMAGE=1
 #
 # Environment:
 #   CI_LOCAL_MIN_FREE_GB  stop when less disk is free (default 6)
@@ -43,6 +45,8 @@ deploy-kody.yml|Run the Kody publish checks (saves nothing)|skip: Kody API call
 deploy-kody.yml|Push the staged tree to the Kody package repo|skip: deploy
 deploy-kody.yml|Publish on Kody|skip: deploy
 deploy-kody.yml|Report a package that was not deployed|skip: deploy
+sandbox-image.yml|Build the image (the last RUN is doctor.sh container)|sandbox-image
+sandbox-image.yml|Smoke test as the agent user|sandbox-image
 '
 
 # Prints "file|step name" for each named step under `jobs:` of each workflow file.
@@ -129,7 +133,7 @@ detail() {
     sql) echo "$(sum_of sql passed) passed, $(sum_of sql skipped) skipped" ;;
     crap) clean crap | grep -h "CI failed:" | paste -sd ';' | sed 's/^$/every function has CRAP < 6/' ;;
     gitleaks) clean gitleaks | grep -oE "[0-9]+ commits scanned|no leaks found|leaks found: [0-9]+" | paste -sd ',' ;;
-    deny|migrate|kody-stage) tail -1 "$LOG/$1.log" ;;
+    deny|migrate|kody-stage|sandbox-image) tail -1 "$LOG/$1.log" ;;
     *) [ "$2" -ne 0 ] && tail -1 "$LOG/$1.log" | cut -c1-120 ;;
   esac
 }
@@ -178,6 +182,25 @@ kody_stage() {
   echo "staged $n packages: $(matrix_packages | paste -sd ' ')"
 }
 
+# The `paths` of the pull_request trigger of sandbox-image.yml.
+sandbox_paths() {
+  [ -e "$WORKFLOWS/sandbox-image.yml" ] || return 0
+  awk '/^  pull_request:/{p=1; next} p && /^  [a-z_]+:/{p=0} p && /^ +- /{sub(/^ +- */,""); print}' "$WORKFLOWS/sandbox-image.yml"
+}
+sandbox_image() {
+  local changed base
+  base="$(git merge-base HEAD origin/main 2>/dev/null)"
+  changed="$( [ -n "$base" ] && git diff --name-only "$base" HEAD -- $(sandbox_paths) )"
+  if [ "${CI_LOCAL_SANDBOX_IMAGE:-}" != 1 ] && [ -z "$changed" ]; then echo "SKIP: no file of the sandbox-image.yml paths changed"; return 0; fi
+  podman build -q -f scripts/sandcastle-loop/Containerfile \
+    --build-arg AGENT_UID="$(id -u)" --build-arg AGENT_GID="$(id -g)" \
+    --build-arg LOOP_MODELS=claude:default,cursor:default \
+    -t sandcastle-ci:check scripts/sandcastle-loop || return 1
+  podman run --rm --entrypoint sh sandcastle-ci:check -c \
+    'id -un && git --version && gh --version | head -1 && command -v claude && command -v agent && test "$(stat -c %a /tmp)" = 1777' || return 1
+  echo "built sandcastle-ci:check and the smoke test passed (changed: $(printf '%s' "$changed" | paste -sd ' '))"
+}
+
 step "workflow parity" parity check_parity
 step "node ${CI_LOCAL_NODE:-22}" node use_node
 step "npm ci" npm-ci npm ci --no-audit --no-fund
@@ -190,6 +213,7 @@ step "migrate.yml: apply.sh x2 (scratch db)" migrate migrate
 step "gitleaks (full history)" gitleaks gitleaks_scan
 step "deny-list" deny deny
 step "deploy-kody.yml: kody-stage" kody-stage kody_stage
+step "sandbox-image.yml: build + smoke" sandbox-image sandbox_image
 skip "deploy-kody.yml: Kody check, push, publish" "needs the Kody API and the deploy secret (not run locally)"
 if command -v actionlint >/dev/null; then step "actionlint (extra)" actionlint actionlint "$WORKFLOWS"/*.yml; fi
 

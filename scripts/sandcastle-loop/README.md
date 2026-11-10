@@ -26,6 +26,8 @@ export LOOP_IMAGE="$(LOOP_REPO=tomiwu/automations scripts/sandcastle-loop/build-
 - Another repository keeps its own Containerfile (for example extra toolchains) and sets `LOOP_CONTAINERFILE`, `LOOP_BUILD_CONTEXT` (put `doctor.sh` in it) and `LOOP_IMAGE_NAME`. `LOOP_STORAGE_CONF` selects the podman storage. `LOOP_MODELS` is passed as a build arg, so the build checks the agent CLIs.
 - The box wrapper switches to this image after the merge (owner step). `.sandcastle/Containerfile` stays for the current loop.
 
+- CI: the workflow `.github/workflows/sandbox-image.yml` ("sandbox image build") builds this Containerfile and runs the container doctor. It runs on PRs and pushes to main that change `Containerfile`, `doctor.sh`, `build-image.sh` or the workflow itself, weekly (Monday 03:17 UTC), and by hand. It uses no secret and pushes no image.
+
 ## Preflight doctor
 
 `doctor.sh` runs before the loop starts (`sandcastle-loop.sh`) and before iteration 1 (`main.mts`, skipped when the start script ran it). When a check fails it prints `DOCTOR FAIL: <check> -> fix: <command>`, exits 1, and no agent starts.
