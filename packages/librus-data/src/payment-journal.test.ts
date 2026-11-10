@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { contentHash } from "./journal.ts";
 import {
+  planPaymentCancelled,
   checkCompletedForPayments,
   paymentPayload,
   paymentStream,
@@ -178,5 +179,32 @@ describe("planPaymentSent", () => {
   it("gives null for a Payment that is not pending", async () => {
     const head = await headOf(payment({ status: "paid" }));
     expect(await planPaymentSent(head, ["reminded"], AT)).toBeNull();
+  });
+});
+
+describe("planPaymentCancelled", () => {
+  const at = new Date("2026-12-12T08:00:00Z");
+  const headWith = (status: string): JournalEvent => ({
+    familyId: "fam", childId: "c1", stream: "payment:c1:f1:2026-12", seq: 2, kind: "payment", day: "2026-12-20",
+    eventType: "PaymentChanged", contentHash: "h", source: "payments-watch", recordedAt: at,
+    payload: { status, amount: 15050, amountSource: "config", notifiedAt: "2026-12-10T08:00:00.000Z", remindedAt: null, decidedAt: null, decidedBy: null },
+  });
+
+  it("cancels a pending head with the full state, the reason and the time; the decision fields stay", async () => {
+    const event = await planPaymentCancelled(headWith("pending"), "fee_disabled", at);
+    expect(event).toMatchObject({ stream: "payment:c1:f1:2026-12", seq: 3, eventType: "PaymentCancelled", kind: "payment", day: "2026-12-20" });
+    expect(event!.payload).toEqual({
+      status: "cancelled", amount: 15050, amountSource: "config", notifiedAt: "2026-12-10T08:00:00.000Z", remindedAt: null,
+      decidedAt: null, decidedBy: null, cancelReason: "fee_disabled", cancelledAt: "2026-12-12T08:00:00.000Z",
+    });
+  });
+
+  it("adds the optional evidence", async () => {
+    const event = await planPaymentCancelled(headWith("pending"), "organizer_void", at, "example:missing_after_2_checks");
+    expect(event!.payload.cancelEvidence).toBe("example:missing_after_2_checks");
+  });
+
+  it.each(["paid", "skipped", "cancelled"])("gives null for a %s head", async (status) => {
+    expect(await planPaymentCancelled(headWith(status), "fee_disabled", at)).toBeNull();
   });
 });

@@ -136,6 +136,7 @@ function viewHtml(context: Context, view: Dashboard): string {
     section(lang, "dashboard.unpaid", [...ROW_HEAD, "dashboard.col.actions"], view.unpaid.map(rowCells), view.unpaid.map((row) => actionCell(context, row))),
     section(lang, "dashboard.next_due", ROW_HEAD, view.nextDue.map(rowCells)),
     section(lang, "dashboard.paid", ROW_HEAD, view.paid.map(rowCells)),
+    section(lang, "dashboard.cancelled", ROW_HEAD, view.cancelled.map(rowCells)),
     section(lang, "dashboard.spend_month", ["dashboard.col.child", "dashboard.col.month", "dashboard.col.amount"],
       view.spendByMonth.map((s) => [s.child, s.month, formatAmount(s.total)])),
     section(lang, "dashboard.spend_year", ["dashboard.col.child", "dashboard.col.school_year", "dashboard.col.amount"],

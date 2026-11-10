@@ -93,6 +93,7 @@ async function apply(
   subject: { payment: Payment; fee: Fee },
 ): Promise<void> {
   const { storage, familyId } = deps;
+  if (subject.payment.status === "cancelled") return answer(deps, query, recipient.language, "payment.callback.cancelled");
   if (await decidePayment({ storage, familyId, ...subject, decision: parsed.decision, decidedBy: query.chatId, at: new Date() })) {
     return showStatus(deps, query, recipient, parsed.decision);
   }

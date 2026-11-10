@@ -1,6 +1,7 @@
 import {
   checkCompletedForPayments,
   paymentStream,
+  planPaymentCancelled,
   planPaymentDue,
   type Fee,
   type JournalEvent,
@@ -28,6 +29,9 @@ interface RunContext {
   heads: ReadonlyMap<string, JournalEvent>;
   /** The Journal events of this pass. They are appended in one call at the end. */
   events: NewJournalEvent[];
+  /** The Payments of the Family at the start of the pass (for the cancel of a disabled Fee). */
+  payments: readonly Payment[];
+  now: Date;
 }
 
 const pad = (value: number): string => String(value).padStart(2, "0");
@@ -99,7 +103,31 @@ async function journalPayment(context: RunContext, fee: Fee, stored: Payment, fo
   return { ...stored, amount: next.amount, amountSource: next.amountSource };
 }
 
+/** The head to cancel: the stored head, or a `PaymentDue` (appended first) for a Payment made before the Journal. */
+async function cancelBase(context: RunContext, fee: Fee, payment: Payment): Promise<JournalEvent | undefined> {
+  const head = context.heads.get(paymentStream(fee.childId, fee.id, payment.month));
+  if (head) return head;
+  const due = await planPaymentDue(undefined, fee, payment);
+  if (due) context.events.push(due);
+  return due ? { ...due, recordedAt: context.now } : undefined;
+}
+
+/**
+ * A Fee that an admin disabled while the Payment of the current month is pending gets one `PaymentCancelled`
+ * with `fee_disabled` (payments contract v0.2, PC5: one pass is enough). Paid, skipped and cancelled stay.
+ */
+async function cancelDisabled(context: RunContext, fee: Fee): Promise<void> {
+  const payment = context.payments.find((p) => p.feeId === fee.id && p.month === context.month && p.status === "pending");
+  if (!payment) return;
+  const base = await cancelBase(context, fee, payment);
+  const event = base && (await planPaymentCancelled(base, "fee_disabled", context.now));
+  if (!event) return;
+  context.events.push(event);
+  await context.storage.cancelPendingPayment(payment.id);
+}
+
 async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Promise<void> {
+  if (!fee.enabled) return cancelDisabled(context, fee);
   if (!isDue(context, fee)) return;
   const found = await source.amountFor(fee, context.month);
   if (!found || found.amount <= 0) return;
@@ -143,7 +171,8 @@ async function handleFees(context: RunContext, run: PaymentRun, fees: readonly F
  * Makes the Payments of the current month (in the Family time zone) and queues their Notifications.
  * A Payment is made on `notifyDay` or later, one time only. A `pending` Payment gets one Notification
  * for each Recipient of the Child, and one reminder on `reminderDay` or later. The Outbox keys make a
- * repeated run send nothing twice. A `paid` or `skipped` Payment gets nothing.
+ * repeated run send nothing twice. A `paid`, `skipped` or `cancelled` Payment gets nothing. A disabled Fee with a
+ * pending Payment in the current month gets `PaymentCancelled` (`fee_disabled`) and the status `cancelled`.
  * The pass also writes the Journal: `PaymentDue` or `PaymentChanged` for a pending Payment, and one
  * `CheckCompleted` for each Child with an enabled Fee when the pass did not fail. All events go in one append.
  */
@@ -159,6 +188,8 @@ export async function runPayments(run: PaymentRun): Promise<void> {
     month: today.slice(0, 7),
     heads: new Map(heads.map((head) => [head.stream, head])),
     events: [],
+    payments: fees.some((fee) => !fee.enabled) ? await run.storage.listPayments(run.familyId) : [],
+    now: run.now,
   };
   await handleFees(context, run, fees);
 }

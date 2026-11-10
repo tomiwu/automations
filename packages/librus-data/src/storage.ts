@@ -117,7 +117,8 @@ export interface Fee {
   enabled: boolean;
 }
 
-export type PaymentStatus = "pending" | "paid" | "skipped";
+/** `cancelled` comes from `PaymentCancelled` (payments contract v0.2): never from a human decision. */
+export type PaymentStatus = "pending" | "paid" | "skipped" | "cancelled";
 export type AmountSource = "page" | "config";
 
 /** The data to make one Payment. The status is `pending`. */
@@ -184,7 +185,9 @@ export interface StorageAdapter {
   /** Sets the status, `decidedAt` and `decidedBy` of a `pending` Payment. Returns false if nothing changed. */
   setPaymentStatus(
     id: string,
-    status: Exclude<PaymentStatus, "pending">,
+    status: Exclude<PaymentStatus, "pending" | "cancelled">,
     decidedBy: string,
   ): Promise<boolean>;
+  /** Sets the status of a `pending` Payment to `cancelled`. `decidedAt` and `decidedBy` stay. Returns false if nothing changed. */
+  cancelPendingPayment(id: string): Promise<boolean>;
 }

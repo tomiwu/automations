@@ -26,6 +26,8 @@ export interface SchoolYearSpend {
 export interface Dashboard {
   paid: DashboardRow[];
   unpaid: DashboardRow[];
+  /** History only: not in "next due" and not in spend (payments contract v0.2, PC3). */
+  cancelled: DashboardRow[];
   nextDue: DashboardRow[];
   spendByMonth: MonthSpend[];
   spendBySchoolYear: SchoolYearSpend[];
@@ -96,6 +98,7 @@ export function buildDashboard(input: DashboardInput): Dashboard {
   return {
     paid,
     unpaid,
+    cancelled: rows.filter((row) => row.status === "cancelled"),
     nextDue: unpaid.filter((row) => row.dueDate >= input.today).sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     spendByMonth: sumBy(paid, (row) => ({ child: row.child, month: row.month })),
     spendBySchoolYear: sumBy(paid, (row) => {

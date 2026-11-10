@@ -29,7 +29,8 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - On `notifyDay` or later, an enabled Fee with an amount above 0 gets one `pending` Payment for the month. An existing Payment is not made again.
 - Each Recipient of the Child gets one Outbox entry with the key `payment:<payment id>:<chat id>`.
 - On `reminderDay` or later, a `pending` Payment gets one reminder with the key `payment:<payment id>:<chat id>:reminder`.
-- A `paid` or `skipped` Payment gets no Notification. A repeated run queues nothing twice.
+- A `paid`, `skipped` or `cancelled` Payment gets no Notification. A repeated run queues nothing twice.
+- A Fee that is disabled (`enabled = false`) while the Payment of the current month is `pending` gets one `PaymentCancelled` (`cancelReason: "fee_disabled"`, `cancelledAt`) and the status `cancelled` (payments contract v0.2 section 3b). One pass is enough. A `paid` or `skipped` Payment stays. Paid/Skip on a cancelled Payment changes nothing and answers "This Payment is cancelled". Its Outbox entries are dropped. The Dashboard shows it under "Cancelled" only (not in next due, not in spend).
 
 ## Journal dual write
 
@@ -92,7 +93,7 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 ## The `./stored-payments` export
 
 - **Input:** `{ childId?, month? }`. `month` is `YYYY-MM`. It is the current month in the Family time zone by default, and at most 12 months back. Other keys are rejected.
-- **Output:** `{ timezone, month, lastSavedAt, payments, fetches? }`. `payments` are the head states of the `payment:` streams of the month, ordered by `dueDay`. Each has `stream`, `seq`, `eventType`, `lastChanged`, `childId` (the Journal `child_id`), `feeId`, `organizer`, `month`, `dueDay` (1 to 28), `status` (`pending`, `paid` or `skipped`), `amount` (grosze), `amountSource`, `notifiedAt`, `remindedAt`, `decidedAt` and `decidedBy`. A reader derives `overdue` from `status`, `month` and `dueDay`.
+- **Output:** `{ timezone, month, lastSavedAt, payments, fetches? }`. `payments` are the head states of the `payment:` streams of the month, ordered by `dueDay`. Each has `stream`, `seq`, `eventType`, `lastChanged`, `childId` (the Journal `child_id`), `feeId`, `organizer`, `month`, `dueDay` (1 to 28), `status` (`pending`, `paid`, `skipped` or `cancelled`; a cancelled head also has `cancelReason` and `cancelledAt`), `amount` (grosze), `amountSource`, `notifiedAt`, `remindedAt`, `decidedAt` and `decidedBy`. A reader derives `overdue` from `status`, `month` and `dueDay`, and only for `pending`.
 - `lastSavedAt` maps each Child ID to the time of the last `CheckCompleted` in `check:payments-watch:<childId>`, or `null` before the first check.
 - It never returns a bank account, NIP, title, recipient or source URL.
 - **Fetches:** the config, the payment heads and the check heads. This is 3 Supabase fetches. There is no organizer or Librus fetch.
