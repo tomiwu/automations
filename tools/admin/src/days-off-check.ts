@@ -69,27 +69,26 @@ function streamLine(stream: string, histories: readonly CheckHistory[]): { ok: b
   return { ok, line: `${ok ? "OK" : "FAIL"} journal ${mask(stream)}: ${items.length} dayOff event(s)${DAY_OFF_STREAM.test(stream) ? "" : " (not an item:schoolFreeDays|classFreeDays stream)"}` };
 }
 
+function journalLines(input: DaysOffInput): { ok: boolean; lines: string[] } {
+  const streams = sourceStreams(input.lessons).map((stream) => streamLine(stream, input.histories));
+  if (streams.length === 0) return { ok: false, lines: ["FAIL journal: no day-off source stream in the Lessons"] };
+  return { ok: streams.every((s) => s.ok), lines: streams.map((s) => s.line) };
+}
+
 /** Checks the data that the two exports returned. */
 export function evaluateDaysOff(input: DaysOffInput, options: DaysOffOptions): DaysOffResult {
   const saved = input.lastSavedAt !== null;
   const lessons = lessonLines(input, options);
-  const streams = sourceStreams(input.lessons).map((stream) => streamLine(stream, input.histories));
-  const anyStream = streams.length > 0;
-  const lines = [
-    `${saved ? "OK" : "FAIL"} lastSavedAt: ${input.lastSavedAt ?? "null (no Journal pass yet)"}`,
-    ...lessons.lines,
-    ...(anyStream ? streams.map((s) => s.line) : ["FAIL journal: no day-off source stream in the Lessons"]),
-  ];
-  return { ok: saved && lessons.ok && anyStream && streams.every((s) => s.ok), lines };
+  const journal = journalLines(input);
+  const savedLine = saved ? `OK lastSavedAt: ${input.lastSavedAt}` : "FAIL lastSavedAt: null (no Journal pass yet)";
+  return { ok: saved && lessons.ok && journal.ok, lines: [savedLine, ...lessons.lines, ...journal.lines] };
 }
+
+const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object";
 
 /** Finds the first object in a CLI answer that has the given key (the CLI may wrap the export result). */
 export function unwrap<T>(value: unknown, key: string): T | undefined {
-  if (value === null || typeof value !== "object") return undefined;
+  if (!isObject(value)) return undefined;
   if (key in value) return value as T;
-  for (const child of Object.values(value)) {
-    const found = unwrap<T>(child, key);
-    if (found) return found;
-  }
-  return undefined;
+  return Object.values(value).reduce<T | undefined>((found, child) => found ?? unwrap<T>(child, key), undefined);
 }
