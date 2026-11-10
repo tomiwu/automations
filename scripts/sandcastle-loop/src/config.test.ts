@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadConfig, parseModels, repoNameOf } from "./config.ts";
+import { GROK_CURSOR_MODEL, loadConfig, parseModels, repoNameOf } from "./config.ts";
 
 describe("loadConfig", () => {
   it("uses the defaults", () => {
@@ -8,6 +8,7 @@ describe("loadConfig", () => {
     expect(c.models).toEqual([
       { provider: "claude", model: "claude-sonnet-5-5" },
       { provider: "cursor", model: "composer-2.5" },
+      { provider: "cursor", model: GROK_CURSOR_MODEL },
     ]);
     expect(c.logDir).toBe("/workspace/loops/example-repo");
     expect(c.checks).toContain("npm run crap");
