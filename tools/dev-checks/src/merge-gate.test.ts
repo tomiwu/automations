@@ -247,7 +247,7 @@ describe("scripts/ci-local-merge-gate.sh", () => {
     const f = fixture();
     const before = f.head();
     expect(f.record().status).toBe(0);
-    f.git("branch", "main", "HEAD~0");
+    f.git("branch", "main");
     f.git("checkout", "-q", "main");
     f.commit("main.md", "Example School\n");
     f.git("checkout", "-q", "feature");

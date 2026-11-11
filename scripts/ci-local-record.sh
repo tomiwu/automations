@@ -57,16 +57,24 @@ cat "$WORK/log"
 RESULT=RED
 [ "$RC" -eq 0 ] && RESULT=GREEN
 
-# The record goes to a temporary file first, so the gate never reads a record that is not complete.
+# Writes the record. The record goes to a temporary file first, so the gate never reads a record that is not complete.
+write_record() {
+  local tmp="$RECORDS/.$SHA.$$"
+  {
+    echo "sha: $SHA"
+    echo "result: $RESULT"
+    echo "exit-code: $RC"
+    echo "recorded-at: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    echo "---"
+    cat "$WORK/log"
+  } > "$tmp" && mv -f "$tmp" "$RECORDS/$SHA" && return 0
+  # A record that is not complete must not stay. An old record of the SHA is not valid after this run.
+  rm -f "$tmp" "$RECORDS/$SHA"
+  return 1
+}
+
 mkdir -p "$RECORDS" || exit 2
-{
-  echo "sha: $SHA"
-  echo "result: $RESULT"
-  echo "exit-code: $RC"
-  echo "recorded-at: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  echo "---"
-  cat "$WORK/log"
-} > "$RECORDS/.$SHA.$$" && mv -f "$RECORDS/.$SHA.$$" "$RECORDS/$SHA" || { rm -f "$RECORDS/.$SHA.$$" "$RECORDS/$SHA"; exit 2; }
+write_record || exit 2
 
 echo "ci-local-record: $RESULT record for $SHA in $RECORDS/$SHA" >&2
 [ "$RESULT" = GREEN ]
