@@ -11,7 +11,7 @@ const read = (path: string): string => readFileSync(join(repo, path), "utf8");
 function sandboxReadyCommands(): string[] {
   const block = /onSandboxReady:\s*\[([\s\S]*?)\]/.exec(read(".sandcastle/main.mts"));
   expect(block).not.toBeNull();
-  return [...(block?.[1] ?? "").matchAll(/command:\s*"([^"]+)"/g)].map((match) => match[1]);
+  return [...(block?.[1] ?? "").matchAll(/command:\s*"([^"]+)"/g)].map((match) => match[1] ?? "");
 }
 
 function pinned(text: string, pattern: RegExp): string | undefined {
