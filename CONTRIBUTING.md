@@ -62,6 +62,20 @@ Do not use `git push --no-verify`: `--no-verify` is not allowed for this hook. C
 
 The Sandcastle loop runs `scripts/install-hooks.sh` at its start and in each new sandbox worktree. Thus the push of a feature branch by the loop host runs the pre-push hook.
 
+## Merge gate
+
+The Git hooks are not the last gate, because `--no-verify` skips a hook. The merge path of the Sandcastle loop uses two scripts:
+
+```sh
+scripts/ci-local-record.sh <SHA>        # runs the full ci-local on the commit and writes the record
+scripts/ci-local-merge-gate.sh <SHA>    # exit code 0 only for a GREEN record of this exact SHA
+```
+
+- The recorder runs `scripts/ci-local.sh` in a temporary checkout of the commit. It writes `ci-local-records/<full SHA>` in the common git directory. The record has the SHA, the result (`GREEN` or `RED`), the exit code, the UTC time and the full output of ci-local. Only exit code 0 of ci-local gives a `GREEN` record.
+- The gate refuses the merge when the PR head SHA has no record, when the record is for a different SHA and when the record is `RED`.
+- A sync with `origin/main` changes the head SHA. The new SHA needs its own record: run the recorder, then the gate, then merge.
+- GitHub Actions is an extra check. A missing Actions run is not a reason to merge without a `GREEN` record.
+
 ## Pull requests
 
 - One topic for each pull request. Say what changed and why.
