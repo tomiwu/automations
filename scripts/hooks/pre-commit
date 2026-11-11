@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Optional pre-commit hook: the privacy check on the staged lines. It prints places and categories, never a value.
+# Install it in your clone with: git config core.hooksPath scripts/hooks
+set -eu
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+exec "$HERE/node_modules/.bin/tsx" "$HERE/tools/privacy-check/src/cli.ts" --staged

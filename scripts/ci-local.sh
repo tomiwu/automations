@@ -9,6 +9,9 @@
 #   ci.yml build       npm ci, npm run typecheck, npm test, npm run crap (Node 22, like actions/setup-node)
 #   ci.yml sql         npm test -w @automations/sql-tests against a throwaway postgres:17 container (podman)
 #   ci.yml secrets     gitleaks git --redact --verbose --exit-code 1 . ; deny-list check (DENYLIST or DENYLIST_FILE)
+#   privacy            gitleaks on the full history (it contains the tree and the diff of the branch), then
+#                      tools/privacy-check: hashed private words and heuristics on the tracked files and on the
+#                      lines that the branch adds against origin/main. It prints places and categories only.
 #   migrate.yml        tools/migrate/apply.sh on a scratch database, two times (the second run applies nothing)
 #   deploy-kody.yml    tools/kody-stage/stage.mjs for each package of the matrix (the Kody API steps are SKIP)
 #   sandbox-image.yml  podman build of the sandbox Containerfile and the smoke test, only when the branch changes a
@@ -20,6 +23,7 @@
 #   CI_LOCAL_NODE         Node major version (default 22). --host-node uses the node in PATH.
 #   CI_LOCAL_PG_IMAGE     Postgres image (default docker.io/library/postgres:17)
 #   DENYLIST / DENYLIST_FILE  personal strings, one for each line. Values are never printed.
+#   PRIVACY_PEPPER        the pepper of the private word hashes, when privacy/denylist.hashes.json uses one
 #   GITLEAKS              gitleaks binary (default: gitleaks in PATH, else a cached v8.28.0)
 # It never prints a secret value. It calls no Kody, Supabase or GitHub API.
 set -uo pipefail
@@ -36,6 +40,7 @@ ci.yml|Check the CRAP score (fails if a function has CRAP >= 6)|crap
 ci.yml|Run the SQL tests against Postgres|sql
 ci.yml|Scan the full history with gitleaks|gitleaks
 ci.yml|Check for personal strings (deny-list from the DENYLIST secret)|deny
+ci.yml|Run the privacy check (hashed private words and heuristics)|privacy
 migrate.yml|Install psql|migrate
 migrate.yml|Apply the migrations|migrate
 deploy-kody.yml|Decide the mode|skip: GitHub vars only
@@ -133,7 +138,7 @@ detail() {
     sql) echo "$(sum_of sql passed) passed, $(sum_of sql skipped) skipped" ;;
     crap) clean crap | grep -h "CI failed:" | paste -sd ';' | sed 's/^$/every function has CRAP < 6/' ;;
     gitleaks) clean gitleaks | grep -oE "[0-9]+ commits scanned|no leaks found|leaks found: [0-9]+" | paste -sd ',' ;;
-    deny|migrate|kody-stage|sandbox-image) tail -1 "$LOG/$1.log" ;;
+    deny|privacy|migrate|kody-stage|sandbox-image) tail -1 "$LOG/$1.log" ;;
     *) [ "$2" -ne 0 ] && tail -1 "$LOG/$1.log" | cut -c1-120 ;;
   esac
 }
@@ -176,6 +181,10 @@ deny() {
   if git log --all -p --format= | grep -q -i -F -f "$list"; then rm -f "$list"; echo "personal strings found in the git history (values hidden)"; return 1; fi
   rm -f "$list"; echo "no personal strings found ($(git rev-list --all | wc -l) commits, values hidden)"
 }
+privacy() {
+  local base; base="$(git merge-base HEAD origin/main 2>/dev/null)"
+  npx --no-install tsx tools/privacy-check/src/cli.ts --tree ${base:+--diff "$base"}
+}
 kody_stage() {
   local pkg n=0
   for pkg in $(matrix_packages); do node tools/kody-stage/stage.mjs "packages/$pkg" "$STAGE/$pkg" || { echo "stage failed: $pkg"; return 1; }; n=$((n + 1)); done
@@ -212,6 +221,7 @@ step "npm test -w @automations/sql-tests" sql sql_tests
 step "migrate.yml: apply.sh x2 (scratch db)" migrate migrate
 step "gitleaks (full history)" gitleaks gitleaks_scan
 step "deny-list" deny deny
+step "privacy: hashed private words + heuristics (tree, diff)" privacy privacy
 step "deploy-kody.yml: kody-stage" kody-stage kody_stage
 step "sandbox-image.yml: build + smoke" sandbox-image sandbox_image
 skip "deploy-kody.yml: Kody check, push, publish" "needs the Kody API and the deploy secret (not run locally)"

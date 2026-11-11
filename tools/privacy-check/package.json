@@ -1,0 +1,14 @@
+{
+  "name": "@automations/privacy-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Privacy gate: hashed private words and heuristics for personal data in the tracked files and the git history.",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "crap": "crap4ts --exclude .test --exclude cli --fail-on-crap 6"
+  }
+}

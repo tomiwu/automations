@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# npm run check: the checks of CI on this computer, in order. It stops at the first failure and names it.
+# npm run check: the checks of CI on this computer, in order (typecheck, test, crap, privacy, gitleaks). It stops at the first failure and names it.
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
@@ -15,6 +15,7 @@ step() {
 step typecheck npm run typecheck
 step test npm test
 step crap npm run crap
+step privacy npm run --silent privacy
 if command -v gitleaks >/dev/null 2>&1; then
   step gitleaks gitleaks git --no-banner --redact --exit-code 1 .
 else

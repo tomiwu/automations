@@ -1,0 +1,2 @@
+# Paths that scripts/clean-publish.sh leaves out of the public repository. One path for each line, from the
+# repository root. A line that starts with # is a comment. The owner decides the entries (audit finding F5).
