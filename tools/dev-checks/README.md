@@ -6,5 +6,6 @@ Local checks before a push.
 - `npm run crap:changed` (root, `src/cli.ts`): `npm run crap` only in the workspaces with a changed file against `origin/main`. Changed files are the commits since the base, the uncommitted changes and new files. A change in `package.json`, `package-lock.json` or `tsconfig.base.json` selects all workspaces. Workspaces without a `crap` script are skipped.
   - `npm run crap:changed -- --dry-run` prints the selected workspaces and runs nothing.
   - `npm run crap:changed -- --base <ref>` uses another base.
+  - `--staged` uses the staged files and no base. `--script <name>` runs another script than `crap`. `scripts/hooks/pre-commit` uses `--staged --script typecheck`.
 
 The CI workflow does not use these commands. It runs each step itself.

@@ -84,7 +84,8 @@ function text(env: Record<string, string | undefined>, key: string, fallback: st
   return env[key] || fallback;
 }
 
-export const DEFAULT_SANDBOX_READY = "npm ci --no-audit --no-fund";
+// The hook runs in each new sandbox worktree. It installs the git hooks of the repository, if the repository has an installer.
+export const DEFAULT_SANDBOX_READY = "npm ci --no-audit --no-fund && if [ -f scripts/install-hooks.sh ]; then bash scripts/install-hooks.sh; fi";
 
 /** The value of the key, also when it is empty. The fallback only when the key is not set. */
 function setOr(env: Record<string, string | undefined>, key: string, fallback: string): string {

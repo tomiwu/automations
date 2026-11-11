@@ -27,6 +27,12 @@ describe("changedWorkspaces", () => {
     expect(names(changedWorkspaces(["package-lock.json"], workspaces))).toEqual(["@x/shared", "@x/watch", "@x/watch-extra"]);
   });
 
+  it("selects by another script when the caller names one", () => {
+    const mixed: Workspace[] = [...workspaces, { name: "@x/types", dir: "tools/types", scripts: { typecheck: "tsc" } }];
+    expect(names(changedWorkspaces(["tools/types/a.ts", "packages/watch/a.ts"], mixed, "typecheck"))).toEqual(["@x/types"]);
+    expect(names(changedWorkspaces(["package.json"], mixed, "typecheck"))).toEqual(["@x/types"]);
+  });
+
   it("selects nothing for a change outside the workspaces", () => {
     expect(changedWorkspaces([".github/workflows/ci.yml", "docs/a.md"], workspaces)).toEqual([]);
   });

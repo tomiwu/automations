@@ -96,18 +96,18 @@ function waitForLoop(logDir: string): void {
 }
 
 describe("sandcastle-loop.sh", () => {
-  function start(doctor: string) {
+  function start(doctor: string, installHooks = "") {
     const dir = tempDir();
     const logDir = join(dir, "logs");
     const marker = join(dir, "npx-called");
     executable(join(dir, "npx"), `touch "${marker}"; exit 0`);
     executable(join(dir, "doctor"), doctor);
     const result = spawnSync(join(scriptsDir, "sandcastle-loop.sh"), [], {
-      env: { ...linked(dir), LOOP_REPO: "owner/example", LOOP_LOG_DIR: logDir, LOOP_DOCTOR: join(dir, "doctor") },
+      env: { ...linked(dir), LOOP_REPO: "owner/example", LOOP_LOG_DIR: logDir, LOOP_DOCTOR: join(dir, "doctor"), LOOP_INSTALL_HOOKS: installHooks },
       encoding: "utf8",
     });
     waitForLoop(logDir);
-    return { result, logDir, marker };
+    return { result, logDir, marker, dir };
   }
 
   it("creates the log file with mode 600", () => {
@@ -117,6 +117,27 @@ describe("sandcastle-loop.sh", () => {
     expect(logs).toHaveLength(1);
     expect((statSync(join(logDir, logs[0]!)).mode & 0o777).toString(8)).toBe("600");
     expect(existsSync(join(logDir, "current.log"))).toBe(true);
+  });
+
+  it("installs the git hooks before the loop starts", () => {
+    const { result, dir, marker } = start("exit 0", 'touch "$LOOP_LOG_DIR/../hooks-installed"');
+    expect(result.status).toBe(0);
+    expect(existsSync(join(dir, "hooks-installed"))).toBe(true);
+    expect(existsSync(marker)).toBe(true);
+  });
+
+  it("does not start the loop when the hook install fails", () => {
+    const { result, logDir, marker } = start("exit 0", "exit 1");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("The hook install failed. The loop does not start.");
+    expect(existsSync(join(logDir, "loop.pid"))).toBe(false);
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("uses scripts/install-hooks.sh of the checkout when LOOP_INSTALL_HOOKS is not set", () => {
+    const script = readFileSync(join(scriptsDir, "sandcastle-loop.sh"), "utf8");
+    expect(script).toContain('[ -f scripts/install-hooks.sh ]');
+    expect(script).toContain('LOOP_INSTALL_HOOKS="bash scripts/install-hooks.sh"');
   });
 
   it("does not start the loop when the doctor fails", () => {

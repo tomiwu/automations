@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ALLOWLIST_PATH, run } from "./run.ts";
 import { isSkipped } from "./sources.ts";
 
-// Tests of scripts/clean-publish.sh, scripts/hooks/pre-commit and the privacy step of scripts/ci-local.sh.
+// Tests of scripts/clean-publish.sh, scripts/hooks/pre-commit, scripts/install-hooks.sh and the privacy step of scripts/ci-local.sh.
 // Every repository is a throwaway one with invented data. The positive samples are built at run time.
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const dirs: string[] = [];
@@ -122,20 +122,209 @@ describe("scripts/clean-publish.sh", () => {
   });
 });
 
-describe("scripts/hooks/pre-commit", () => {
-  it("stops a commit with a staged finding and lets a clean commit pass", () => {
-    const repo = source();
-    git(repo, "config", "core.hooksPath", join(root, "scripts", "hooks"));
-    writeFileSync(join(repo, "a.md"), "Child Two\n");
-    git(repo, "add", "-A");
-    git(repo, "commit", "-q", "-m", "clean");
+/** A stub gitleaks program. It records its arguments in `<stub>.calls`. */
+function stubGitleaks(exitCode: number): string {
+  const stub = join(temp(), "gitleaks");
+  writeFileSync(stub, `#!/bin/bash\necho "$*" >> "${stub}.calls"\nexit ${exitCode}\n`);
+  chmodSync(stub, 0o755);
+  return stub;
+}
 
-    writeFileSync(join(repo, "b.md"), `${phone}\n`);
-    git(repo, "add", "-A");
-    const result = spawnSync("git", ["commit", "-q", "-m", "phone"], { cwd: repo, env, encoding: "utf8" });
+/** The real gitleaks program (GITLEAKS, the PATH, or the cache of scripts/install-hooks.sh), if this computer has one. */
+function realGitleaks(): string | undefined {
+  const cached = join(process.env.XDG_CACHE_HOME ?? join(process.env.HOME ?? "", ".cache"), "ci-local", "gitleaks");
+  const inPath = spawnSync("bash", ["-c", "command -v gitleaks"], { encoding: "utf8" }).stdout.trim();
+  return [process.env.GITLEAKS ?? "", inPath, cached].find((path) => path !== "" && existsSync(path));
+}
+
+function stage(repo: string, files: Record<string, string>): void {
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(repo, path)), { recursive: true });
+    writeFileSync(join(repo, path), text);
+  }
+  git(repo, "add", "-A");
+}
+
+function tryCommit(repo: string, gitleaks: string, message = "change") {
+  const result = spawnSync("git", ["commit", "-q", "-m", message], { cwd: repo, env: { ...env, GITLEAKS: gitleaks }, encoding: "utf8" });
+  return { status: result.status, out: result.stdout + result.stderr, head: git(repo, "log", "-1", "--format=%s").trim() };
+}
+
+/** A throwaway repository that uses the pre-commit hook of this checkout. */
+function hooked(): string {
+  const repo = source();
+  git(repo, "config", "core.hooksPath", join(root, "scripts", "hooks"));
+  return repo;
+}
+
+describe("scripts/hooks/pre-commit", () => {
+  it("stops a commit with a staged privacy finding and lets a clean commit pass", () => {
+    const repo = hooked();
+    const gitleaks = stubGitleaks(0);
+    stage(repo, { "a.md": "Child Two\n" });
+    expect(tryCommit(repo, gitleaks, "clean")).toMatchObject({ status: 0, head: "clean" });
+
+    stage(repo, { "b.md": `${phone}\n` });
+    const result = tryCommit(repo, gitleaks, "phone");
     expect(result.status).not.toBe(0);
-    expect(result.stdout + result.stderr).toContain("b.md:1:phone");
-    expect(git(repo, "log", "-1", "--format=%s").trim()).toBe("clean");
+    expect(result.out).toContain("b.md:1:phone");
+    expect(result.out).toContain("pre-commit: FAILED privacy");
+    expect(result.out).not.toContain(phone);
+    expect(result.head).toBe("clean");
+  });
+
+  it("runs gitleaks on the staged changes with the flags of ci-local, and stops the commit on a leak", () => {
+    const repo = hooked();
+    const clean = stubGitleaks(0);
+    stage(repo, { "a.md": "Child Two\n" });
+    expect(tryCommit(repo, clean, "clean").status).toBe(0);
+    expect(readFileSync(`${clean}.calls`, "utf8").trim()).toBe("git --pre-commit --staged --redact --verbose --no-banner --exit-code 1 .");
+
+    stage(repo, { "c.md": "Child Three\n" });
+    const result = tryCommit(repo, stubGitleaks(1), "leak");
+    expect(result.status).not.toBe(0);
+    expect(result.out).toContain("pre-commit: FAILED gitleaks");
+    expect(result.out).toContain("--no-verify is not allowed");
+    expect(result.head).toBe("clean");
+  });
+
+  it("stops the commit when gitleaks is not installed", () => {
+    const repo = hooked();
+    stage(repo, { "a.md": "Child Two\n" });
+    const result = tryCommit(repo, join(temp(), "no-gitleaks"));
+    expect(result.status).not.toBe(0);
+    expect(result.out).toContain("gitleaks is not installed. Run scripts/install-hooks.sh");
+    expect(result.head).not.toBe("change");
+  });
+
+  it("uses the same gitleaks version and flags as scripts/ci-local.sh", () => {
+    const ciLocal = readFileSync(join(root, "scripts", "ci-local.sh"), "utf8");
+    const installer = readFileSync(join(root, "scripts", "install-hooks.sh"), "utf8");
+    const hook = readFileSync(join(root, "scripts", "hooks", "pre-commit"), "utf8");
+    expect(ciLocal).toContain("download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz");
+    expect(installer).toContain("GITLEAKS_VERSION=8.28.0");
+    expect(ciLocal).toContain("git --redact --verbose --exit-code 1 .");
+    expect(hook).toMatch(/git --pre-commit --staged --redact --verbose --no-banner --exit-code 1 \.$/m);
+  });
+
+  describe("the typecheck of the staged workspaces", () => {
+    function workspaceRepo(typecheck: string): string {
+      const repo = source();
+      commit(repo, {
+        "package.json": JSON.stringify({ name: "example", private: true, workspaces: ["packages/*"] }),
+        "packages/one/package.json": JSON.stringify({ name: "@example/one", version: "1.0.0", scripts: { typecheck } }),
+      }, "workspaces");
+      git(repo, "config", "core.hooksPath", join(root, "scripts", "hooks"));
+      return repo;
+    }
+    const fails = "echo typecheck-ran && exit 1";
+
+    it("stops the commit when the typecheck of a staged workspace fails", () => {
+      const repo = workspaceRepo(fails);
+      stage(repo, { "packages/one/src/a.ts": "export const a = 1;\n" });
+      const result = tryCommit(repo, stubGitleaks(0));
+      expect(result.status).not.toBe(0);
+      expect(result.out).toContain("typecheck-ran");
+      expect(result.out).toContain("pre-commit: FAILED typecheck");
+      expect(result.head).toBe("workspaces");
+    });
+
+    it("does not run the typecheck of a workspace without a staged file", () => {
+      const repo = workspaceRepo(fails);
+      stage(repo, { "docs/a.md": "Child Two\n" });
+      const result = tryCommit(repo, stubGitleaks(0));
+      expect(result.out).not.toContain("typecheck-ran");
+      expect(result).toMatchObject({ status: 0, head: "change" });
+    });
+
+    it("lets the commit pass when the typecheck of the staged workspace passes", () => {
+      const repo = workspaceRepo("echo typecheck-ran");
+      stage(repo, { "packages/one/src/a.ts": "export const a = 1;\n" });
+      const result = tryCommit(repo, stubGitleaks(0));
+      expect(result.out).toContain("typecheck-ran");
+      expect(result).toMatchObject({ status: 0, head: "change" });
+    });
+  });
+
+  // These cases use the real gitleaks program. They are skipped on a computer without gitleaks.
+  describe.skipIf(realGitleaks() === undefined)("with the real gitleaks", () => {
+    const gitleaks = realGitleaks() ?? "";
+    const secret = ["ghp", "x7Kq2LmN9pRt4VwY8zBc3DfG6hJs5MnP1QaE"].join("_");
+    const leak = { "src/config.ts": `export const key = "${secret}";\n` };
+
+    it("stops a commit with a staged synthetic leak that is not in .gitleaksignore, and prints no secret value", () => {
+      const repo = hooked();
+      stage(repo, leak);
+      const result = tryCommit(repo, gitleaks, "leak");
+      expect(result.status).not.toBe(0);
+      expect(result.out).toContain("src/config.ts:github-pat:1");
+      expect(result.out).toContain("REDACTED");
+      expect(result.out).toContain("pre-commit: FAILED gitleaks");
+      expect(result.out).not.toContain(secret);
+      expect(result.out).not.toContain(secret.slice(4, 16));
+      expect(result.head).not.toBe("leak");
+    });
+
+    it("lets a staged leak of .gitleaksignore and a clean change pass", () => {
+      const repo = hooked();
+      stage(repo, { ...leak, ".gitleaksignore": "src/config.ts:github-pat:1\n" });
+      expect(tryCommit(repo, gitleaks, "allowlisted")).toMatchObject({ status: 0, head: "allowlisted" });
+      stage(repo, { "a.md": "Child Two\n" });
+      expect(tryCommit(repo, gitleaks, "clean")).toMatchObject({ status: 0, head: "clean" });
+    });
+  });
+});
+
+describe("scripts/install-hooks.sh", () => {
+  const install = (cwd: string, gitleaks: string) => {
+    const result = spawnSync("bash", [join(root, "scripts", "install-hooks.sh")], { cwd, env: { ...env, GITLEAKS: gitleaks }, encoding: "utf8" });
+    return { status: result.status, out: result.stdout + result.stderr };
+  };
+
+  /** A repository whose scripts/hooks/pre-commit runs the hook of this checkout. */
+  function withHook(): string {
+    const repo = source();
+    commit(repo, { "scripts/hooks/pre-commit": `#!/usr/bin/env bash\necho "hook ran in $(pwd)"\nexec "${join(root, "scripts", "hooks", "pre-commit")}"\n` }, "hook");
+    chmodSync(join(repo, "scripts", "hooks", "pre-commit"), 0o755);
+    git(repo, "commit", "-q", "-am", "hook mode");
+    return repo;
+  }
+
+  it("sets core.hooksPath on the common config, so the hook runs in every worktree", () => {
+    const repo = withHook();
+    const gitleaks = stubGitleaks(0);
+    const worktree = join(temp(), "worktree");
+    git(repo, "worktree", "add", "-q", "-b", "side", worktree);
+
+    const result = install(worktree, gitleaks);
+    expect(result.out).toContain("install-hooks: core.hooksPath is scripts/hooks");
+    expect(result.status).toBe(0);
+    expect(git(repo, "config", "--get", "core.hooksPath").trim()).toBe("scripts/hooks");
+    expect(git(worktree, "config", "--get", "core.hooksPath").trim()).toBe("scripts/hooks");
+    expect(existsSync(join(repo, ".git", "hooks", "pre-commit"))).toBe(false);
+
+    const later = join(temp(), "later");
+    git(repo, "worktree", "add", "-q", "-b", "later", later);
+    for (const tree of [worktree, later]) {
+      stage(tree, { "b.md": `${phone}\n` });
+      const stopped = tryCommit(tree, gitleaks, "phone");
+      expect(stopped.status).not.toBe(0);
+      expect(stopped.out).toContain(`hook ran in ${tree}`);
+      expect(stopped.out).toContain("b.md:1:phone");
+      expect(stopped.head).toBe("hook mode");
+    }
+  });
+
+  it("fails when the gitleaks program of GITLEAKS does not exist", () => {
+    const result = install(withHook(), join(temp(), "no-gitleaks"));
+    expect(result.status).not.toBe(0);
+    expect(result.out).toContain("install-hooks: FAILED");
+  });
+
+  it("fails outside a checkout with scripts/hooks/pre-commit", () => {
+    const result = install(source(), stubGitleaks(0));
+    expect(result.status).not.toBe(0);
+    expect(result.out).toContain("scripts/hooks/pre-commit");
   });
 });
 
