@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { ALLOWLIST_PATH, run } from "./run.ts";
+import { isSkipped } from "./sources.ts";
 
 // Tests of scripts/clean-publish.sh, scripts/hooks/pre-commit and the privacy step of scripts/ci-local.sh.
 // Every repository is a throwaway one with invented data. The positive samples are built at run time.
@@ -153,5 +155,27 @@ describe("the repository", () => {
     const result = spawnSync(join(root, "node_modules", ".bin", "tsx"), [join(root, "tools", "privacy-check", "src", "cli.ts"), "--repo", root, "--tree"], { env: { PATH: process.env.PATH ?? "", PRIVACY_PEPPER: process.env.PRIVACY_PEPPER ?? "" }, encoding: "utf8" });
     expect(result.stdout).toContain("privacy: no findings");
     expect(result.status).toBe(0);
+  });
+});
+
+describe("examples/", () => {
+  const files = execFileSync("git", ["ls-files", "-z", "examples"], { cwd: root, encoding: "utf8" }).split("\0").filter((path) => path !== "");
+
+  it("has every tracked file in the scope of the tree check, with no finding", () => {
+    const allow = JSON.parse(readFileSync(join(root, ALLOWLIST_PATH), "utf8")) as { paths: string[] };
+    expect(files).toContain("examples/README.md");
+    expect(files.filter((path) => isSkipped(path, allow.paths))).toEqual([]);
+    const lines: string[] = [];
+    run(["--repo", root, "--tree"], { PATH: process.env.PATH ?? "", PRIVACY_PEPPER: process.env.PRIVACY_PEPPER ?? "" }, (line) => lines.push(line));
+    expect(lines.filter((line) => line.startsWith("examples/"))).toEqual([]);
+  });
+
+  it("says in its README that all data is invented, and names the rule for example values", () => {
+    const readme = readFileSync(join(root, "examples", "README.md"), "utf8");
+    expect(readme).toContain("All data in `examples/` is invented");
+    for (const kind of ["Family", "Children", "schools", "Accounts"]) expect(readme).toContain(kind);
+    expect(readme).toContain("Use only the documented example values");
+    expect(readme).toContain("tools/privacy-check/README.md");
+    expect(readme).toContain("npm run privacy -- --tree");
   });
 });

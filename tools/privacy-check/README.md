@@ -62,4 +62,4 @@ git config core.hooksPath scripts/hooks
 
 ## Tests
 
-`npm test -w @automations/privacy-check`. The positive samples are synthetic and the tests build them at run time, so the test files have no finding. The tests prove that the check fails when a synthetic private word, e-mail address, phone number or token is added, and that `scripts/clean-publish.sh` makes a repository with no finding in its tree and history.
+`npm test -w @automations/privacy-check`. The positive samples are synthetic and the tests build them at run time, so the test files have no finding. The tests prove that the check fails when a synthetic private word, e-mail address, phone number or token is added, and that `scripts/clean-publish.sh` makes a repository with no finding in its tree and history. They also prove that every tracked file in `examples/` is in the scope of the tree check, has no finding, and that `examples/README.md` names the rule for example values.
