@@ -72,6 +72,7 @@ const hooks = {
   sandbox: {
     onSandboxReady: [
       { command: "npm ci --no-audit --no-fund || true" },
+      { command: "bash scripts/install-hooks.sh" },
     ],
   },
 };

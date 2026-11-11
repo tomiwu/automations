@@ -19,6 +19,20 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # Install Claude Code CLI (used when AGENT=claude)
 RUN npm install -g @anthropic-ai/claude-code
 
+# Install gitleaks (the pre-commit hook of scripts/hooks needs it). Pinned release binary: the same version
+# and sha256 as scripts/install-hooks.sh. The sha256 must match the pinned value and the release checksums file.
+ARG GITLEAKS_VERSION=8.28.0
+ARG GITLEAKS_SHA256=a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
+RUN set -eu; cd /tmp; f="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"; \
+  base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"; \
+  curl -fsSL --retry 5 -o "$f" "$base/$f"; \
+  curl -fsSL --retry 5 -o gitleaks-checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"; \
+  grep -qx "${GITLEAKS_SHA256}  $f" gitleaks-checksums.txt; \
+  echo "${GITLEAKS_SHA256}  $f" | sha256sum -c -; \
+  tar -xzf "$f" -C /usr/local/bin gitleaks; \
+  rm -f "$f" gitleaks-checksums.txt; \
+  gitleaks version
+
 # Build-args for UID/GID alignment: sandcastle docker build-image
 # defaults these to the host user's UID/GID so image-built files
 # and bind-mounted files share an owner without runtime chown.
