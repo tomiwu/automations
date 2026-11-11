@@ -27,7 +27,7 @@ None. `npm run privacy` (tree) gives no finding. The table "Closed findings" tel
 
 | ID | Topic | Where | State |
 |---|---|---|---|
-| F2 | Single initial commit or a filtered history | `scripts/clean-publish.sh` | The script makes a single initial commit (`docs/public-release.md` gives the reason). |
+| F2 | Single initial commit or a filtered history | `scripts/clean-publish.sh` | The script makes a single initial commit by default (`docs/public-release.md` gives the reason). The option `--filtered-history` makes a filtered history. The owner decides. |
 | F4 | Owner handle in package names | npm scope `@tomiwu/*` and `kody:@tomiwu/*` imports in 49 files | The handle is public already. Keep the scope, or rename it before the publish step. |
 | F5 | Owner-specific tooling and deploy | `.sandcastle/`, `scripts/sandcastle-loop/`, `.github/workflows/deploy-kody.yml` | No secret values. To leave a path out of the public repository, add it to `privacy/publish-exclude.txt`. |
 | F6 | Bot / package name | `packages/kradziejka` and references (38 files) | Not a person name. Keep, or rename before the publish step. |

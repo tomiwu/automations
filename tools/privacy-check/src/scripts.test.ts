@@ -55,10 +55,28 @@ function source(): string {
   return repo;
 }
 
-function publish(repo: string, extraEnv: Record<string, string> = {}) {
+function publish(repo: string, extraEnv: Record<string, string> = {}, options: string[] = []) {
   const target = join(temp(), "public");
-  const result = spawnSync("bash", [join(root, "scripts", "clean-publish.sh"), target, "--source", repo], { env: { ...env, ...extraEnv }, encoding: "utf8" });
+  const result = spawnSync("bash", [join(root, "scripts", "clean-publish.sh"), target, "--source", repo, ...options], { env: { ...env, ...extraEnv }, encoding: "utf8" });
   return { target, status: result.status, out: result.stdout + result.stderr };
+}
+
+/** The state of a repository that the script must not change: HEAD, the refs, the status, the log and the configuration. */
+function state(repo: string): string[] {
+  return [
+    git(repo, "rev-parse", "HEAD"),
+    git(repo, "for-each-ref"),
+    git(repo, "status", "--porcelain", "--ignored"),
+    git(repo, "log", "--all", "--format=fuller"),
+    git(repo, "stash", "list"),
+    readFileSync(join(repo, ".git", "config"), "utf8"),
+  ];
+}
+
+/** The git-filter-repo program (GIT_FILTER_REPO or the PATH), if this computer has one. */
+function realFilterRepo(): string | undefined {
+  const inPath = spawnSync("bash", ["-c", "command -v git-filter-repo"], { encoding: "utf8" }).stdout.trim();
+  return [process.env.GIT_FILTER_REPO ?? "", inPath].find((path) => path !== "" && existsSync(path));
 }
 
 describe("scripts/clean-publish.sh", () => {
@@ -123,6 +141,86 @@ describe("scripts/clean-publish.sh", () => {
   it("gives exit code 2 without a target", () => {
     const result = spawnSync("bash", [join(root, "scripts", "clean-publish.sh")], { env, encoding: "utf8" });
     expect(result.status).toBe(2);
+  });
+
+  it("does not change the source repository", () => {
+    const repo = source();
+    const before = state(repo);
+    expect(publish(repo).status).toBe(0);
+    expect(state(repo)).toEqual(before);
+  });
+});
+
+describe("scripts/clean-publish.sh --filtered-history", () => {
+  const trailers = [`Co-authored-by: Private Person <${privateEmail}>`, "signed-off-by: Private Person <person@example.com>"];
+
+  /** A source repository with a clean tree and clean messages, but with a private author, trailers and an excluded path. */
+  function sourceWithTrailers(): string {
+    const repo = join(temp(), "source");
+    mkdirSync(repo);
+    git(repo, "init", "-q", "-b", "main");
+    commit(repo, { "README.md": "Child One\n", "private/loop.md": "owner tooling\n", "privacy/publish-exclude.txt": "# owner tooling\nprivate/\n" }, `first\n\nThe body stays.\n\n${trailers.join("\n")}`);
+    commit(repo, { "private/loop.md": "more owner tooling\n" }, "only an excluded path");
+    commit(repo, { "docs/notes.md": "clean\n" }, "notes");
+    git(repo, "tag", "-a", "-m", "tag", "v1");
+    return repo;
+  }
+
+  it("gives exit code 2 and makes nothing when git filter-repo is not installed", () => {
+    const repo = sourceWithTrailers();
+    const before = state(repo);
+    const { target, status, out } = publish(repo, { GIT_FILTER_REPO: join(temp(), "no-filter-repo") }, ["--filtered-history"]);
+    expect(out).toContain("clean-publish: --filtered-history needs git filter-repo, and it is not installed");
+    expect(status).toBe(2);
+    expect(existsSync(target)).toBe(false);
+    expect(state(repo)).toEqual(before);
+  });
+
+  // These cases use the real git-filter-repo program. They are skipped on a computer without it.
+  describe.skipIf(realFilterRepo() === undefined)("with the real git filter-repo", () => {
+    const filterRepo = { GIT_FILTER_REPO: realFilterRepo() ?? "" };
+    const neutral = "The automations contributors <noreply@example.com>";
+
+    it("keeps the history with a neutral author and committer, without the trailers and the excluded paths", () => {
+      const repo = sourceWithTrailers();
+      const before = state(repo);
+      const { target, status, out } = publish(repo, filterRepo, ["--filtered-history"]);
+      expect(out).toContain("clean-publish: nothing was published");
+      expect(status).toBe(0);
+      expect(git(target, "log", "--all", "--reverse", "--format=%an <%ae>|%cn <%ce>|%s").trim().split("\n")).toEqual([`${neutral}|${neutral}|first`, `${neutral}|${neutral}|notes`]);
+      const history = git(target, "log", "--all", "--format=fuller", "--name-only");
+      expect(history).toContain("The body stays.");
+      expect(history).not.toMatch(/co-authored-by|signed-off-by/i);
+      expect(history).not.toContain("Private Person");
+      expect(history).not.toContain("private/loop.md");
+      expect(git(target, "ls-files").trim().split("\n")).toEqual(["README.md", "docs/notes.md", "privacy/publish-exclude.txt"]);
+      expect(git(target, "status", "--porcelain")).toBe("");
+      expect(git(target, "remote")).toBe("");
+      expect(git(target, "for-each-ref", "--format=%(refname)").trim()).toBe("refs/heads/main");
+      expect(git(target, "count-objects", "-v")).toContain("count: 0");
+      expect(git(target, "rev-list", "--all", "--objects").trim().split("\n")).toHaveLength(Number(/in-pack: (\d+)/.exec(git(target, "count-objects", "-v"))?.[1]));
+      expect(existsSync(join(target, ".git", "filter-repo"))).toBe(false);
+      expect(existsSync(join(target, ".git", "FETCH_HEAD"))).toBe(false);
+      expect(out).not.toContain(privateEmail);
+      expect(state(repo)).toEqual(before);
+    });
+
+    it("removes the new repository when the filtered history has a finding", () => {
+      const repo = source();
+      const before = state(repo);
+      const { target, status, out } = publish(repo, filterRepo, ["--filtered-history"]);
+      expect(out).toContain("clean-publish: FAILED the new repository has privacy findings. It was removed.");
+      expect(status).toBe(1);
+      expect(existsSync(target)).toBe(false);
+      expect(state(repo)).toEqual(before);
+    });
+
+    it("removes the new repository when gitleaks finds a secret", () => {
+      const { target, status, out } = publish(sourceWithTrailers(), { ...filterRepo, GITLEAKS: stubGitleaks(1) }, ["--filtered-history"]);
+      expect(out).toContain("gitleaks found a secret");
+      expect(status).toBe(1);
+      expect(existsSync(target)).toBe(false);
+    });
   });
 });
 
