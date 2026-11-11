@@ -22,11 +22,12 @@ echo "install-hooks: core.hooksPath is scripts/hooks (common config, all worktre
 
 download_gitleaks() {
   local dir="$1" arch sum file
-  [ "$(uname -s)" = Linux ] || fail "gitleaks is not installed. Install gitleaks $GITLEAKS_VERSION and run this script again"
+  local no_download="gitleaks is not installed. Install gitleaks $GITLEAKS_VERSION and run this script again"
+  [ "$(uname -s)" = Linux ] || fail "$no_download"
   case "$(uname -m)" in
     x86_64) arch=x64; sum="$SHA256_x64" ;;
     aarch64|arm64) arch=arm64; sum="$SHA256_arm64" ;;
-    *) fail "gitleaks is not installed. Install gitleaks $GITLEAKS_VERSION and run this script again" ;;
+    *) fail "$no_download" ;;
   esac
   file="gitleaks_${GITLEAKS_VERSION}_linux_${arch}.tar.gz"
   mkdir -p "$dir"

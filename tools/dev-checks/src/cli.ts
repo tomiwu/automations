@@ -15,6 +15,7 @@ const staged = args.includes("--staged");
 const scriptAt = args.indexOf("--script");
 const script = (scriptAt >= 0 ? args[scriptAt + 1] : undefined) ?? "crap";
 const label = `${script}:${staged ? "staged" : "changed"}`;
+const scope = staged ? "staged files" : `base ${base}`;
 
 const git = (...gitArgs: string[]) => execFileSync("git", gitArgs, { cwd: root, encoding: "utf8" });
 const files = staged
@@ -32,7 +33,7 @@ const workspaces: Workspace[] = dirs
   });
 
 const selected = changedWorkspaces(files, workspaces, script);
-console.log(`${label}: ${staged ? "staged files" : `base ${base}`}, ${files.length} changed file(s), workspaces: ${selected.map((w) => w.name).join(", ") || "none"}`);
+console.log(`${label}: ${scope}, ${files.length} changed file(s), workspaces: ${selected.map((w) => w.name).join(", ") || "none"}`);
 if (dryRun) process.exit(0);
 for (const workspace of selected) {
   const run = spawnSync("npm", ["run", script, "-w", workspace.name], { cwd: root, stdio: "inherit" });

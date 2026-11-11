@@ -32,12 +32,16 @@ function temp(): string {
   return dir;
 }
 
-function commit(repo: string, files: Record<string, string>, message: string): void {
+function stage(repo: string, files: Record<string, string>): void {
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(dirname(join(repo, path)), { recursive: true });
     writeFileSync(join(repo, path), text);
   }
   git(repo, "add", "-A");
+}
+
+function commit(repo: string, files: Record<string, string>, message: string): void {
+  stage(repo, files);
   git(repo, "commit", "-q", "-m", message);
 }
 
@@ -137,23 +141,20 @@ function realGitleaks(): string | undefined {
   return [process.env.GITLEAKS ?? "", inPath, cached].find((path) => path !== "" && existsSync(path));
 }
 
-function stage(repo: string, files: Record<string, string>): void {
-  for (const [path, text] of Object.entries(files)) {
-    mkdirSync(dirname(join(repo, path)), { recursive: true });
-    writeFileSync(join(repo, path), text);
-  }
-  git(repo, "add", "-A");
-}
-
 function tryCommit(repo: string, gitleaks: string, message = "change") {
   const result = spawnSync("git", ["commit", "-q", "-m", message], { cwd: repo, env: { ...env, GITLEAKS: gitleaks }, encoding: "utf8" });
   return { status: result.status, out: result.stdout + result.stderr, head: git(repo, "log", "-1", "--format=%s").trim() };
 }
 
+/** Makes the repository use the pre-commit hook of this checkout. */
+function useHook(repo: string): void {
+  git(repo, "config", "core.hooksPath", join(root, "scripts", "hooks"));
+}
+
 /** A throwaway repository that uses the pre-commit hook of this checkout. */
 function hooked(): string {
   const repo = source();
-  git(repo, "config", "core.hooksPath", join(root, "scripts", "hooks"));
+  useHook(repo);
   return repo;
 }
 
@@ -214,7 +215,7 @@ describe("scripts/hooks/pre-commit", () => {
         "package.json": JSON.stringify({ name: "example", private: true, workspaces: ["packages/*"] }),
         "packages/one/package.json": JSON.stringify({ name: "@example/one", version: "1.0.0", scripts: { typecheck } }),
       }, "workspaces");
-      git(repo, "config", "core.hooksPath", join(root, "scripts", "hooks"));
+      useHook(repo);
       return repo;
     }
     const fails = "echo typecheck-ran && exit 1";
