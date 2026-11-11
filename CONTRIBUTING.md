@@ -46,9 +46,21 @@ The script sets `git config core.hooksPath scripts/hooks` on the common reposito
 - The privacy check on the staged lines.
 - `npm run typecheck` in the workspaces with a staged file.
 
-A finding stops the commit. The output shows places and categories, never a secret value. Correct the finding and commit again. Do not use `git commit --no-verify`: `--no-verify` is not allowed for this hook. The hook does not run the tests. Run `npm run check` before a push.
+A finding stops the commit. The output shows places and categories, never a secret value. Correct the finding and commit again. Do not use `git commit --no-verify`: `--no-verify` is not allowed for this hook. The hook does not run the tests.
 
-The Sandcastle loop runs `scripts/install-hooks.sh` at its start and in each new sandbox worktree.
+`scripts/hooks/pre-push` runs on each push, also on a force push. It is the full gate before a branch reaches GitHub:
+
+- It runs the full `scripts/ci-local.sh` (every job of the CI workflows) for each commit that the push sends. A red result stops the push.
+- ci-local runs in a temporary checkout of the commit (a detached worktree in `TMPDIR`, with its own `npm ci`). It checks the commit, not the files of your working directory. The hook removes the checkout after the run.
+- A branch delete sends no commit, so ci-local does not run.
+- Green cache: the hook writes one stamp file for each green commit SHA into `ci-local-green` in the common git directory. A second push of the same SHA does not run ci-local again. A new SHA runs ci-local. A red result is not cached.
+- The hook needs what `scripts/ci-local.sh` needs: podman, Node 22, gitleaks and about 6 GB of free disk.
+
+Time cost: a green full run takes about 2.5 minutes of wall time (the last full measurement on the loop host, with podman). In a sandbox without podman, the hook measured 90 to 101 seconds on 2026-11-11 (two runs) for all steps that do not use Postgres (first run: `npm ci` 1 s, typecheck 16 s, tests 37 s, crap 32 s, the other steps 5 s). The hook prints the wall time of each run. A push of a cached green SHA takes less than one second.
+
+Do not use `git push --no-verify`: `--no-verify` is not allowed for this hook. Correct the failures and push again. Run `npm run check` before a push to find most failures faster.
+
+The Sandcastle loop runs `scripts/install-hooks.sh` at its start and in each new sandbox worktree. Thus the push of a feature branch by the loop host runs the pre-push hook.
 
 ## Pull requests
 

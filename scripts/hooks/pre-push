@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Pre-push hook: the full scripts/ci-local.sh for each commit that the push sends. A red result stops the push.
+#   - It runs on a normal push and on a force push. A branch delete sends no commit, so ci-local does not run.
+#   - ci-local runs in a temporary checkout of the commit (a detached worktree in TMPDIR). It checks the commit,
+#     not the files of the working directory. The checkout runs its own scripts/ci-local.sh.
+#   - Green cache: one stamp file for each green commit SHA in <common git dir>/ci-local-green. All worktrees of
+#     the clone use it. A second push of the same SHA does not run ci-local again. A red result is not cached.
+# A green full run takes minutes (see CONTRIBUTING.md). Install the hook with: scripts/install-hooks.sh
+# Do not use `git push --no-verify` for this hook.
+set -u
+COMMON="$(git rev-parse --path-format=absolute --git-common-dir)" || exit 1
+CACHE="$COMMON/ci-local-green"
+WORK=""
+
+cleanup() {
+  [ -n "$WORK" ] || return 0
+  git worktree remove --force "$WORK/tree" >/dev/null 2>&1
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
+
+# Prints each different commit of the push one time. The lines of stdin are: <local ref> <local sha> <remote ref> <remote sha>.
+pushed_commits() {
+  local local_ref local_sha remote_ref remote_sha commit seen=" "
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    if [[ "$local_sha" =~ ^0+$ ]]; then echo "pre-push: $remote_ref is a delete. ci-local does not run for it." >&2; continue; fi
+    commit="$(git rev-parse --verify --quiet "$local_sha^{commit}")" || { echo "pre-push: $local_ref is not a commit. ci-local does not run for it." >&2; continue; }
+    case "$seen" in *" $commit "*) continue ;; esac
+    seen="$seen$commit "
+    echo "$commit"
+  done
+}
+
+# Runs the ci-local of the commit in a temporary checkout of the commit. The git variables of the hook must not go to it.
+run_ci_local() {
+  local sha="$1" rc
+  WORK="$(mktemp -d)" || return 1
+  git worktree add --quiet --detach "$WORK/tree" "$sha" || return 1
+  if [ ! -f "$WORK/tree/scripts/ci-local.sh" ]; then echo "pre-push: the commit $sha has no scripts/ci-local.sh" >&2; return 1; fi
+  (
+    unset $(git rev-parse --local-env-vars)
+    cd "$WORK/tree" && bash scripts/ci-local.sh
+  ) </dev/null
+  rc=$?
+  cleanup; WORK=""
+  return "$rc"
+}
+
+check_commit() {
+  local sha="$1" t0
+  if [ -f "$CACHE/$sha" ]; then echo "pre-push: $sha is in the green cache. ci-local does not run again."; return 0; fi
+  echo "pre-push: the full scripts/ci-local.sh runs on $sha. This takes minutes."
+  t0=$(date +%s)
+  if ! run_ci_local "$sha"; then
+    echo "pre-push: FAILED ci-local is red on $sha ($(( $(date +%s) - t0 ))s). The push was stopped. Correct the failures and push again. --no-verify is not allowed."
+    return 1
+  fi
+  mkdir -p "$CACHE" && date -u '+%Y-%m-%dT%H:%M:%SZ' > "$CACHE/$sha"
+  echo "pre-push: ci-local is green on $sha ($(( $(date +%s) - t0 ))s)"
+}
+
+COMMITS="$(pushed_commits)"
+for SHA in $COMMITS; do
+  check_commit "$SHA" >&2 || exit 1
+done
+exit 0
