@@ -5,7 +5,7 @@ import { inflectedForms } from "./inflect.ts";
 describe("inflectedForms", () => {
   it("gives the case forms of a word that ends with a", () => {
     const forms = inflectedForms("zorka");
-    for (const form of ["zorka", "zorki", "zorke", "zorka", "zorko", "zorce"]) expect(forms).toContain(form);
+    for (const form of ["zorka", "zorki", "zorke", "zorko", "zorce"]) expect(forms).toContain(form);
   });
 
   it("gives the case forms of a word that ends with a consonant", () => {

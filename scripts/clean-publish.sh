@@ -31,6 +31,8 @@ done
 [ -n "$TARGET" ] || { echo "usage: scripts/clean-publish.sh <target-dir> [--source <repo-dir>]" >&2; exit 2; }
 
 fail() { echo "clean-publish: FAILED $1" >&2; exit 1; }
+# Removes the new repository, then fails.
+remove_and_fail() { rm -rf "$TARGET"; fail "$1"; }
 privacy() { "$HERE/node_modules/.bin/tsx" "$HERE/tools/privacy-check/src/cli.ts" "$@"; }
 
 [ -z "$(git -C "$SOURCE" status --porcelain)" ] || fail "the source has uncommitted changes. Commit or stash them first."
@@ -45,7 +47,7 @@ git -C "$SOURCE" archive HEAD | tar -x -C "$TARGET"
 EXCLUDES="$SOURCE/privacy/publish-exclude.txt"
 if [ -f "$EXCLUDES" ]; then
   while IFS= read -r path; do
-    case "$path" in ""|"#"*) continue ;; /*|*..*) rm -rf "$TARGET"; fail "bad path in privacy/publish-exclude.txt: $path" ;; esac
+    case "$path" in ""|"#"*) continue ;; /*|*..*) remove_and_fail "bad path in privacy/publish-exclude.txt: $path" ;; esac
     rm -rf "${TARGET:?}/$path"
     echo "clean-publish: left out $path"
   done < "$EXCLUDES"
@@ -60,17 +62,11 @@ git -C "$TARGET" add -A
 git -C "$TARGET" commit -q --no-verify -m "${PUBLISH_MESSAGE:-Initial public release}"
 
 echo "clean-publish: privacy check on the new tree and its full history"
-if ! privacy --repo "$TARGET" --tree --history; then
-  rm -rf "$TARGET"
-  fail "the new repository has privacy findings. It was removed."
-fi
+privacy --repo "$TARGET" --tree --history || remove_and_fail "the new repository has privacy findings. It was removed."
 
 GITLEAKS_BIN="${GITLEAKS:-$(command -v gitleaks || true)}"
 if [ -n "$GITLEAKS_BIN" ]; then
-  if ! (cd "$TARGET" && "$GITLEAKS_BIN" git --no-banner --redact --exit-code 1 .); then
-    rm -rf "$TARGET"
-    fail "gitleaks found a secret in the new repository. It was removed."
-  fi
+  (cd "$TARGET" && "$GITLEAKS_BIN" git --no-banner --redact --exit-code 1 .) || remove_and_fail "gitleaks found a secret in the new repository. It was removed."
 else
   echo "clean-publish: WARNING gitleaks is not installed, the secret scan did not run" >&2
 fi

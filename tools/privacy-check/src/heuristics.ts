@@ -21,8 +21,9 @@ interface Rule {
 
 const EXAMPLE_EMAIL = /@(?:[\w-]+\.)*(?:example\.(?:com|org|net)|example|test|invalid|localhost|users\.noreply\.github\.com)$|^(?:noreply|no-reply)@|^git@github\.com$/i;
 const EXAMPLE_CHAT_ID = /^-?1000\d{3}$/;
-const never = () => false;
 const PLACEHOLDER = /[<>${}%*]|example|placeholder|redacted|your|x{3}/i;
+/** For a rule that has no documented example value. */
+const never = () => false;
 
 /** ISO 13616 mod-97 check. A number of 26 digits without a country code is a Polish account number. */
 export function ibanValid(raw: string): boolean {

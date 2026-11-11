@@ -44,8 +44,12 @@ function hunkRecords(lines: string[], where: string): TextRecord[] {
   const records: TextRecord[] = [];
   let line = 0;
   for (const text of lines) {
-    if (text.startsWith("@@ ")) line = hunkStart(text);
-    else if (text.startsWith("+")) records.push({ where, line: line++, text: text.slice(1) });
+    if (text.startsWith("@@ ")) {
+      line = hunkStart(text);
+    } else if (text.startsWith("+")) {
+      records.push({ where, line, text: text.slice(1) });
+      line += 1;
+    }
   }
   return records;
 }
@@ -65,14 +69,15 @@ export function parsePatch(patch: string, prefix: string, skipPaths: string[]): 
   return patch.split(/^diff --git /m).flatMap((section) => fileRecords(section, prefix, skipPaths));
 }
 
-const DIFF = ["diff", "-U0", "--no-color", "--no-ext-diff"];
+/** The git options that give a patch that `parsePatch` can read. */
+const PATCH_OPTIONS = ["-U0", "--no-color", "--no-ext-diff"];
 
 export function diffRecords(repo: string, env: Env, base: string, skipPaths: string[]): TextRecord[] {
-  return parsePatch(git(repo, env, [...DIFF, `${base}...HEAD`]), "", skipPaths);
+  return parsePatch(git(repo, env, ["diff", ...PATCH_OPTIONS, `${base}...HEAD`]), "", skipPaths);
 }
 
 export function stagedRecords(repo: string, env: Env, skipPaths: string[]): TextRecord[] {
-  return parsePatch(git(repo, env, [...DIFF, "--cached"]), "", skipPaths);
+  return parsePatch(git(repo, env, ["diff", ...PATCH_OPTIONS, "--cached"]), "", skipPaths);
 }
 
 const COMMIT_START = "\u0001";
@@ -91,5 +96,5 @@ export function parseHistory(log: string, skipPaths: string[]): TextRecord[] {
 }
 
 export function historyRecords(repo: string, env: Env, skipPaths: string[]): TextRecord[] {
-  return parseHistory(git(repo, env, ["log", "--all", "-p", "-U0", "--no-color", "--no-ext-diff", HISTORY_FORMAT]), skipPaths);
+  return parseHistory(git(repo, env, ["log", "--all", "-p", ...PATCH_OPTIONS, HISTORY_FORMAT]), skipPaths);
 }

@@ -8,7 +8,7 @@ export function normalize(text: string): string {
     .toLowerCase()
     .replace(/ł/g, "l")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 /** The words of a line. A token has 3 or more characters and one letter or more. */
