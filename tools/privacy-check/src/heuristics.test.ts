@@ -84,7 +84,7 @@ describe("scanLine: Telegram chat id", () => {
 
 describe("scanLine: tokens", () => {
   it("finds a URL with a token in the query", () => {
-    const url = `https://api.service.example/v1/feed?user=1&${join("=", "token", "a8f3k2m9x7q1w5e4")}`;
+    const url = `https://api.service.example/v1/feed?user=1&${join("=", "token", "a8f3k2m9x7q1w5e4")}`;  // gitleaks:allow (synthetic sample)
     expect(scanLine(url, none)).toEqual(["url-token"]);
   });
 

@@ -49,7 +49,7 @@ function check(dir: string, args: string[] = [], env: Record<string, string> = {
 
 const email = ["some.parent", "private-mail.net"].join("@");
 const phone = ["+48", "601", "234", "567"].join(" ");
-const tokenUrl = `https://api.service.example/feed?${["token", "a8f3k2m9x7q1w5e4"].join("=")}`;
+const tokenUrl = `https://api.service.example/feed?${["token", "a8f3k2m9x7q1w5e4"].join("=")}`;  // gitleaks:allow (synthetic sample)
 
 describe("run: tree", () => {
   it("passes on a clean tree", () => {
