@@ -3,6 +3,8 @@ coverage/
 .env
 .env.*
 !.sandcastle/.env.example
+!.env.example
+.privacy-denylist.txt
 .sandcastle/.env
 .sandcastle/logs/
 .sandcastle/worktrees/

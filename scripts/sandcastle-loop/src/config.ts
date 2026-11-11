@@ -48,7 +48,7 @@ export interface LoopConfig {
   denylistFile: string | undefined;
 }
 
-// Tomasz's order (9.11): Claude -> Cursor CLI Composer 2.5 -> Grok in the Cursor CLI. Local CLIs only.
+// The order of the owner (9.11): Claude -> Cursor CLI Composer 2.5 -> Grok in the Cursor CLI. Local CLIs only.
 // GROK_CURSOR_MODEL is the Grok id of the Cursor CLI.
 // UNVERIFIED: "grok-4.5-high" is copied from the e1003-firmware loop log. Nobody has run it yet.
 // Check it with `agent --list-models` after a valid Cursor key is set, then change it here or in LOOP_MODELS.

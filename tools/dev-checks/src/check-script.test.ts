@@ -25,10 +25,10 @@ function stubs(options: { failNpm?: string; gitleaks?: boolean } = {}) {
 }
 
 describe("check.sh", () => {
-  it("runs typecheck, test, crap and gitleaks in order", () => {
+  it("runs typecheck, test, crap, privacy and gitleaks in order", () => {
     const { result, calls } = stubs({ gitleaks: true });
     expect(result.status).toBe(0);
-    expect(calls).toEqual(["npm run typecheck", "npm test", "npm run crap", "gitleaks git --no-banner --redact --exit-code 1 ."]);
+    expect(calls).toEqual(["npm run typecheck", "npm test", "npm run crap", "npm run --silent privacy", "gitleaks git --no-banner --redact --exit-code 1 ."]);
     expect(result.stdout).toContain("check: all steps passed");
   });
 

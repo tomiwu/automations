@@ -12,6 +12,9 @@
     "crap": "npm run crap --workspaces --if-present",
     "test:sql:local": "bash scripts/test-sql-local.sh",
     "check": "bash scripts/check.sh",
+    "privacy": "tsx tools/privacy-check/src/cli.ts",
+    "privacy:hash": "tsx tools/privacy-check/src/cli.ts hash",
+    "clean-publish": "bash scripts/clean-publish.sh",
     "crap:changed": "tsx tools/dev-checks/src/cli.ts",
     "sandcastle": "npx tsx .sandcastle/main.mts"
   },
