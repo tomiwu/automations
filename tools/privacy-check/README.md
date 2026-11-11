@@ -58,7 +58,7 @@ Do not add a real value to the allowlist. Change the fixture to a synthetic valu
 scripts/install-hooks.sh
 ```
 
-`scripts/install-hooks.sh` sets `core.hooksPath` to `scripts/hooks` for the clone and all its worktrees. `scripts/hooks/pre-commit` runs gitleaks on the staged changes, then `--staged`, then the typecheck of the workspaces with a staged file. A finding stops the commit. `--no-verify` is not allowed. See `CONTRIBUTING.md`.
+`scripts/install-hooks.sh` sets `core.hooksPath` to `scripts/hooks` for the clone and all its worktrees. `scripts/hooks/pre-commit` runs gitleaks on the staged changes, then `--staged`, then the typecheck of the workspaces with a staged file. A finding stops the commit. `--no-verify` is not allowed. `scripts/hooks/pre-push` runs the full `scripts/ci-local.sh` on each commit of a push. See `CONTRIBUTING.md`.
 
 ## Tests
 

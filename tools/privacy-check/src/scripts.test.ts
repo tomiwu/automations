@@ -282,11 +282,12 @@ describe("scripts/install-hooks.sh", () => {
     return { status: result.status, out: result.stdout + result.stderr };
   };
 
-  /** A repository whose scripts/hooks/pre-commit runs the hook of this checkout. */
+  /** A repository whose scripts/hooks/pre-commit runs the hook of this checkout. Its pre-push hook does nothing. */
   function withHook(): string {
     const repo = source();
     commit(repo, { "scripts/hooks/pre-commit": `#!/usr/bin/env bash\necho "hook ran in $(pwd)"\nexec "${join(root, "scripts", "hooks", "pre-commit")}"\n` }, "hook");
-    chmodSync(join(repo, "scripts", "hooks", "pre-commit"), 0o755);
+    stage(repo, { "scripts/hooks/pre-push": "#!/usr/bin/env bash\nexit 0\n" });
+    for (const hook of ["pre-commit", "pre-push"]) chmodSync(join(repo, "scripts", "hooks", hook), 0o755);
     git(repo, "commit", "-q", "-am", "hook mode");
     return repo;
   }
