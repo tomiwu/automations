@@ -8,6 +8,7 @@
 #   REDACT_ENV_FILE  dotenv file whose values the loop masks in its output (default: .sandcastle/.env)
 #   LOOP_STORAGE_CONF podman storage config for this repo (exported as CONTAINERS_STORAGE_CONF)
 #   LOOP_DOCTOR      preflight doctor command (default: sandcastle-loop/doctor.sh; empty: no doctor)
+#   LOOP_INSTALL_HOOKS  git hook install command (default: scripts/install-hooks.sh of the checkout, if it has one; empty: no install)
 # The loop output goes through a redaction filter. Log files get mode 600.
 set -euo pipefail
 umask 077
@@ -46,6 +47,16 @@ if [ -n "${LOOP_STORAGE_CONF:-}" ]; then export CONTAINERS_STORAGE_CONF="$LOOP_S
 
 if [ -n "${LOOP_IMAGE:-}" ] && ! podman image exists "$LOOP_IMAGE"; then
   echo "The image $LOOP_IMAGE does not exist. Build it first." >&2
+  exit 1
+fi
+
+# Install the git hooks on the common config of the clone, so each worktree of a loop agent has them.
+if [ -z "${LOOP_INSTALL_HOOKS+set}" ]; then
+  LOOP_INSTALL_HOOKS=""
+  if [ -f scripts/install-hooks.sh ]; then LOOP_INSTALL_HOOKS="bash scripts/install-hooks.sh"; fi
+fi
+if [ -n "$LOOP_INSTALL_HOOKS" ] && ! bash -c "$LOOP_INSTALL_HOOKS"; then
+  echo "The hook install failed. The loop does not start." >&2
   exit 1
 fi
 

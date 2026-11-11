@@ -17,7 +17,7 @@ describe("loadConfig", () => {
     expect(c.image).toBeUndefined();
     expect(c.maxIterations).toBe(10);
     expect(c.promptDir).toBe("/prompts");
-    expect(c.sandboxReady).toBe("npm ci --no-audit --no-fund");
+    expect(c.sandboxReady).toBe("npm ci --no-audit --no-fund && if [ -f scripts/install-hooks.sh ]; then bash scripts/install-hooks.sh; fi");
     expect(c.sandboxReady).not.toContain("|| true");
     expect(c).toMatchObject({ gh: "gh", git: "git", checksLock: undefined, ciLogFilter: undefined, doctor: "/doctor.sh", ciRerun: true });
     expect(c.retryDelaysMs).toEqual([5000, 15000, 45000, 90000]);

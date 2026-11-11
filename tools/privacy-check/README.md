@@ -52,14 +52,14 @@ Limit: the salt is in the repository. A person who guesses a word can check the 
 
 Do not add a real value to the allowlist. Change the fixture to a synthetic value.
 
-## Pre-commit hook (optional)
+## Pre-commit hook
 
 ```sh
-git config core.hooksPath scripts/hooks
+scripts/install-hooks.sh
 ```
 
-`scripts/hooks/pre-commit` runs `--staged`. A finding stops the commit.
+`scripts/install-hooks.sh` sets `core.hooksPath` to `scripts/hooks` for the clone and all its worktrees. `scripts/hooks/pre-commit` runs gitleaks on the staged changes, then `--staged`, then the typecheck of the workspaces with a staged file. A finding stops the commit. `--no-verify` is not allowed. See `CONTRIBUTING.md`.
 
 ## Tests
 
-`npm test -w @automations/privacy-check`. The positive samples are synthetic and the tests build them at run time, so the test files have no finding. The tests prove that the check fails when a synthetic private word, e-mail address, phone number or token is added, and that `scripts/clean-publish.sh` makes a repository with no finding in its tree and history. They also prove that every tracked file in `examples/` is in the scope of the tree check, has no finding, and that `examples/README.md` names the rule for example values.
+`npm test -w @automations/privacy-check`. The positive samples are synthetic and the tests build them at run time, so the test files have no finding. The tests prove that the check fails when a synthetic private word, e-mail address, phone number or token is added, and that `scripts/clean-publish.sh` makes a repository with no finding in its tree and history. They prove that `scripts/hooks/pre-commit` stops a commit on a gitleaks finding, a privacy finding or a failed typecheck, and that `scripts/install-hooks.sh` makes the hook run in every worktree. The hook tests use a stub gitleaks program. The cases with the real gitleaks program run only on a computer that has it. They also prove that every tracked file in `examples/` is in the scope of the tree check, has no finding, and that `examples/README.md` names the rule for example values.

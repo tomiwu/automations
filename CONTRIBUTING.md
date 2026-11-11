@@ -28,11 +28,27 @@ npm run check
 
 ## Privacy check
 
-`npm run privacy` must print `no findings`. It prints places and categories, never values. If it finds a synthetic value of yours, change the value to a documented example value (see `tools/privacy-check/README.md`). You can install the pre-commit hook:
+`npm run privacy` must print `no findings`. It prints places and categories, never values. If it finds a synthetic value of yours, change the value to a documented example value (see `tools/privacy-check/README.md`).
+
+## Git hooks
+
+Install the hooks one time for each clone:
 
 ```sh
-git config core.hooksPath scripts/hooks
+scripts/install-hooks.sh
 ```
+
+The script sets `git config core.hooksPath scripts/hooks` on the common repository config, so every worktree of the clone uses the hooks. It also makes sure that gitleaks 8.28.0 is available (gitleaks in the `PATH`, or a download into the cache that `scripts/ci-local.sh` uses). Only this download uses the network.
+
+`scripts/hooks/pre-commit` runs on each commit, in seconds, on the staged changes only:
+
+- gitleaks on the staged changes, with `--redact` and the `.gitleaksignore` of the repository.
+- The privacy check on the staged lines.
+- `npm run typecheck` in the workspaces with a staged file.
+
+A finding stops the commit. The output shows places and categories, never a secret value. Correct the finding and commit again. Do not use `git commit --no-verify`: `--no-verify` is not allowed for this hook. The hook does not run the tests. Run `npm run check` before a push.
+
+The Sandcastle loop runs `scripts/install-hooks.sh` at its start and in each new sandbox worktree.
 
 ## Pull requests
 

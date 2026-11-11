@@ -53,7 +53,7 @@ None. `npm run privacy` (tree) gives no finding. The table "Closed findings" tel
 ## Privacy gate (step 4)
 
 - `tools/privacy-check` has the categories of this audit: hashed private words, e-mail addresses, phone numbers, account numbers, private IP addresses, Telegram chat ids, URLs with tokens, bot tokens, JWTs and Supabase project refs.
-- `scripts/ci-local.sh` (step `privacy`), `npm run check` and the optional pre-commit hook (`scripts/hooks/pre-commit`) run it.
+- `scripts/ci-local.sh` (step `privacy`), `npm run check` and the pre-commit hook (`scripts/hooks/pre-commit`) run it.
 - `--history` on the private repository reports the commit metadata of F2 (category `email`). This is expected: the private history is not published. `scripts/clean-publish.sh` runs `--history` on the new repository and stops on a finding.
 
 ## Publish

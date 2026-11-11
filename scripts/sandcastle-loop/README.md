@@ -87,7 +87,8 @@ To see the next issue and run no agent: `DRY_RUN=1 npx tsx scripts/sandcastle-lo
 | `LOOP_DENYLIST_FILE` | unset | Personal strings, one for each line (same list as the CI `DENYLIST`). A proposal with one of them is not opened. |
 | `LOOP_DOCTOR` | `doctor.sh` in this directory | Preflight doctor. Empty: no doctor. |
 | `LOOP_DOCTOR_EXTRA` | empty | Extra shell command of the container checks (for example toolchain checks of the repo) |
-| `LOOP_SANDBOX_READY` | `npm ci --no-audit --no-fund` | Sandbox-ready hook. A failure stops the sandbox. Empty: no hook. |
+| `LOOP_SANDBOX_READY` | `npm ci --no-audit --no-fund && if [ -f scripts/install-hooks.sh ]; then bash scripts/install-hooks.sh; fi` | Sandbox-ready hook. It runs in each new sandbox worktree and installs the git hooks of the repository. A failure stops the sandbox. Empty: no hook. |
+| `LOOP_INSTALL_HOOKS` | `bash scripts/install-hooks.sh`, if the checkout has this file | Git hook install command of the start script. It runs before the doctor. A failure stops the start. Empty: no install. |
 | `LOOP_GH`, `LOOP_GIT` | `gh`, `git` | Host commands or wrappers for GitHub and git |
 | `LOOP_RETRY_DELAYS` | `5,15,45,90` | Seconds between the attempts of a host `gh` call and of `git push`/`pull`/`fetch` (5 attempts) |
 | `LOOP_RETRY_TRANSIENT` | unset | One more regex (case-insensitive) of a transient error. The default list: connection reset, unexpected/early EOF, TLS handshake, timeouts, DNS, HTTP 5xx, HTTP 429, GitHub secondary rate limit. Other errors are not retried. |
