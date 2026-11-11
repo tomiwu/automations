@@ -39,6 +39,10 @@ interface Fixture {
   remote: string;
   env: Record<string, string>;
   git: (...args: string[]) => string;
+  head: () => string;
+  /** Commits the staged changes. No hook runs. */
+  commitNoHooks: (...args: string[]) => string;
+  /** Writes the file, commits it and returns the new commit. No hook runs. */
   commit: (file: string, text: string) => string;
   push: (...args: string[]) => { status: number | null; out: string };
   setResult: (exitCode: number) => void;
@@ -59,11 +63,13 @@ function fixture(hooksPath = join(root, "scripts", "hooks")): Fixture {
   const remote = join(dir, "remote.git");
   const env = { ...baseEnv, STUB_CALLS: join(dir, "calls.log"), STUB_RESULT: join(dir, "result"), TMPDIR: dir };
   const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, env, encoding: "utf8" }).trim();
+  const head = () => git("rev-parse", "HEAD");
+  const commitNoHooks = (...args: string[]) => git("-c", "core.hooksPath=/dev/null", "commit", "-q", ...args);
   const commit = (file: string, text: string) => {
     write(repo, file, text, file.startsWith("scripts/") ? 0o755 : 0o644);
     git("add", "-A");
-    git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", `change ${file}`);
-    return git("rev-parse", "HEAD");
+    commitNoHooks("-m", `change ${file}`);
+    return head();
   };
   const setResult = (exitCode: number) => writeFileSync(env.STUB_RESULT, `${exitCode}\n`);
   mkdirSync(repo);
@@ -78,6 +84,8 @@ function fixture(hooksPath = join(root, "scripts", "hooks")): Fixture {
     remote,
     env,
     git,
+    head,
+    commitNoHooks,
     commit,
     setResult,
     push: (...args) => {
@@ -93,7 +101,7 @@ describe("scripts/hooks/pre-push", () => {
   it("stops the push when ci-local is red", () => {
     const f = fixture();
     f.setResult(1);
-    const sha = f.git("rev-parse", "HEAD");
+    const sha = f.head();
 
     const result = f.push("origin", "feature");
     expect(result.status).not.toBe(0);
@@ -106,7 +114,7 @@ describe("scripts/hooks/pre-push", () => {
 
   it("lets the push pass when ci-local is green, and removes its temporary checkout", () => {
     const f = fixture();
-    const sha = f.git("rev-parse", "HEAD");
+    const sha = f.head();
 
     const result = f.push("origin", "feature");
     expect(result.out).toContain(`pre-push: ci-local is green on ${sha}`);
@@ -118,7 +126,7 @@ describe("scripts/hooks/pre-push", () => {
 
   it("runs ci-local on the commit of the push, not on the files of the working directory", () => {
     const f = fixture();
-    const pushed = f.git("rev-parse", "HEAD");
+    const pushed = f.head();
     f.git("branch", "other");
     const head = f.commit("a.md", "Child One\n");
     write(f.repo, "not-committed.md", "draft\n");
@@ -131,7 +139,7 @@ describe("scripts/hooks/pre-push", () => {
 
   it("uses the green cache for a second push of the same commit, and runs ci-local for a new commit", () => {
     const f = fixture();
-    const first = f.git("rev-parse", "HEAD");
+    const first = f.head();
     expect(f.push("origin", "feature").status).toBe(0);
 
     f.setResult(1);
@@ -149,7 +157,7 @@ describe("scripts/hooks/pre-push", () => {
 
   it("does not put a red commit in the cache", () => {
     const f = fixture();
-    const sha = f.git("rev-parse", "HEAD");
+    const sha = f.head();
     f.setResult(1);
     expect(f.push("origin", "feature").status).not.toBe(0);
 
@@ -172,12 +180,12 @@ describe("scripts/hooks/pre-push", () => {
 
   it("runs on a force push: red stops it, green lets it pass", () => {
     const f = fixture();
-    const first = f.git("rev-parse", "HEAD");
+    const first = f.head();
     expect(f.push("origin", "feature").status).toBe(0);
     write(f.repo, "a.md", "Child One\n");
     f.git("add", "-A");
-    f.git("-c", "core.hooksPath=/dev/null", "commit", "-q", "--amend", "-m", "new history");
-    const rewritten = f.git("rev-parse", "HEAD");
+    f.commitNoHooks("--amend", "-m", "new history");
+    const rewritten = f.head();
 
     f.setResult(1);
     const red = f.push("-f", "origin", "feature");
@@ -191,9 +199,9 @@ describe("scripts/hooks/pre-push", () => {
     expect(f.calls()).toEqual([`${first} 0`, `${rewritten} 0`, `${rewritten} 0`]);
   });
 
-  it("runs ci-local one time for each different commit of one push, and one red commit stops all", () => {
+  it("runs ci-local one time for each different commit of one push", () => {
     const f = fixture();
-    const first = f.git("rev-parse", "HEAD");
+    const first = f.head();
     f.git("branch", "same");
     f.git("branch", "old");
     const second = f.commit("a.md", "Child One\n");
@@ -202,10 +210,22 @@ describe("scripts/hooks/pre-push", () => {
     expect(f.calls().sort()).toEqual([`${first} 0`, `${second} 0`].sort());
   });
 
+  it("stops all refs of one push when one commit is red", () => {
+    const f = fixture();
+    f.git("branch", "old");
+    f.commit("a.md", "Child One\n");
+    f.setResult(1);
+
+    expect(f.push("origin", "feature", "old").status).not.toBe(0);
+    expect(f.calls()).toHaveLength(1);
+    expect(f.remoteSha("feature")).toBe("");
+    expect(f.remoteSha("old")).toBe("");
+  });
+
   it("stops the push when the commit has no scripts/ci-local.sh", () => {
     const f = fixture();
     f.git("rm", "-q", "scripts/ci-local.sh");
-    f.git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "remove ci-local");
+    f.commitNoHooks("-m", "remove ci-local");
 
     const result = f.push("origin", "feature");
     expect(result.status).not.toBe(0);
@@ -215,20 +235,22 @@ describe("scripts/hooks/pre-push", () => {
 });
 
 describe("scripts/install-hooks.sh and the pre-push hook", () => {
+  const installHooks = (cwd: string, env: Record<string, string>) => spawnSync("bash", [join(root, "scripts", "install-hooks.sh")], { cwd, env, encoding: "utf8" });
+
   it("makes the hook run for a push from a worktree, with one green cache for all worktrees", () => {
     const f = fixture("/dev/null");
     const real = join(root, "scripts", "hooks", "pre-push");
     f.commit("scripts/hooks/pre-commit", "#!/usr/bin/env bash\nexit 0\n");
     f.commit("scripts/hooks/pre-push", `#!/usr/bin/env bash\necho "hook ran in $(pwd)" >&2\nexec "${real}" "$@"\n`);
     f.git("config", "--unset", "core.hooksPath");
-    const sha = f.git("rev-parse", "HEAD");
+    const sha = f.head();
     const worktree = join(dirname(f.repo), "worktree");
     f.git("worktree", "add", "-q", "-b", "side", worktree);
     const gitleaks = join(dirname(f.repo), "gitleaks");
     writeFileSync(gitleaks, "#!/bin/bash\nexit 0\n");
     chmodSync(gitleaks, 0o755);
 
-    const install = spawnSync("bash", [join(root, "scripts", "install-hooks.sh")], { cwd: worktree, env: { ...f.env, GITLEAKS: gitleaks }, encoding: "utf8" });
+    const install = installHooks(worktree, { ...f.env, GITLEAKS: gitleaks });
     expect(install.stdout + install.stderr).toContain("install-hooks: core.hooksPath is scripts/hooks");
     expect(install.status).toBe(0);
 
@@ -247,7 +269,7 @@ describe("scripts/install-hooks.sh and the pre-push hook", () => {
     const f = fixture("/dev/null");
     f.commit("scripts/hooks/pre-commit", "#!/usr/bin/env bash\nexit 0\n");
 
-    const install = spawnSync("bash", [join(root, "scripts", "install-hooks.sh")], { cwd: f.repo, env: f.env, encoding: "utf8" });
+    const install = installHooks(f.repo, f.env);
     expect(install.status).not.toBe(0);
     expect(install.stderr).toContain("this checkout has no scripts/hooks/pre-push");
   });

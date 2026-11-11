@@ -23,8 +23,14 @@ trap cleanup EXIT
 pushed_commits() {
   local local_ref local_sha remote_ref remote_sha commit seen=" "
   while read -r local_ref local_sha remote_ref remote_sha; do
-    if [[ "$local_sha" =~ ^0+$ ]]; then echo "pre-push: $remote_ref is a delete. ci-local does not run for it." >&2; continue; fi
-    commit="$(git rev-parse --verify --quiet "$local_sha^{commit}")" || { echo "pre-push: $local_ref is not a commit. ci-local does not run for it." >&2; continue; }
+    if [[ "$local_sha" =~ ^0+$ ]]; then
+      echo "pre-push: $remote_ref is a delete. ci-local does not run for it." >&2
+      continue
+    fi
+    if ! commit="$(git rev-parse --verify --quiet "$local_sha^{commit}")"; then
+      echo "pre-push: $local_ref is not a commit. ci-local does not run for it." >&2
+      continue
+    fi
     case "$seen" in *" $commit "*) continue ;; esac
     seen="$seen$commit "
     echo "$commit"
@@ -36,27 +42,35 @@ run_ci_local() {
   local sha="$1" rc
   WORK="$(mktemp -d)" || return 1
   git worktree add --quiet --detach "$WORK/tree" "$sha" || return 1
-  if [ ! -f "$WORK/tree/scripts/ci-local.sh" ]; then echo "pre-push: the commit $sha has no scripts/ci-local.sh" >&2; return 1; fi
+  if [ ! -f "$WORK/tree/scripts/ci-local.sh" ]; then
+    echo "pre-push: the commit $sha has no scripts/ci-local.sh" >&2
+    return 1
+  fi
   (
     unset $(git rev-parse --local-env-vars)
     cd "$WORK/tree" && bash scripts/ci-local.sh
   ) </dev/null
   rc=$?
-  cleanup; WORK=""
+  cleanup
+  WORK=""
   return "$rc"
 }
 
+# Uses the green cache or runs ci-local. It writes the stamp file of the commit only after a green run.
 check_commit() {
-  local sha="$1" t0
-  if [ -f "$CACHE/$sha" ]; then echo "pre-push: $sha is in the green cache. ci-local does not run again."; return 0; fi
+  local sha="$1" start
+  if [ -f "$CACHE/$sha" ]; then
+    echo "pre-push: $sha is in the green cache. ci-local does not run again."
+    return 0
+  fi
   echo "pre-push: the full scripts/ci-local.sh runs on $sha. This takes minutes."
-  t0=$(date +%s)
+  start=$(date +%s)
   if ! run_ci_local "$sha"; then
-    echo "pre-push: FAILED ci-local is red on $sha ($(( $(date +%s) - t0 ))s). The push was stopped. Correct the failures and push again. --no-verify is not allowed."
+    echo "pre-push: FAILED ci-local is red on $sha ($(( $(date +%s) - start ))s). The push was stopped. Correct the failures and push again. --no-verify is not allowed."
     return 1
   fi
   mkdir -p "$CACHE" && date -u '+%Y-%m-%dT%H:%M:%SZ' > "$CACHE/$sha"
-  echo "pre-push: ci-local is green on $sha ($(( $(date +%s) - t0 ))s)"
+  echo "pre-push: ci-local is green on $sha ($(( $(date +%s) - start ))s)"
 }
 
 COMMITS="$(pushed_commits)"
