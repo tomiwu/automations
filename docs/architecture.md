@@ -8,7 +8,6 @@
 | Storage | `packages/librus-data` | `StorageAdapter`, the Journal core (`journal.ts`), the Supabase adapter, the in-memory fake, the migration import |
 | Librus | `packages/librus-watch` | Librus Watchers, Morning report, delivery of the Outbox, exports |
 | Activities | `packages/activities-watch` | ActiveNow, Edusky and Mondo Watchers, `sessions` export, mail comparison |
-| Kradziejka | `packages/kradziejka` | Telegram router to Grok bot routines. The registry is the table `kradziejka_bots`. |
 | Payments | `packages/payments-watch` | Fee sources, Payment engine, ZBP QR code, Telegram Notifier and Dashboard. The bot never pays (ADR 0005). |
 | Admin | `tools/admin` | CLI that edits the config in Supabase |
 | SQL | `supabase/migrations` | Schema, RLS and the role `automations_watcher` |

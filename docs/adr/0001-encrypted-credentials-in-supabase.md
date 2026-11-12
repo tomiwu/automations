@@ -11,9 +11,9 @@ Kody accepts only literal secret names. One Kody secret cannot hold one value fo
 ## Decision
 
 - Service logins are rows in the Supabase table `credentials`. They are AES-256-GCM ciphertext.
-- Grok routine webhook keys are rows in `kradziejka_bots`. They use the same ciphertext format.
+- The table `kradziejka_bots` (of the suspended kradziejka package, removed from the code in #254; the table stays in the database) used the same ciphertext format.
 - The packages keep one key, `credentialKey`. The owner sets it with `./configure`.
-- The Kody secrets are only literal names, for example `SUPABASE_KEY` and `JEV_API_KEY`.
+- The Kody secrets are only literal names, for example `SUPABASE_KEY`.
 - The owner adds or changes a credential with `admin set-credential` on their own computer. An agent never sees the value.
 
 ## Consequences

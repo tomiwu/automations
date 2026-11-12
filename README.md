@@ -14,7 +14,6 @@ Start here: [system overview](docs/overview.md).
 | `packages/librus-data` | `StorageAdapter` and the Supabase implementation |
 | `packages/librus-watch` | Librus watcher, exports and morning report |
 | `packages/activities-watch` | ActiveNow, Edusky and Mondo watchers |
-| `packages/kradziejka` | Telegram router to Grok bot routines |
 | `packages/payments-watch` | Payment notices with a transfer QR code and the payments dashboard |
 | `tools/admin` | Admin CLI to add families, children, accounts and recipients |
 | `tools/privacy-check` | Privacy gate: hashed private words and heuristics for personal data |

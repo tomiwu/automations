@@ -36,12 +36,9 @@ flowchart LR
 | --- | --- | --- |
 | School logins (Librus, ActiveNow, My School/Edusky with `EDUSKY_CLIENT_SECRET`, Mondo) | Supabase table `credentials`. AES-256-GCM, format `v1.<iv>.<ct>`, additional data `familyId:name` (`packages/shared/src/credentials.ts`) | Only package code that has the key |
 | `CREDENTIAL_KEY` | Owner's `.env` and the storage of each package, set by `./configure` | Owner and packages. Never an agent. It cannot be a Kody secret: Kody secrets are only `{{secret:NAME}}` placeholders filled on outgoing fetch, and decryption needs the raw key |
-| `SUPABASE_KEY` (restricted role `automations_watcher`, host `<ref>.supabase.co`) | Kody secret. Used by librus-watch, activities-watch, payments-watch, kradziejka | Nobody reads it. Kody inserts it only on calls to allowed hosts |
+| `SUPABASE_KEY` (restricted role `automations_watcher`, host `<ref>.supabase.co`) | Kody secret. Used by librus-watch, activities-watch, payments-watch | Nobody reads it. Kody inserts it only on calls to allowed hosts |
 | `TELEGRAM_BOT_TOKEN` (Librus polling bot, host `api.telegram.org`) | Kody secret. Used by librus-watch, activities-watch, payments-watch | Same |
-| `telegramBotToken-kradziejka` (separate bot) | Kody secret. Used by kradziejka | Same |
-| `JEV_API_KEY` (host `api.getjevai.com`) | Kody secret. Used by kradziejka | Same |
 | `LIBRUS_USER`, `LIBRUS_PASSWORD` | Old Kody secrets. **Legacy, Owner can delete.** No package code reads them (logins are now in Supabase) | Nobody |
-| Bot webhook keys of kradziejka | AES-256-GCM ciphertext in `kradziejka_bots` (not Kody secrets) | Only package code that has the key |
 | Deploy token `KODY_DEPLOY_TOKEN` | GitHub environment secret (environment `kody`). A long token lasts 90 days at most and expires after 14 days unused | GitHub Actions deploy job |
 
 A database leak alone gives only ciphertext. A package config leak alone gives a key with no data.
@@ -66,7 +63,6 @@ A database leak alone gives only ciphertext. A package config leak alone gives a
 | payments-watch `scheduled-check` | `0 8 * * *` | Due fees to Telegram with a ZBP QR code |
 | payments-watch webhook `telegram-update` | Owner taps Paid / Skip | Marks the fee in Supabase |
 | payments-watch app (dashboard) | Owner opens it and logs in | Shows fees and payments |
-| kradziejka webhooks `telegram-update`, `reply`, `register` | Incoming messages | Routes allowlisted chats to bots. No timed jobs |
 
 Kody reads the cron expressions in UTC. The jobs set no cron time zone. The table shows the local time in Warsaw:
 

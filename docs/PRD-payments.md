@@ -99,7 +99,7 @@ docs/adr/0005-payments-qr-not-pay.md    why the bot never pays
 
 ### Part F: Dashboard
 
-1. A Kody web app in `payments-watch` (as the app of `kradziejka`). It reads Supabase.
+1. A Kody web app in `payments-watch`. It reads Supabase.
 2. Views: paid and unpaid Payments; next due Payments (date, amount); spend per Child per month and per school year (September to June).
 3. A `Paid` and a `Skip` button on each `pending` Payment.
 4. Access only after login, for an allowlist of users (the owner and one more adult). The allowlist is in the deployment config, not in the code.

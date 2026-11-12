@@ -13,10 +13,9 @@ Four packages run as Kody packages. All are private.
 | `@tomiwu/librus-watch` | `scheduled-check` (04:30 and 12:30 UTC) |
 | `@tomiwu/activities-watch` | The scheduled pass and the exports. See its README. |
 | `@tomiwu/payments-watch` | `scheduled-check` (08:00 UTC) |
-| `@tomiwu/kradziejka` | No jobs. Two inbound webhooks and one register webhook. See its README. |
 
 Kody reads cron expressions in UTC. Do not set a cron time zone.
-Each watcher package exports entry files (`./scheduled`, `./configure` and the exports). `@tomiwu/kradziejka` exports webhooks instead of jobs. Only the entry files import the Kody runtime.
+Each watcher package exports entry files (`./scheduled`, `./configure` and the exports). Only the entry files import the Kody runtime.
 
 ## Deploy workflow behaviour
 
@@ -29,15 +28,12 @@ Each watcher package exports entry files (`./scheduled`, `./configure` and the e
 ## Secrets and credentials
 
 - Kody secret `SUPABASE_KEY` (the watcher key). It is sent as the literal `{{secret:SUPABASE_KEY}}`. Allowed host: `<ref>.supabase.co`, header placement.
-- Kody secret `JEV_API_KEY`, used by `@tomiwu/kradziejka`. It is sent as the literal `{{secret:JEV_API_KEY}}`. Allowed host: `api.getjevai.com`, header placement.
 - Kody secret `TELEGRAM_BOT_TOKEN`, used by `@tomiwu/telegram` for the Librus polling bot (`librus-watch` and `activities-watch`).
-- Kody secret `telegramBotToken-kradziejka`, used by `@tomiwu/kradziejka` through `@tomiwu/telegram` (`secretName: "telegramBotToken-kradziejka"`). This is a separate BotFather bot. Host: `api.telegram.org`.
-- Bot webhook keys are not Kody secrets. `@tomiwu/kradziejka` stores them as AES-256-GCM ciphertext in `kradziejka_bots`. Kody accepts only literal secret names, so one secret cannot hold one key per bot.
 - The service logins (Librus, ActiveNow, Edusky, Mondo, and `EDUSKY_CLIENT_SECRET`) are rows in the Supabase table `credentials`, encrypted with AES-256-GCM. Add or change one with `admin set-credential --family <id> --name <NAME>` on your own computer (it asks for the value without echo and needs `CREDENTIAL_KEY`). New Accounts need no code change and no Kody secret.
 
 ## Deployment config
 
-After the first deploy, call `./configure` of each package yourself with `{ supabaseUrl, familyId, credentialKey }`. `@tomiwu/kradziejka` also needs `allowlist` and `adminToken`. The key comes from `admin new-credential-key`; keep it in a password manager. Do not pass it through an agent. Rotate with `admin rotate-credential-key` (needs `CREDENTIAL_KEY` and `NEW_CREDENTIAL_KEY`), then call `./configure` again.
+After the first deploy, call `./configure` of each package yourself with `{ supabaseUrl, familyId, credentialKey }`. The key comes from `admin new-credential-key`; keep it in a password manager. Do not pass it through an agent. Rotate with `admin rotate-credential-key` (needs `CREDENTIAL_KEY` and `NEW_CREDENTIAL_KEY`), then call `./configure` again.
 
 The key cannot be a Kody secret. Kody never gives a secret value to package code: a secret is only an opaque `{{secret:NAME}}` placeholder that Kody fills in when a `fetch` sends it to an allowed host. AES-GCM decryption needs the raw key in the code, so the key stays in the package storage (`./configure`).
 

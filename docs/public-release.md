@@ -1,12 +1,12 @@
 # Public release
 
-> Owner decision of 2026-11-12 (F2): the current repository becomes public after a history rewrite (see `docs/public-release-audit.md`). The rewrite needs the owner's final confirmation. The script below stays as the fallback.
+> Owner decision of 2026-11-12 (F2): the current repository becomes public as it is, with no history rewrite. The owner's name and Gmail address in the commits stay visible (see `docs/public-release-audit.md`). Only the owner changes the visibility of the repository. The script below is an unused fallback.
 
 This page tells the owner how to make the public repository. An agent never does the publish step.
 
 ## Why a new repository
 
-The history of the private repository has personal commit metadata (author name and address) and one old line with a first name (see `docs/public-release-audit.md`, F2 and F3). The history of the private repository is not rewritten. The public repository starts with one initial commit that has a neutral author.
+The history of the private repository has personal commit metadata (author name and address) and one old line with a first name (see `docs/public-release-audit.md`, F2 and F3). The history of the private repository is not rewritten. With this fallback script, a new public repository starts with one initial commit that has a neutral author.
 
 A filtered history is possible, but every commit, message and author line must then pass the privacy check. One initial commit has no such risk, so the script makes one commit by default. The option `--filtered-history` makes the other choice possible (see below). The owner decides (F2).
 

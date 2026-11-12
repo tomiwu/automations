@@ -87,11 +87,13 @@ describe("rekey", () => {
 });
 
 describe("configureSnippet", () => {
-  const input = { supabaseUrl: "https://x.supabase.co", familyId: FAMILY, credentialKey: "K", allowlist: '["1",2]', adminToken: "t", withPayments: false };
+  const input = { supabaseUrl: "https://x.supabase.co", familyId: FAMILY, credentialKey: "K", withPayments: false };
   it("configures each package with the same key", () => {
     const code = configureSnippet(input);
-    expect(code).toContain('import kradziejka from "kody:@tomiwu/kradziejka/configure";');
-    expect(code).toContain('allowlist: ["1","2"]');
+    expect(code).toContain('import librus from "kody:@tomiwu/librus-watch/configure";');
+    expect(code).toContain('import activities from "kody:@tomiwu/activities-watch/configure";');
+    expect(code).toContain('["librus-watch", () => librus(base)],');
+    expect(code).not.toMatch(/kradziejka|adminToken/);
     expect(code).not.toContain("payments-watch");
   });
   it("passes the Dashboard allowlist with the token digest, not the token", () => {
@@ -110,9 +112,6 @@ describe("configureSnippet", () => {
     const env = { WITH_PAYMENTS: "1", FAMILY_ID: FAMILY, PAYMENTS_DASHBOARD_USER: "u", PAYMENTS_DASHBOARD_TOKEN: "t" };
     expect(snippetFromEnv(env)).toContain("payments-watch");
     expect(() => snippetFromEnv({ WITH_PAYMENTS: "1" })).toThrow("PAYMENTS_DASHBOARD_USER");
-    expect(snippetFromEnv({})).toContain("allowlist: []");
-  });
-  it("refuses an allowlist that is not a list", () => {
-    expect(() => configureSnippet({ ...input, allowlist: "{}" })).toThrow("JSON list");
+    expect(snippetFromEnv({})).not.toContain("allowlist");
   });
 });
