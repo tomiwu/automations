@@ -42,12 +42,12 @@ done
 find_filter_repo() {
   local candidate
   for candidate in "$(command -v git-filter-repo || true)" "$(git --exec-path)/git-filter-repo"; do
-    if [ -n "$candidate" ] && [ -x "$candidate" ]; then echo "$candidate"; return; fi
+    if [ -x "$candidate" ]; then echo "$candidate"; return; fi
   done
 }
 if [ "$FILTERED" = 1 ]; then
   FILTER_REPO_BIN="${GIT_FILTER_REPO:-$(find_filter_repo)}"
-  if [ -z "$FILTER_REPO_BIN" ] || [ ! -x "$FILTER_REPO_BIN" ]; then
+  if [ ! -x "$FILTER_REPO_BIN" ]; then
     echo "clean-publish: --filtered-history needs git filter-repo, and it is not installed. Install it, or run the script without the option (one commit)." >&2
     exit 2
   fi

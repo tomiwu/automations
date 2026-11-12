@@ -156,6 +156,15 @@ describe("scripts/clean-publish.sh", () => {
     const result = spawnSync("bash", [join(root, "scripts", "clean-publish.sh")], { env, encoding: "utf8" });
     expect(result.status).toBe(2);
   });
+
+  it("leaves the source repository unchanged", () => {
+    const repo = sourceWithTrailers();
+    const before = state(repo);
+    const { target, status } = publish(repo);
+    expect(status).toBe(0);
+    expect(git(target, "rev-list", "--count", "--all").trim()).toBe("1");
+    expect(state(repo)).toEqual(before);
+  });
 });
 
 describe("scripts/clean-publish.sh --filtered-history", () => {
@@ -169,18 +178,10 @@ describe("scripts/clean-publish.sh --filtered-history", () => {
     expect(state(repo)).toEqual(before);
   });
 
-  it("leaves the source repository unchanged in the default mode", () => {
-    const repo = sourceWithTrailers();
-    const before = state(repo);
-    const { target, status } = publish(repo);
-    expect(status).toBe(0);
-    expect(git(target, "rev-list", "--count", "--all").trim()).toBe("1");
-    expect(state(repo)).toEqual(before);
-  });
-
   // These cases use the real git filter-repo program. They are skipped on a computer without it.
-  describe.skipIf(realFilterRepo() === undefined)("with the real git filter-repo", () => {
-    const filtered = (repo: string, extraEnv: Record<string, string> = {}) => publish(repo, { GIT_FILTER_REPO: realFilterRepo() ?? "", ...extraEnv }, ["--filtered-history"]);
+  const filterRepo = realFilterRepo();
+  describe.skipIf(filterRepo === undefined)("with the real git filter-repo", () => {
+    const filtered = (repo: string, extraEnv: Record<string, string> = {}) => publish(repo, { GIT_FILTER_REPO: filterRepo ?? "", ...extraEnv }, ["--filtered-history"]);
     const neutral = "The automations contributors <noreply@example.com>";
 
     it("keeps the history with a neutral author and committer, without the trailers and the excluded paths", () => {
