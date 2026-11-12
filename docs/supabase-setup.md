@@ -38,7 +38,7 @@ The migrations make the tables, the RLS policies and the role `automations_watch
 - read and insert `items`;
 - read and insert `outbox` entries, update only `outbox.delivered_at`, and delete `outbox` entries that were delivered more than 30 days ago;
 - read and insert `journal_events`, and read `journal_heads`. The role cannot update or delete a Journal event, and no role can (a trigger rejects it);
-- read, insert, and update `kradziejka_bots` (the Grok bot registry). The role cannot delete those rows. Webhook keys in that table are ciphertext.
+- read, insert, and update `kradziejka_bots` (the registry of the suspended kradziejka package; the package was removed from the code in #254, the table and migration `0003` stay because migrations are append-only). The role cannot delete those rows. Webhook keys in that table are ciphertext.
 
 ## 3. Make the role key
 

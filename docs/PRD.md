@@ -41,7 +41,6 @@ packages/shared            runtime interface, config types, i18n, HTTP session, 
 packages/librus-data       StorageAdapter, SupabaseStorage, in-memory fake, migration import
 packages/librus-watch      Librus watcher, lessons and upcoming exports, morning report
 packages/activities-watch  ActiveNow, Edusky and Mondo watchers, sessions export, mail compare
-packages/kradziejka       Telegram router to Grok bot routines (registry table kradziejka_bots)
 supabase/migrations        SQL: schema, RLS, restricted role
 tools/admin                admin CLI (service_role, run on the owner's computer only)
 docs/                      PRD, ADRs, setup, Kody deploy, Supabase setup, adding a child

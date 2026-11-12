@@ -10,3 +10,6 @@ coverage/
 .sandcastle/worktrees/
 seed.json
 *.seed.json
+
+# Suspended package, removed from the code (#254). Never commit it again.
+packages/kradziejka/

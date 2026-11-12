@@ -6,9 +6,6 @@ export interface SnippetInput {
   supabaseUrl: string;
   familyId: string;
   credentialKey: string;
-  /** JSON list of Telegram chat IDs for kradziejka. */
-  allowlist: string;
-  adminToken: string;
   withPayments: boolean;
   /** Dashboard user of payments-watch. Needed with `withPayments`. */
   paymentsUser?: string;
@@ -31,12 +28,9 @@ function paymentsArg(input: SnippetInput): string {
  */
 export function configureSnippet(input: SnippetInput): string {
   const j = JSON.stringify;
-  const allowlist: unknown = JSON.parse(input.allowlist);
-  if (!Array.isArray(allowlist)) throw new Error("KRADZIEJKA_ALLOWLIST must be a JSON list");
   const packages = [
     ["librus-watch", "librus", "base"],
     ["activities-watch", "activities", "base"],
-    ["kradziejka", "kradziejka", `{ ...base, allowlist: ${j(allowlist.map(String))}, adminToken: ${j(input.adminToken)} }`],
     ...(input.withPayments ? [["payments-watch", "payments", paymentsArg(input)]] : []),
   ];
   return [
@@ -63,8 +57,6 @@ export function snippetFromEnv(e: Record<string, string | undefined>): string {
     supabaseUrl: v("SUPABASE_URL"),
     familyId: v("FAMILY_ID"),
     credentialKey: v("NEW_CREDENTIAL_KEY"),
-    allowlist: v("KRADZIEJKA_ALLOWLIST", "[]"),
-    adminToken: v("KRADZIEJKA_ADMIN_TOKEN"),
     withPayments: e.WITH_PAYMENTS === "1",
     paymentsUser: v("PAYMENTS_DASHBOARD_USER"),
     paymentsToken: v("PAYMENTS_DASHBOARD_TOKEN"),

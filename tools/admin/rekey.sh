@@ -3,7 +3,7 @@
 #   bash tools/admin/rekey.sh
 # It works the same from zsh or bash (macOS bash 3.2 is fine). It never prints a secret value.
 #
-# 1. Loads the gitignored .env (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, FAMILY_ID, KRADZIEJKA_ALLOWLIST,
+# 1. Loads the gitignored .env (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, FAMILY_ID,
 #    the old CREDENTIAL_KEY and the credential values, each in a variable with the credential name).
 # 2. Makes a new key. Encrypts every credential with it (value from .env, else the old stored value,
 #    else it asks you), in one upsert. Sets the Librus origin where it is empty.
@@ -33,7 +33,6 @@ ask() { # ask NAME "description": read a missing plain setting and keep it in .e
 }
 ask SUPABASE_URL "https://<ref>.supabase.co"
 ask FAMILY_ID "the Family ID"
-ask KRADZIEJKA_ALLOWLIST "JSON list of Telegram chat IDs, like [\"1\",\"2\"]"
 if [ "${WITH_PAYMENTS:-}" = "1" ]; then
   ask PAYMENTS_DASHBOARD_USER "the Dashboard user name"
   if [ -z "${PAYMENTS_DASHBOARD_TOKEN:-}" ]; then
@@ -68,10 +67,7 @@ printf 'CREDENTIAL_KEY=%s\n' "$NEW_CREDENTIAL_KEY" >> .env
 echo "Saved the new CREDENTIAL_KEY in .env (old file: .env.bak)"
 
 echo "== Save the key in the Kody packages =="
-TOKEN_FILE="$HOME/.kradziejka-admin-token"
-[ -s "$TOKEN_FILE" ] || openssl rand -hex 24 > "$TOKEN_FILE"
-KRADZIEJKA_ADMIN_TOKEN=$(tr -d '[:space:]' < "$TOKEN_FILE") \
-  node --experimental-strip-types tools/admin/src/configure-snippet.ts > "$SNIPPET"
+node --experimental-strip-types tools/admin/src/configure-snippet.ts > "$SNIPPET"
 npx -y @kodycodes/cli@1.31.4 execute --file "$SNIPPET" || status=1
 
 if [ "${WITH_PAYMENTS:-}" = "1" ]; then
