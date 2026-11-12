@@ -1,10 +1,11 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { brokenLinks, relativeLinks } from "./docs.js";
 
-const root = new URL("../../../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../../../", import.meta.url));
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
@@ -35,19 +36,18 @@ describe("the open source documents", () => {
     expect(existsSync(join(root, name))).toBe(true);
   });
 
+  const readme = () => readFileSync(join(root, "README.md"), "utf8");
   const docs = readdirSync(join(root, "docs")).filter((name) => name.endsWith(".md")).map((name) => `docs/${name}`);
   it.each(["README.md", "CONTRIBUTING.md", ...docs])("each relative link in %s points to a file that exists", (name) => {
     expect(brokenLinks(join(root, name))).toEqual([]);
   });
 
   it("the README links the primary documents", () => {
-    const links = relativeLinks(readFileSync(join(root, "README.md"), "utf8"));
-    expect(links).toEqual(expect.arrayContaining(["docs/architecture.md", "docs/adding-a-child.md", "examples/seed.example.json", "CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md", "LICENSE"]));
+    expect(relativeLinks(readme())).toEqual(expect.arrayContaining(["docs/architecture.md", "docs/adding-a-child.md", "examples/seed.example.json", "CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md", "LICENSE"]));
   });
 
   it("the README says that the agent loop tooling is optional", () => {
-    const readme = readFileSync(join(root, "README.md"), "utf8");
-    const section = readme.split(/^## /m).find((part) => part.includes("`.sandcastle/`") && part.includes("`scripts/sandcastle-loop/`"));
+    const section = readme().split(/^## /m).find((part) => part.includes("`.sandcastle/`") && part.includes("`scripts/sandcastle-loop/`"));
     expect(section).toMatch(/optional/);
     expect(section).toMatch(/not necessary to run the packages/);
   });
