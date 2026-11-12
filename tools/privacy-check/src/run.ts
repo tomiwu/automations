@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildDenylist, denylistEntries, denylistHit, parseDenylist, type Denylist } from "./denylist.ts";
 import { scanLine, type Category } from "./heuristics.ts";
+import { resolvePepper } from "./pepper.ts";
 import { diffRecords, historyRecords, stagedRecords, treeRecords, type Env, type TextRecord } from "./sources.ts";
 
 export const HASHES_PATH = "privacy/denylist.hashes.json";
@@ -125,9 +126,9 @@ function report(found: Set<string>, summary: string, print: Print): number {
   return 0;
 }
 
-function check(options: Options, env: Env, print: Print): number {
+function check(options: Options, env: Env, print: Print, extraDirs: string[]): number {
   const list = parseDenylist(readIfPresent(join(options.repo, HASHES_PATH)));
-  const words = wordCheck(list, env.PRIVACY_PEPPER ?? "");
+  const words = wordCheck(list, list.peppered ? resolvePepper(env, options.repo, extraDirs) : "");
   if (words.problem !== undefined) {
     print(`privacy: ${options.requireWords ? "FAILED" : "WARNING"} ${words.problem}`);
     if (options.requireWords) return 1;
@@ -143,19 +144,22 @@ function hash(options: Options, env: Env, print: Print): number {
     return 2;
   }
   const plain = readFileSync(source, "utf8");
-  const list = buildDenylist(plain, randomBytes(16).toString("hex"), env.PRIVACY_PEPPER ?? "");
+  const list = buildDenylist(plain, randomBytes(16).toString("hex"), resolvePepper(env, options.repo));
   mkdirSync(join(options.repo, "privacy"), { recursive: true });
   writeFileSync(join(options.repo, HASHES_PATH), `${JSON.stringify(list, null, 1)}\n`);
   print(`privacy: wrote ${list.hashes.length} hashes of ${denylistEntries(plain).length} entries to ${HASHES_PATH}${list.peppered ? " (with PRIVACY_PEPPER)" : ""}`);
   return 0;
 }
 
-/** Exit code: 0 no finding, 1 findings, 2 usage error. */
-export function run(args: string[], env: Env, print: Print): number {
+/**
+ * Exit code: 0 no finding, 1 findings, 2 usage error.
+ * `extraDirs`: more checkouts whose `.env` can give the pepper (the CLI gives the current directory).
+ */
+export function run(args: string[], env: Env, print: Print, extraDirs: string[] = []): number {
   const options = parseArgs(args);
   if (typeof options === "string") {
     print(`privacy: ${options}`);
     return 2;
   }
-  return options.command === "hash" ? hash(options, env, print) : check(options, env, print);
+  return options.command === "hash" ? hash(options, env, print) : check(options, env, print, extraDirs);
 }

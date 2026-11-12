@@ -1,5 +1,7 @@
 # Public release
 
+> Owner decision of 2026-11-12 (F2): the current repository becomes public after a history rewrite (see `docs/public-release-audit.md`). The rewrite needs the owner's final confirmation. The script below stays as the fallback.
+
 This page tells the owner how to make the public repository. An agent never does the publish step.
 
 ## Why a new repository

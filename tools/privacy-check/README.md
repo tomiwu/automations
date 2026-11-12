@@ -31,6 +31,8 @@ How the hash works:
 - The hash is HMAC-SHA256 with the salt of the file and the optional `PRIVACY_PEPPER`.
 - The check hashes each token and each sequence of tokens (up to the longest entry) of each line. A match is a `private-word` finding. Tokens of less than 3 characters are ignored.
 
+Where the check finds the pepper (the first source that has one): the environment variable `PRIVACY_PEPPER`; the file of `PRIVACY_PEPPER_FILE`; the `PRIVACY_PEPPER=` line of the `.env` of the checked repository; the `.env` of the main checkout of its clone (so a worktree, the checkout of the pre-push hook and `scripts/ci-local.sh` in a worktree find it); then the same for the current directory (for `--repo <other dir>`, for example `scripts/clean-publish.sh`). The check never prints the value. A Sandcastle sandbox does not see the `.env` of the main checkout, so in a sandbox the check prints the warning and skips the private words; `scripts/ci-local.sh` and the pre-push hook on the host check them.
+
 Limit: the salt is in the repository. A person who guesses a word can check the guess, and first names are easy to guess. For a public repository, set the secret `PRIVACY_PEPPER` (in the CI secrets and in your `.env`) before you run `npm run privacy:hash`. Then nobody can check a guess without the pepper. When the hashes need the pepper and it is not set, the check prints a warning and skips the private words. With `--require-words` it fails.
 
 ## Heuristics
