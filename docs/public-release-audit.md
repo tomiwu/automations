@@ -20,18 +20,18 @@ None. `npm run privacy` (tree) gives no finding. The table "Closed findings" tel
 | ID | Category | Where | How it was closed |
 |---|---|---|---|
 | F1 | Personal name (owner) | `scripts/sandcastle-loop/src/config.ts:51` | The comment now says "the owner". |
-| F2 | Personal name and personal e-mail (owner), commit metadata | 121 commits and 3 commit trailers of the private history | `scripts/clean-publish.sh` makes the public repository with one initial commit and a neutral author. The private history is not published and not rewritten. A test proves that the new history has no finding (`tools/privacy-check/src/scripts.test.ts`). |
-| F3 | Personal name (owner), history content | commits `49e8a7a`, `ab4b044` | Same as F2: the public history does not contain the old commits. |
+| F2 | Personal name and personal e-mail (owner), commit metadata | 121 commits and 3 commit trailers of the private history (133 commits on 2026-11-12) | Owner decided 2026-11-12: publish the current repo after a history rewrite to a neutral author. Until the rewrite, the private history is not published. Fallback: `scripts/clean-publish.sh` makes a repository with one initial commit and a neutral author; a test proves that its history has no finding (`tools/privacy-check/src/scripts.test.ts`). |
+| F3 | Personal name (owner), history content | commits `49e8a7a`, `ab4b044` | The history rewrite of F2 replaces the lines. Until then, the private history is not published. |
 
 ## Owner decisions (not personal data)
 
 | ID | Topic | Where | State |
 |---|---|---|---|
-| F2 | Single initial commit or a filtered history | `scripts/clean-publish.sh` | The script makes a single initial commit (`docs/public-release.md` gives the reason). |
+| F2 | Single initial commit or a filtered history | `scripts/clean-publish.sh`, the history of this repository | Owner decided 2026-11-12: publish the current repo after a history rewrite (the author, committer and trailer lines become a neutral author; the F3 lines are replaced). The rewrite is not done yet and needs the owner's final confirmation before the force push. `scripts/clean-publish.sh` (single initial commit) stays as the fallback. |
 | F4 | Owner handle in package names | npm scope `@tomiwu/*` and `kody:@tomiwu/*` imports in 49 files | The handle is public already. Keep the scope, or rename it before the publish step. |
 | F5 | Owner-specific tooling and deploy | `.sandcastle/`, `scripts/sandcastle-loop/`, `.github/workflows/deploy-kody.yml` | No secret values. To leave a path out of the public repository, add it to `privacy/publish-exclude.txt`. |
 | F6 | Bot / package name | `packages/kradziejka` and references (38 files) | Not a person name. Keep, or rename before the publish step. |
-| F7 | Pepper for the private word hashes | `privacy/denylist.hashes.json` | The file has no hashes yet. The owner sets `PRIVACY_PEPPER`, runs `npm run privacy:hash` with the local plain list and commits the file (`tools/privacy-check/README.md`). |
+| F7 | Pepper for the private word hashes | `privacy/denylist.hashes.json` | Pepper set locally, hashes committed (2026-11-12, #252); CI secret pending with F8. The pepper is in the owner's git-ignored `.env` and in a file outside the repository; the plain list is in the git-ignored `.privacy-denylist.txt`. Hosted CI has no `PRIVACY_PEPPER` secret yet, so there the check prints a warning and skips the private words. |
 | F8 | `privacy` step in the GitHub workflow | `.github/workflows/ci.yml` | Agents do not change `.github/`. The exact change is in a comment on issue #234. `scripts/ci-local.sh` has the step already. |
 
 ## Checked, no finding
@@ -54,7 +54,7 @@ None. `npm run privacy` (tree) gives no finding. The table "Closed findings" tel
 
 - `tools/privacy-check` has the categories of this audit: hashed private words, e-mail addresses, phone numbers, account numbers, private IP addresses, Telegram chat ids, URLs with tokens, bot tokens, JWTs and Supabase project refs.
 - `scripts/ci-local.sh` (step `privacy`), `npm run check` and the pre-commit hook (`scripts/hooks/pre-commit`) run it.
-- `--history` on the private repository reports the commit metadata of F2 (category `email`). This is expected: the private history is not published. `scripts/clean-publish.sh` runs `--history` on the new repository and stops on a finding.
+- `--history` on the private repository reports the commit metadata of F2 (categories `email` and `private-word`) and the old line of F3 (`ab4b044`, category `private-word`). This is expected until the history rewrite of F2. After the rewrite, `--history` must give no finding. `scripts/clean-publish.sh` runs `--history` on the new repository and stops on a finding.
 
 ## Publish
 

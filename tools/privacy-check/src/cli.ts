@@ -3,4 +3,4 @@
 // npm run privacy:hash [-- --in <file>]
 import { run } from "./run.ts";
 
-process.exit(run(process.argv.slice(2), process.env, (line) => console.log(line)));
+process.exit(run(process.argv.slice(2), process.env, (line) => console.log(line), [process.cwd()]));
