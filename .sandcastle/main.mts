@@ -17,52 +17,125 @@
 //   AGENT=cursor MAX_ITERATIONS=10 npx tsx .sandcastle/main.mts   (option: Cursor, Composer 2.5 Fast)
 //   DRY_RUN=1 npx tsx .sandcastle/main.mts                        (print the next issue and the packages, run no agent)
 // If the Cursor agent fails because of credits or limits, the loop changes to Claude.
+//
+// Loop policy (tomiwu 2026-11-13, review of the Lydia Hallie talk; helpers in loop-policy.mts):
+// - Claude limit: the loop parses the reset time ("resets 6:30pm (UTC)") and pauses until it on
+//   the wall clock (a box suspend does not freeze the wait), then retries. It skips the other
+//   Claude models (CLAUDE_FALLBACK_MODEL) on a limit: they share the same subscription limit.
+// - Claude Code reads the committed .claude/settings.json: permissions.deny and a Stop hook.
+//   The hook is active only with LOOP_STOP_GATE=1 (this loop sets it). It returns exit 2 until
+//   there is a commit, the tree is clean, a ## Verification section exists, and typecheck/tests
+//   of the changed workspaces pass. One forced retry (stop_hook_active).
+// - Effort per phase (EFFORT_<PHASE>), REVIEW_MODEL for the reviewer (default claude-opus-5-5).
+// - Status file STATUS_FILE (JSON: phase, model, issue, startedAt, lastOutputAt).
 
 import * as sandcastle from "@ai-hero/sandcastle";
 import { podman } from "@ai-hero/sandcastle/sandboxes/podman";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import {
+  CLAUDE_LIMIT, effortFor, isClaudeLabel, limitWait, modelOfLabel, nextAgentAfterStall, phaseOfName, sleepUntil, writeStatus,
+} from "./loop-policy.mts";
 
 const MAX_ITERATIONS = Number(process.env.MAX_ITERATIONS ?? "10");
 const MAX_FIX_ATTEMPTS = Number(process.env.MAX_FIX_ATTEMPTS ?? "3");
-let agentName = (process.env.AGENT ?? "claude") === "cursor" ? "cursor" : "claude";
 const CURSOR_MODEL = process.env.CURSOR_MODEL ?? "composer-2.5-fast";
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-sonnet-5-5";
-const LIMIT_ERROR = /credit|quota|usage limit|rate limit|payment|out of (fast )?requests|insufficient/i;
+// tomiwu 2026-11-13: next work on Opus 5.5. The start script can set another model.
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
+const CLAUDE_FALLBACK_MODEL = process.env.CLAUDE_FALLBACK_MODEL ?? "";
+const REVIEW_MODEL = process.env.REVIEW_MODEL ?? "claude-opus-5-5";
+const PAUSE_MINUTES = Number(process.env.PAUSE_MINUTES ?? "30");
+const MAX_PAUSES = Number(process.env.MAX_PAUSES ?? "12");
+const LIMIT_MAX_HOURS = Number(process.env.LIMIT_MAX_HOURS ?? "6");
+const STATUS_FILE = process.env.STATUS_FILE ?? "/tmp/automations-loop.status.json";
+const LIMIT_ERROR = /credit|quota|usage limit|rate limit|payment|out of (fast )?requests|insufficient|hit your (?:[\w-]+ )?limit|limit reached/i;
 
-function agent() {
-  return agentName === "claude" ? sandcastle.claudeCode(CLAUDE_MODEL) : sandcastle.cursor(CURSOR_MODEL);
+interface PhaseOpts { effort: ReturnType<typeof effortFor>; env: Record<string, string> }
+type Provider = ReturnType<typeof sandcastle.cursor>;
+const claude = (model: string) => (o?: PhaseOpts): Provider =>
+  sandcastle.claudeCode(model, o ? { effort: o.effort, env: o.env } : undefined);
+const cursorAgent = { label: `Cursor CLI (${CURSOR_MODEL})`, make: (): Provider => sandcastle.cursor(CURSOR_MODEL) };
+const claudeAgents = [
+  { label: `Claude Code (${CLAUDE_MODEL})`, make: claude(CLAUDE_MODEL) },
+  ...(CLAUDE_FALLBACK_MODEL && CLAUDE_FALLBACK_MODEL !== CLAUDE_MODEL ? [{ label: `Claude Code (${CLAUDE_FALLBACK_MODEL})`, make: claude(CLAUDE_FALLBACK_MODEL) }] : []),
+];
+// AGENT=cursor: Cursor first, then Claude. Default: Claude only (the automations .env has no Cursor key).
+const AGENTS: { label: string; make: (o?: PhaseOpts) => Provider }[] = process.env.AGENT === "cursor" ? [cursorAgent, ...claudeAgents] : claudeAgents;
+const LABELS = AGENTS.map((a) => a.label);
+let agentIndex = 0;
+let pauses = 0;
+let currentIssue: number | null = null;
+let loopStatus = { phase: "start", startedAt: new Date().toISOString(), lastOutputAt: null as string | null, note: "" };
+function saveStatus(): void {
+  const label = AGENTS[agentIndex].label;
+  writeStatus(STATUS_FILE, { ...loopStatus, model: modelOfLabel(label), agent: label, issue: currentIssue, pid: process.pid });
 }
 
 type RunOptions = Omit<Parameters<sandcastle.Sandbox["run"]>[0], "agent">;
 
-// Run one agent phase. Change from Cursor to Claude if Cursor has no credits.
-async function runPhase(sandbox: sandcastle.Sandbox, options: RunOptions) {
-  try {
-    const result = await sandbox.run({ idleTimeoutSeconds: 1800, ...options, agent: agent() });
-    if (agentName === "cursor" && !result.commits.length && logHasLimitError(options.name)) throw new Error("cursor limit");
-    return result;
-  } catch (error) {
-    const text = `${error}`;
-    if (agentName === "cursor" && (LIMIT_ERROR.test(text) || logHasLimitError(options.name))) {
-      console.log(`Cursor failed (${text.slice(0, 200)}). Change to Claude Code and run again.`);
-      agentName = "claude";
-      return sandbox.run({ idleTimeoutSeconds: 1800, ...options, agent: agent() });
+// Run one agent phase. On a stall, change to the next agent; a Claude limit skips the other Claude
+// models. When no agent is left, pause until the parsed reset time (wall clock) and retry.
+async function runPhase(sandbox: sandcastle.Sandbox, options: RunOptions & { checkLog?: string }) {
+  const { checkLog = "", ...runOptions } = options;
+  const name = options.name ?? "phase";
+  const baseSha = (await sandbox.exec("git rev-parse HEAD")).stdout.trim();
+  for (;;) {
+    const o: PhaseOpts = { effort: effortFor(phaseOfName(name, checkLog)), env: { LOOP_STOP_GATE: "1", LOOP_PHASE: name, LOOP_BASE_SHA: baseSha } };
+    const a = AGENTS[agentIndex];
+    const useReview = name === "reviewer" && isClaudeLabel(a.label) && REVIEW_MODEL;
+    const label = useReview ? `Claude Code (${REVIEW_MODEL})` : a.label;
+    const provider = useReview ? claude(REVIEW_MODEL)(o) : a.make(o);
+    loopStatus = { phase: name, startedAt: new Date().toISOString(), lastOutputAt: null, note: `${label}, effort ${o.effort}` };
+    saveStatus();
+    const beat = setInterval(() => {
+      const f = newestLog(name);
+      try { if (f) { loopStatus.lastOutputAt = new Date(statSync(f).mtimeMs).toISOString(); saveStatus(); } } catch { /* next beat */ }
+    }, 30_000);
+    let failure = "";
+    try {
+      const result = await sandbox.run({ idleTimeoutSeconds: 1800, ...runOptions, agent: provider });
+      const tail = logTail(name);
+      if (result.commits.length || !LIMIT_ERROR.test(tail)) return result;
+      failure = `limit text in the agent log: ${tail.match(new RegExp(`.{0,80}(?:${LIMIT_ERROR.source}).{0,120}`, "i"))?.[0] ?? ""}`;
+    } catch (error) {
+      failure = `${error} ${logTail(name).slice(-600)}`;
+      if (!LIMIT_ERROR.test(failure)) throw error;
+    } finally {
+      clearInterval(beat);
     }
-    throw error;
+    console.log(`${label} stalled in ${name}: ${failure.slice(0, 300)}`);
+    let until = Date.now() + PAUSE_MINUTES * 60_000;
+    if (isClaudeLabel(a.label) && CLAUDE_LIMIT.test(failure)) {
+      const w = limitWait(failure, Date.now(), PAUSE_MINUTES, LIMIT_MAX_HOURS);
+      until = w.untilMs;
+      console.log(`Claude limit: ${w.reason}.`);
+    }
+    const next = nextAgentAfterStall(LABELS, agentIndex, failure);
+    if (next >= 0) { agentIndex = next; console.log(`Agent: ${AGENTS[agentIndex].label} (fallback).`); continue; }
+    if (pauses >= MAX_PAUSES) throw new Error(`All agents stalled ${MAX_PAUSES + 1} times. Last error: ${failure.slice(0, 300)}`);
+    pauses++;
+    console.log(`All agents stalled. Pause until ${new Date(until).toISOString()} on the wall clock (pause ${pauses}/${MAX_PAUSES}).`);
+    loopStatus = { ...loopStatus, phase: "pause", note: `until ${new Date(until).toISOString()}` };
+    saveStatus();
+    await sleepUntil(until);
+    agentIndex = 0;
   }
 }
 
-function logHasLimitError(name?: string): boolean {
+function newestLog(name?: string): string | undefined {
   try {
     const dir = ".sandcastle/logs";
-    const files = readdirSync(dir).filter((f) => name && f.endsWith(`-${name}.log`))
-      .map((f) => join(dir, f)).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-    return files.length > 0 && LIMIT_ERROR.test(readFileSync(files[0], "utf8").slice(-4000));
+    return readdirSync(dir).filter((f) => name && f.endsWith(`-${name}.log`))
+      .map((f) => join(dir, f)).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+function logTail(name?: string): string {
+  const file = newestLog(name);
+  try { return file ? readFileSync(file, "utf8").slice(-4000) : ""; } catch { return ""; }
 }
 const LABEL = "Sandcastle";
 // Issues to skip, for example issues that must change .github/ (GH_TOKEN has no Workflows permission).
@@ -160,13 +233,21 @@ async function waitCi(url: string): Promise<boolean> {
     const st = ciState(url);
     if (st === "success") return true;
     if (st === "failure") return false;
-    await new Promise((r) => setTimeout(r, 15_000));
+    await sleepUntil(Date.now() + 15_000);
   }
   return false;
 }
 
+// The commit messages for the PR body. Without a Verification section, add a visible note (rule 8).
+function prLog(branch: string): string {
+  const log = sh("git", ["log", "--reverse", "--format=%B", `main..${branch}`]);
+  return log.includes("## Verification") ? log
+    : `${log}\n\n## Verification\n\n**Missing: no commit has a Verification section with a command and its real output. A reviewer must add it before the merge.**`;
+}
+
 const merged = new Set<number>();
-console.log(`Agent: ${agentName}`);
+console.log(`Agent chain: ${LABELS.join(" -> ")}. Reviewer: ${REVIEW_MODEL}.`);
+saveStatus();
 
 for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   sh("git", ["checkout", "main"]);
@@ -174,12 +255,13 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   let issue = nextIssue(merged);
   if (!issue) {
     // The issue list can be stale just after a merge. Wait and try again one time.
-    await new Promise((r) => setTimeout(r, 30_000));
+    await sleepUntil(Date.now() + 30_000);
     issue = nextIssue(merged);
   }
   if (issue && merged.has(issue.number)) { console.log(`Issue #${issue.number} is already merged. Stopping.`); break; }
   if (!issue) { console.log("No ready issue. Stopping."); break; }
   console.log(`\n=== Iteration ${iteration}/${MAX_ITERATIONS}: issue #${issue.number} ${issue.title} ===\n`);
+  currentIssue = issue.number;
 
   // Resume an open PR for this issue (for example after CI failed in an earlier run).
   const existing = JSON.parse(sh("gh", ["pr", "list", "--state", "open", "--json", "url,headRefName"]))
@@ -213,7 +295,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       await runPhase(sandbox, {
         name: `fixer-${attempt + 1}`, maxIterations: 1,
         promptFile: "./.sandcastle/fix-prompt.md",
-        promptArgs: { ...args, CHECK_LOG: result.log.slice(-12000) },
+        promptArgs: { ...args, CHECK_LOG: result.log.slice(-12000) }, checkLog: result.log.slice(-12000),
       });
     }
   } finally {
@@ -233,12 +315,12 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   if (!existing) sh("git", ["push", "-f", "origin", branch]);
   const url: string = existing ? existing.url : sh("gh", ["pr", "create", "--base", "main", "--head", branch,
     "--title", issue.title,
-    "--body", `This PR implements #${issue.number}.\n\n${sh("git", ["log", "--reverse", "--format=%B", `main..${branch}`])}\n\nThe local checks pass at the workspace root: \`npm ci\`, \`npm run typecheck\`, \`npm test\` and \`npm run crap\`.\n\nCloses #${issue.number}`]);
+    "--body", `This PR implements #${issue.number}.\n\n${prLog(branch)}\n\nThe local checks pass at the workspace root: \`npm ci\`, \`npm run typecheck\`, \`npm test\` and \`npm run crap\`.\n\nCloses #${issue.number}`]);
   console.log(`PR: ${url}`);
   // Merge only when all GitHub Actions checks on the PR pass.
   let hasChecks = false;
   for (let wait = 0; wait < 12 && !hasChecks; wait++) {
-    await new Promise((r) => setTimeout(r, 15_000));
+    await sleepUntil(Date.now() + 15_000);
     hasChecks = ciState(url) !== "none";
   }
   if (!hasChecks) {
@@ -250,7 +332,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   let mergedOk = false;
   for (let attempt = 0; attempt <= MAX_FIX_ATTEMPTS && !mergedOk; attempt++) {
     spawnSync("gh", ["pr", "update-branch", url], { stdio: "inherit" });
-    await new Promise((r) => setTimeout(r, 20_000));
+    await sleepUntil(Date.now() + 20_000);
     if (await waitCi(url)) {
       mergedOk = spawnSync("gh", ["pr", "merge", url, "--squash", "--delete-branch"], { stdio: "inherit" }).status === 0;
       continue;

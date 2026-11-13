@@ -16,7 +16,8 @@
     "privacy:hash": "tsx tools/privacy-check/src/cli.ts hash",
     "clean-publish": "bash scripts/clean-publish.sh",
     "crap:changed": "tsx tools/dev-checks/src/cli.ts",
-    "sandcastle": "npx tsx .sandcastle/main.mts"
+    "sandcastle": "npx tsx .sandcastle/main.mts",
+    "test:loop": "tsx .sandcastle/loop-policy-test.mts && bash scripts/test-stop-gate.sh"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "0.12.0",
