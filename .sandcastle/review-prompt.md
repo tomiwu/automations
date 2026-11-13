@@ -1,66 +1,33 @@
-# TASK
+# Task
 
-Review the code changes on branch `{{BRANCH}}` and improve code clarity, consistency, and maintainability while preserving exact functionality.
+Review branch `{{BRANCH}}` for issue #{{ISSUE}}. First check that the change does what the issue asks. Then make the code simpler without a change in behaviour.
 
-# CONTEXT
+## Issue
+
+<!-- inline-start: .sandcastle/context/issue.json -->
+!`mkdir -p .sandcastle/context && printf '*\n' > .sandcastle/context/.gitignore && { [ -s .sandcastle/context/issue.json ] || gh issue view {{ISSUE}} --json number,title,body,comments --jq '{number, title, body, comments: [.comments[].body]}' > .sandcastle/context/issue.json; } && head -c 15000 .sandcastle/context/issue.json && echo && echo "[Full issue: .sandcastle/context/issue.json.]"`
+<!-- inline-end -->
 
 ## Branch diff
 
-!`git diff {{TARGET_BRANCH}}...{{BRANCH}}`
+<!-- inline-start: .sandcastle/context/review-diff.patch -->
+!`git diff {{TARGET_BRANCH}}...{{BRANCH}} > .sandcastle/context/review-diff.patch && echo "Full diff: .sandcastle/context/review-diff.patch ($(wc -c < .sandcastle/context/review-diff.patch) bytes)." && git diff --stat=160 {{TARGET_BRANCH}}...{{BRANCH}} | tail -n 80 && git diff {{TARGET_BRANCH}}...{{BRANCH}} | head -c 40000 && echo && echo "[End of the inline part. Read the rest in .sandcastle/context/review-diff.patch.]"`
+<!-- inline-end -->
 
 ## Commits on this branch
 
 !`git log {{TARGET_BRANCH}}..{{BRANCH}} --oneline`
 
-# REVIEW PROCESS
+# Review steps
 
-1. **Understand the change**: Read the diff and commits above to understand the intent.
+1. **Acceptance criteria first.** List each acceptance criterion of the issue. For each one, write `met` or `not met` with the file and the test that shows it. Fix each `not met` item.
+2. **Bugs.** List each bug (wrong logic, missed edge case, missing test, unchecked input, personal data, a secret). Fix each bug and add a test for it.
+3. **Verification section.** A commit message must have `## Verification` with the command and the pasted tail of its real output. If it is missing or invented, run the command and add the real output in your commit.
+4. **Simplify.** Remove needless complexity, duplication and comments that say what the code says. Keep behaviour the same. Follow `CODING_STANDARDS.md`. Every function has CRAP less than 6.
+5. At the root run `npm run typecheck`, `npm test` and `npm run crap`. Commit with a message in English (ASD-STE100) that starts with `RALPH: #{{ISSUE}} review` and contains the criteria list and the bug list.
 
-2. **Analyze for improvements**: Look for opportunities to:
-   - Reduce unnecessary complexity and nesting
-   - Eliminate redundant code and abstractions
-   - Improve readability through clear variable and function names
-   - Consolidate related logic
-   - Remove unnecessary comments that describe obvious code
-   - Avoid nested ternary operators - prefer switch statements or if/else chains
-   - Choose clarity over brevity - explicit code is often better than overly compact code
+If all criteria are met, there is no bug and the code is clean, do not commit.
 
-3. **Check correctness**:
-   - Does the implementation match the intent? Are edge cases handled?
-   - Are new/changed behaviours covered by tests?
-   - Are there unsafe casts, `as` casts, `any`, or unchecked assumptions?
-   - Does the change introduce injection vulnerabilities, credential leaks, or other security issues?
-
-4. **Maintain balance**: Avoid over-simplification that could:
-   - Reduce code clarity or maintainability
-   - Create overly clever solutions that are hard to understand
-   - Combine too many concerns into single functions or components
-   - Remove helpful abstractions that improve code organization
-   - Make the code harder to debug or extend
-
-5. **Follow docs/PRD.md** (automations spec).
-
-6. **Apply project standards**: Follow the coding standards in @.sandcastle/CODING_STANDARDS.md and in `CODING_STANDARDS.md` in the repository root. The root file has priority. Use the words in `CONTEXT.md`.
-
-7. **Preserve functionality**: Never change what the code does - only how it does it. All original features, outputs, and behaviors must remain intact.
-
-# RULES
-
-- Every function must have a CRAP score less than 6. Make functions small and well tested.
-- Do not push. Do not open a PR. Do not close the issue.
-- Do not edit `docs/PRD.md` or `.sandcastle/`.
-- Do not change `.github/`.
-- Do not read or change Kody secrets. Do not publish or deploy to Kody.
-- Do not add personal data (real names, schools, e-mail addresses, chat IDs, local paths). Use invented data.
-
-# EXECUTION
-
-If you find improvements to make:
-
-1. Make the changes directly on this branch
-2. At the repository root, run `npm run typecheck`, `npm test` and `npm run crap`. Make sure that nothing is broken
-3. Commit describing the refinements. Write the commit message in English, in ASD-STE100 Simplified Technical English.
-
-If the code is already clean and well-structured, do nothing.
+The host pushes and merges. Do not edit `docs/PRD.md`, `.sandcastle/`, `.claude/` or `.github/`.
 
 Once complete, output <promise>COMPLETE</promise>.
