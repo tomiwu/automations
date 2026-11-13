@@ -7,8 +7,8 @@
 set -uo pipefail
 [ "${LOOP_STOP_GATE:-0}" = "1" ] || exit 0
 input=$(cat)
-active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null || echo false)
-[ "$active" = "true" ] && exit 0
+# No jq or python needed: the hook input is one JSON object.
+if printf '%s' "$input" | grep -Eq '"stop_hook_active" *: *true'; then exit 0; fi
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 phase="${LOOP_PHASE:-}"
 base="${LOOP_BASE_SHA:-}"
