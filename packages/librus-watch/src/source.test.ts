@@ -2,7 +2,7 @@ import { fakeRuntime } from "@automations/shared";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createLibrusSource, fingerprint, lessonItem, timetableWeeks } from "./source.ts";
-import { landingUrl, LibrusTimeoutError, loginIframeSource } from "./session.ts";
+import { dispositionFileName, landingUrl, LibrusTimeoutError, loginIframeSource } from "./session.ts";
 import { lesson } from "./test-fixtures.ts";
 
 const ORIGIN = "https://school.example.org";
@@ -44,6 +44,19 @@ function librus(handlers: Handler[] = [], options: { reject?: boolean } = {}) {
 }
 
 const json = (body: unknown) => new Response(JSON.stringify(body));
+
+describe("dispositionFileName", () => {
+  it.each([
+    [null, undefined],
+    ["attachment", undefined],
+    ['attachment; filename="druga strona.pdf"', "druga strona.pdf"],
+    ["attachment; filename=plain.pdf; size=3", "plain.pdf"],
+    ["attachment; filename=\"x.pdf\"; filename*=UTF-8''zdj%C4%99cie.jpg", "zdjęcie.jpg"],
+    ["attachment; filename*=utf-8''bad%E0%A4%A", "bad%E0%A4%A"],
+  ])("reads %s", (header, name) => {
+    expect(dispositionFileName(header)).toBe(name);
+  });
+});
 
 describe("LibrusSource", () => {
   it("logs in with the secrets of the Account and reads grades", async () => {
@@ -167,23 +180,43 @@ describe("LibrusSource", () => {
     expect(await createLibrusSource(runtime, account, { timezone: "UTC" }).messageBody("m 1")).toBe("Hi");
   });
 
-  it("downloads attachment bytes in the same session", async () => {
+  it("downloads an attachment through the GetFile page in two requests on the same session", async () => {
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
-    const runtime = librus([(url) => (url.pathname === "/file/sample.pdf" ? new Response(bytes) : undefined)]);
-    const source = createLibrusSource(runtime, account, { timezone: "UTC" });
-    await source.currentItems("grades");
-    expect(await source.fetchAttachment("/file/sample.pdf")).toEqual(bytes);
-  });
-
-  it("rejects an empty or failed attachment download", async () => {
+    const GET_FILE = "https://sandbox.librus.pl/GetFile/key-1";
     const runtime = librus([
-      (url) => (url.pathname === "/file/empty" ? new Response(new Uint8Array()) : undefined),
-      (url) => (url.pathname === "/file/missing" ? new Response("", { status: 404 }) : undefined),
+      (url) => (url.pathname === "/wiadomosci/pobierz_zalacznik/11/22" ? new Response("", { status: 302, headers: { location: GET_FILE } }) : undefined),
+      (url) => (url.href === GET_FILE ? new Response("<html>Pobieranie plików</html>", { headers: { "content-type": "text/html" } }) : undefined),
+      (url) =>
+        url.href === `${GET_FILE}/get`
+          ? new Response(bytes, { headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="sample.pdf"' } })
+          : undefined,
     ]);
     const source = createLibrusSource(runtime, account, { timezone: "UTC" });
     await source.currentItems("grades");
+    const before = runtime.requests.length;
+    expect(await source.fetchAttachment("/wiadomosci/pobierz_zalacznik/11/22", 100)).toEqual({ bytes, fileName: "sample.pdf" });
+    const download = runtime.requests.slice(before);
+    expect(download.map((r) => r.input)).toEqual([`${ORIGIN}/wiadomosci/pobierz_zalacznik/11/22`, GET_FILE, `${GET_FILE}/get`]);
+    expect((download[0]?.init?.headers as Record<string, string>).referer).toBe(`${ORIGIN}/wiadomosci/1/5/11/f0`);
+    expect(runtime.requests.filter((r) => r.init?.method === "POST")).toHaveLength(1);
+  });
+
+  it("returns a file answered directly, and rejects empty, failed, page or oversized answers", async () => {
+    const pdf = new Uint8Array([1, 2, 3]);
+    const runtime = librus([
+      (url) => (url.pathname === "/file/direct" ? new Response(pdf, { headers: { "content-disposition": "attachment; filename*=UTF-8''zdj%C4%99cie%201.jpg" } }) : undefined),
+      (url) => (url.pathname === "/file/empty" ? new Response(new Uint8Array()) : undefined),
+      (url) => (url.pathname === "/file/missing" ? new Response("", { status: 404 }) : undefined),
+      (url) => (url.pathname === "/file/page" ? new Response("<html></html>", { headers: { "content-type": "text/html; charset=utf-8" } }) : undefined),
+      (url) => (url.pathname === "/file/big" ? new Response(pdf, { headers: { "content-length": "3" } }) : undefined),
+    ]);
+    const source = createLibrusSource(runtime, account, { timezone: "UTC" });
+    await source.currentItems("grades");
+    expect(await source.fetchAttachment("file/direct")).toEqual({ bytes: pdf, fileName: "zdjęcie 1.jpg" });
     await expect(source.fetchAttachment("/file/empty")).rejects.toThrow("empty file");
     await expect(source.fetchAttachment("/file/missing")).rejects.toThrow("HTTP 404");
+    await expect(source.fetchAttachment("/file/page")).rejects.toThrow("a page, not a file");
+    await expect(source.fetchAttachment("/file/big", 2)).rejects.toThrow("over the size limit");
   });
 
   it("reads the timetable of the next 14 days", async () => {

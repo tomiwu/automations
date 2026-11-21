@@ -2,7 +2,7 @@ import { attachmentObjectPath, sha256Hex, type NewJournalEvent, type NewNotifica
 import { t, type Language, type Recipient } from "@automations/shared";
 import type { Announcement, ChildCheck } from "./engine.ts";
 import { formatMessage } from "./format.ts";
-import type { MessageAttachmentLink, MessageItem, OpenedMessage } from "./types.ts";
+import type { AttachmentFile, MessageAttachmentLink, MessageItem, OpenedMessage } from "./types.ts";
 
 /** Telegram limit is 50 MB; stay below it. */
 export const ATTACHMENT_SIZE_LIMIT = 45 * 1024 * 1024;
@@ -96,7 +96,12 @@ function attachmentFallback(check: ChildCheck, scope: string, messageId: string,
   }));
 }
 
-type StoreResult = { stored: true; path: string; journal: NewJournalEvent } | { stored: false; fallback: NewNotification[] };
+/** The link with the size of the body. The name is the one on the page, else the Content-Disposition one. */
+function downloadedLink(link: MessageAttachmentLink, file: AttachmentFile): MessageAttachmentLink {
+  return { ...link, name: link.name || file.fileName || `attachment-${link.id}`, size: file.bytes.byteLength };
+}
+
+type StoreResult = { stored: true; path: string; link: MessageAttachmentLink; journal: NewJournalEvent } | { stored: false; fallback: NewNotification[] };
 
 async function storeOne(
   ctx: AttachmentRunContext,
@@ -108,13 +113,15 @@ async function storeOne(
   const fallback = (): StoreResult => ({ stored: false, fallback: attachmentFallback(check, ctx.scope, message.id, link) });
   if (link.size > ATTACHMENT_SIZE_LIMIT || chargeFetch?.() === false) return fallback();
   try {
-    const bytes = await check.source.fetchAttachment(link.downloadPath);
+    const file = await check.source.fetchAttachment(link.downloadPath, ATTACHMENT_SIZE_LIMIT);
+    const bytes = file.bytes;
     if (bytes.byteLength > ATTACHMENT_SIZE_LIMIT) return fallback();
+    const named = downloadedLink(link, file);
     const path = attachmentObjectPath(check.familyId, message.id, link.id);
-    const mimeType = mimeOf(link.name);
+    const mimeType = mimeOf(named.name);
     const sha256 = await sha256Hex(bytes);
     await storage.putAttachment(path, bytes, mimeType);
-    return { stored: true, path, journal: journalForStored(check, message, link, path, sha256, bytes.byteLength, mimeType) };
+    return { stored: true, path, link: named, journal: journalForStored(check, message, named, path, sha256, bytes.byteLength, mimeType) };
   } catch {
     return fallback();
   }
@@ -161,9 +168,9 @@ async function attachmentsOf(
     notifications.push(
       ...mapNotifications(check, scope, item.id, `doc:${link.id}`, (recipient) => ({
         kind: "document",
-        text: captionText(recipient.language as Language, link.name),
+        text: captionText(recipient.language as Language, stored.link.name),
         storagePath: stored.path,
-        fileName: link.name,
+        fileName: stored.link.name,
       })),
     );
   }

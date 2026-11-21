@@ -264,11 +264,12 @@ export function createLibrusSource(
       const attachments = parseMessageAttachments(html);
       return { body: parseMessageBody(html), attachments, unrecognizedAttachments: unrecognizedAttachments(html, attachments) };
     },
-    async fetchAttachment(downloadPath) {
+    async fetchAttachment(downloadPath, maxBytes) {
       await ensureLogin();
       const path = downloadPath.startsWith("/") ? downloadPath : `/${downloadPath}`;
-      const bytes = await session.binary(path);
-      return new Uint8Array(bytes);
+      const messageId = /\/pobierz_zalacznik\/(\d+)\//.exec(path)?.[1];
+      const referer = messageId ? `/wiadomosci/1/5/${messageId}/f0` : undefined;
+      return session.attachment(path, { referer, maxBytes });
     },
     fullTimetable,
     timetable,

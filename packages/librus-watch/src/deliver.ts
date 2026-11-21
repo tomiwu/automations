@@ -8,6 +8,12 @@ export interface Messenger {
 
 /** Default time limit of one send, in milliseconds. */
 export const SEND_TIMEOUT_MS = 20_000;
+/**
+ * Upper time limit of one document upload, in milliseconds. A file near 10 MB can take longer than a text send. A
+ * document gets the rest of the delivery budget, at least `SEND_TIMEOUT_MS` and at most this, so a delivery run still
+ * ends at most `SEND_TIMEOUT_MS` after its budget, as with text.
+ */
+export const DOCUMENT_SEND_TIMEOUT_MS = 45_000;
 /** Default time limit of one delivery run, in milliseconds. */
 export const DELIVERY_BUDGET_MS = 60_000;
 /** Telegram accepts at most 4096 characters in one message. */
@@ -59,10 +65,16 @@ export interface DeliveryOptions {
   clock?: () => number;
   budgetMs?: number;
   sendTimeoutMs?: number;
+  documentTimeoutMs?: number;
 }
 
-async function sendEntry(options: DeliveryOptions, entry: OutboxEntry): Promise<void> {
-  const { storage, messenger, sendTimeoutMs = SEND_TIMEOUT_MS } = options;
+/** The time limit of one document upload: the rest of the budget, between the text limit and the document limit. */
+export function documentTimeout(remainingMs: number, sendTimeoutMs: number, documentTimeoutMs: number): number {
+  return Math.max(sendTimeoutMs, Math.min(documentTimeoutMs, remainingMs));
+}
+
+async function sendEntry(options: DeliveryOptions, entry: OutboxEntry, remainingMs: number): Promise<void> {
+  const { storage, messenger, sendTimeoutMs = SEND_TIMEOUT_MS, documentTimeoutMs = DOCUMENT_SEND_TIMEOUT_MS } = options;
   if (entry.kind === "document") {
     const path = entry.storagePath;
     const fileName = entry.fileName;
@@ -72,7 +84,7 @@ async function sendEntry(options: DeliveryOptions, entry: OutboxEntry): Promise<
     if (!sendDocument) throw new Error("telegram sendDocument is not available");
     await withTimeout(
       sendDocument(entry.chatId, fileName, bytes, redactSecretPlaceholders(entry.text)),
-      sendTimeoutMs,
+      documentTimeout(remainingMs, sendTimeoutMs, documentTimeoutMs),
       "telegram document",
     );
     return;
@@ -97,9 +109,9 @@ function inSendOrder(entries: OutboxEntry[]): OutboxEntry[] {
   return [...entries].sort((a, b) => a.queuedAt.getTime() - b.queuedAt.getTime() || rank(a) - rank(b));
 }
 
-async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: DeliveryRun): Promise<void> {
+async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: DeliveryRun, remainingMs: number): Promise<void> {
   try {
-    await sendEntry(options, entry);
+    await sendEntry(options, entry, remainingMs);
     run.sentKeys.push(entry.key);
   } catch (error) {
     run.blocked.add(entry.chatId);
@@ -119,7 +131,8 @@ export async function deliverPending(options: DeliveryOptions): Promise<void> {
   const run: DeliveryRun = { sentKeys: [], failures: [], blocked: new Set() };
   try {
     for (const entry of queue) {
-      if (!run.blocked.has(entry.chatId) && clock() - start < budgetMs) await tryEntry(options, entry, run);
+      const remainingMs = budgetMs - (clock() - start);
+      if (!run.blocked.has(entry.chatId) && remainingMs > 0) await tryEntry(options, entry, run, remainingMs);
     }
   } finally {
     await storage.markDeliveredMany(run.sentKeys);
