@@ -7,6 +7,14 @@ import { upcoming } from "./upcoming.ts";
 
 const child = { id: CHILD1, name: "Child One" };
 const MONDAY_0430Z = new Date("2026-01-05T04:30:00Z");
+const SCHEDULED_CRON_HOURS = (
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    kody: { jobs: { "scheduled-check": { schedule: { expression: string } } } };
+  }
+).kody.jobs["scheduled-check"].schedule.expression
+  .split(" ")[1]
+  ?.split(",")
+  .map(Number) ?? [];
 
 function setup(now = MONDAY_0430Z) {
   const config = testConfig();
@@ -75,6 +83,10 @@ describe("isMorningReportRun", () => {
     expect(isMorningReportRun(MONDAY_0430Z, "Europe/Warsaw")).toBe(true);
     expect(isMorningReportRun(new Date("2026-01-05T12:30:00Z"), "Europe/Warsaw")).toBe(false);
     expect(isMorningReportRun(new Date("2026-07-06T04:30:00Z"), "Europe/Warsaw")).toBe(true);
+  });
+
+  it("uses an hour that the package cron expression schedules", () => {
+    expect(SCHEDULED_CRON_HOURS).toContain(MORNING_REPORT_UTC_HOUR);
   });
 });
 
@@ -202,15 +214,5 @@ describe("the New section", () => {
   it("is in Polish for a Polish Recipient", async () => {
     const text = await reportText([detailRow("trip")], "pl");
     expect(text).toContain("Nowe:\n• Wycieczka, 2026-01-05: Title of trip");
-  });
-});
-
-describe("Morning report schedule", () => {
-  it("runs at an hour that the package cron expression schedules", () => {
-    const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
-      kody: { jobs: { "scheduled-check": { schedule: { expression: string } } } };
-    };
-    const hours = manifest.kody.jobs["scheduled-check"].schedule.expression.split(" ")[1]?.split(",").map(Number);
-    expect(hours).toContain(MORNING_REPORT_UTC_HOUR);
   });
 });
