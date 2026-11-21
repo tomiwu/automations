@@ -327,9 +327,66 @@ describe("activenowBillingShapeExport", () => {
       "GET /client_panel/settlements/index": { body: twoPaths },
     });
     const result = await activenowBillingShapeExport(deps, {});
-    expect(result.accounts[0]?.upcoming).toMatchObject({ source: null });
-    expect(result.accounts[0]?.upcoming?.reason).toBeTruthy();
+    expect(result.accounts[0]?.upcoming).toMatchObject({
+      source: null,
+      reason: "ambiguous upcoming paths in markup",
+    });
     expect(runtime.requests.some((r) => new URL(r.input).pathname.includes("upcoming"))).toBe(false);
+  });
+
+  it("uses the JS module when markup paths are ambiguous", async () => {
+    const twoPaths = billingFixture("activenow-billing-settlements-importmap.html").replace(
+      "</body>",
+      '<div data-controller="client-panel-page-settlements" data-a-url-value="/client_panel/settlements/upcoming" data-b-url-value="/client_panel/settlements/other"></div></body>',
+    );
+    const jsModule = 'fetch("/client_panel/settlements/index?upcoming=true")';
+    const runtime = fakeRuntime({
+      secrets: SECRETS,
+      now: new Date("2026-10-20T08:00:00Z"),
+      respond: (input, init) => {
+        const url = new URL(input);
+        if (url.search.includes("upcoming=true")) {
+          return new Response(UPCOMING_BODY, {
+            status: 200,
+            headers: { "content-type": "text/vnd.turbo-stream.html" },
+          });
+        }
+        const key = `${init?.method ?? "GET"} ${url.pathname}`;
+        const answers: Record<string, Answer> = {
+          "GET /users/sign_in": { body: LOGIN_FORM, cookie: "pre=1" },
+          "POST /users/sign_in": { body: PICKER, cookie: "sess=abc" },
+          "POST /role_selector/change_role": { body: PANEL_WITH_BILLING },
+          "GET /client_panel/billing": { status: 302, location: SETTLEMENTS_INDEX },
+          "GET /client_panel/settlements/index": { body: twoPaths },
+          "GET /assets/settlements-fake.js": { body: jsModule },
+        };
+        const answer = answers[key] ?? { status: 404, body: "missing" };
+        const headers = new Headers();
+        if (answer.location) headers.set("location", answer.location);
+        if (answer.cookie) headers.append("set-cookie", `${answer.cookie}; path=/; HttpOnly`);
+        return new Response(answer.body ?? "", { status: answer.status ?? 200, headers });
+      },
+    });
+    const counter = countFetches(runtime.fetch);
+    const deps = {
+      runtime: { ...runtime, fetch: counter.fetch },
+      storage: storageOf(),
+      familyId: FAMILY_ID,
+      counter,
+    };
+    const result = await activenowBillingShapeExport(deps, {});
+    expect(result.accounts[0]?.upcoming?.source).toBe("javascript");
+    expect(runtime.requests.some((r) => new URL(r.input).search.includes("upcoming"))).toBe(true);
+  });
+
+  it("records a non-2xx upcoming GET without stopping the probe", async () => {
+    const { deps } = setup({
+      ...happySettlements,
+      "GET /client_panel/settlements/upcoming": { status: 404, body: "missing" },
+    });
+    const result = await activenowBillingShapeExport(deps, {});
+    expect(result.accounts[0]?.upcoming).toMatchObject({ source: "markup", status: 404 });
+    expect(result.accounts[0]?.status).toBeUndefined();
   });
 
   it("fetches the settlements JS module only once for two Accounts", async () => {

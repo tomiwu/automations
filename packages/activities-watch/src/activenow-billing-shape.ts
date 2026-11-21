@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import type { FetchCount, FetchCounter, Runtime } from "@automations/shared";
 import { formatFetchCount } from "@automations/shared";
-import { checked, isActiveNowBlock, openActiveNowPanel } from "./activenow-source.ts";
+import { ACTIVE_NOW_BLOCK, blockPage, checked, isActiveNowBlock, openActiveNowPanel } from "./activenow-source.ts";
 import {
   bodySkeleton,
   headSummary,
@@ -102,16 +102,16 @@ function settlementsNodes($: cheerio.CheerioAPI) {
   return [...controller, ...toggle];
 }
 
-function upcomingParamOf(el: ReturnType<cheerio.CheerioAPI>): string | undefined {
-  const action = el.attr("data-action") ?? "";
+function upcomingParamFlag(action: string, attrs: Record<string, string>): string | undefined {
   if (action.includes("upcoming")) return action;
-  const flag = Object.entries(el.attr() ?? {}).find(([name]) => name.endsWith("-upcoming-value"));
+  const flag = Object.entries(attrs).find(([name]) => name.endsWith("-upcoming-value"));
   return flag ? `${flag[0]}=${flag[1]}` : undefined;
 }
 
 function upcomingParam($: cheerio.CheerioAPI, nodes: ReturnType<typeof settlementsNodes>): string | undefined {
   for (const node of nodes) {
-    const value = upcomingParamOf($(node));
+    const el = $(node);
+    const value = upcomingParamFlag(el.attr("data-action") ?? "", el.attr() ?? {});
     if (value) return value;
   }
   return undefined;
@@ -133,11 +133,6 @@ function markupPaths($: cheerio.CheerioAPI): { paths: string[]; param?: string }
     }
   }
   return { paths: [...paths], param: upcomingParam($, nodes) };
-}
-
-function chooseMarkupPath(paths: string[]): string | null {
-  if (paths.length !== 1) return null;
-  return paths[0] ?? null;
 }
 
 function importmapSettlementsHref(raw: string): string | null {
@@ -248,9 +243,10 @@ function guessContentType(text: string): string {
 
 async function fetchUpcoming(http: Http, origin: string, rawPath: string): Promise<Omit<UpcomingProbe, "source">> {
   const url = new URL(rawPath, origin).toString();
-  const page = await checked(http, url, {
+  const page = await http.request(url, {
     headers: { accept: UPCOMING_ACCEPT, "x-requested-with": "XMLHttpRequest" },
   });
+  if (page.status === 403 && blockPage(page.text)) throw new Error(ACTIVE_NOW_BLOCK);
   const contentType = guessContentType(page.text);
   return {
     path: redactUrl(rawPath),
@@ -258,22 +254,6 @@ async function fetchUpcoming(http: Http, origin: string, rawPath: string): Promi
     contentType,
     skeleton: responseSkeleton(page.text, contentType),
   };
-}
-
-async function resolveFromMarkup(
-  http: Http,
-  origin: string,
-  markup: ReturnType<typeof markupPaths>,
-): Promise<UpcomingProbe | null> {
-  const markupPath = chooseMarkupPath(markup.paths);
-  if (markupPath) {
-    const body = await fetchUpcoming(http, origin, markupPath);
-    return { source: "markup", upcomingParam: markup.param, ...body };
-  }
-  if (markup.paths.length > 1) {
-    return { source: null, reason: "ambiguous upcoming paths in markup" };
-  }
-  return null;
 }
 
 async function resolveFromJs(http: Http, origin: string, html: string, shared: SharedProbeState): Promise<UpcomingProbe> {
@@ -288,9 +268,15 @@ async function resolveFromJs(http: Http, origin: string, html: string, shared: S
 
 async function resolveUpcoming(http: Http, origin: string, html: string, shared: SharedProbeState): Promise<UpcomingProbe> {
   const markup = markupPaths(cheerio.load(html));
-  const fromMarkup = await resolveFromMarkup(http, origin, markup);
-  if (fromMarkup) return fromMarkup;
-  return resolveFromJs(http, origin, html, shared);
+  const soleMarkup = markup.paths.length === 1 ? markup.paths[0]! : null;
+  if (soleMarkup) {
+    const body = await fetchUpcoming(http, origin, soleMarkup);
+    return { source: "markup", upcomingParam: markup.param, ...body };
+  }
+  const fromJs = await resolveFromJs(http, origin, html, shared);
+  if (fromJs.source !== null) return fromJs;
+  if (markup.paths.length > 1) return { source: null, reason: "ambiguous upcoming paths in markup" };
+  return fromJs;
 }
 
 async function probeAccount(

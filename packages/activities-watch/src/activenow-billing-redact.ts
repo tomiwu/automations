@@ -203,7 +203,7 @@ function maskedNameValue(name: string, value: string): string | null {
   return null;
 }
 
-function bundleMediaAttr(el: Element, name: string, value: string): string | null {
+function imgAttrValue(el: Element, name: string, value: string): string | null {
   if (el.name !== "img") return null;
   if (name === "srcset") return redactSrcset(value);
   if (name === "src") return redactFilePath(value);
@@ -213,8 +213,8 @@ function bundleMediaAttr(el: Element, name: string, value: string): string | nul
 function attrValue(el: Element, name: string, value: string): string {
   const masked = maskedNameValue(name, value);
   if (masked !== null) return masked;
-  const media = bundleMediaAttr(el, name, value);
-  if (media !== null) return media;
+  const img = imgAttrValue(el, name, value);
+  if (img !== null) return img;
   if (isUrlLike(name, value)) return redactUrl(value);
   return tryJsonShape(value) ?? stringMark(value);
 }
