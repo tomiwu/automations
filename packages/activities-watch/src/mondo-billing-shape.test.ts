@@ -207,6 +207,20 @@ describe("mondoBillingShapeExport", () => {
     expect(JSON.stringify(account)).not.toContain("h-one");
   });
 
+  it("masks the hash of every child in the picker, not only the selected one", async () => {
+    const other = '<button onclick="window.location.href=\'/auth/set-student/h-other\'"><img src="/parent/photo-children/h-other"><span>Child Two</span></button>';
+    const nav = '<nav><a href="/parent/payments/h-other">Płatności</a></nav>';
+    const answers: Answers = {
+      "POST /login": { body: `${PANEL(true, nav)}${other}` },
+      "GET /parent/payments/h-other": { body: '<body><a href="/parent/invoice/h-other">Faktura</a></body>' },
+    };
+    const { deps } = setup(answers);
+    const account = (await mondoBillingShapeExport(deps, {})).accounts[0]!;
+    expect(account.nav?.map((entry) => entry.path)).toContain("/auth/set-student/<id>");
+    expect(account.candidates?.[0]?.skeleton).toContain("/parent/invoice/<id>");
+    expect(JSON.stringify(account)).not.toContain("h-other");
+  });
+
   it("writes nothing and gives no accounts without a Mondo Account", async () => {
     const { deps, runtime } = setup(happy(), configOf(activeNowAccount));
     const result = await mondoBillingShapeExport(deps, {});

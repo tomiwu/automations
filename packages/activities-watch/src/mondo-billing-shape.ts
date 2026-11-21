@@ -66,9 +66,23 @@ const NOT_A_PAGE = /logout|wyloguj|set-student|\/login/i;
 const MAX_CANDIDATES = 3;
 const ID_SENTINEL = "ZZIDZZ";
 
-/** The redacted path: the child hash becomes `<id>`, every digit run `<n>`, query values are dropped. */
-export function maskPath(raw: string, hash: string): string {
-  return redactUrl(raw.split(hash).join(ID_SENTINEL)).split(ID_SENTINEL).join("<id>");
+type Hashes = string | readonly string[];
+
+const hashList = (hashes: Hashes): string[] =>
+  (typeof hashes === "string" ? [hashes] : [...hashes]).filter(Boolean).sort((a, b) => b.length - a.length);
+
+const replaceHashes = (text: string, hashes: Hashes, mark: string): string =>
+  hashList(hashes).reduce((acc, hash) => acc.split(hash).join(mark), text);
+
+/** Every child hash of the child picker (`/parent/photo-children/<hash>`), not only the selected one. */
+export function childHashes(html: string, selected: string): string[] {
+  const found = [...html.matchAll(/photo-children\/([\w-]+)/g)].map((match) => match[1] ?? "");
+  return [...new Set([selected, ...found])].filter(Boolean);
+}
+
+/** The redacted path: each child hash becomes `<id>`, every digit run `<n>`, query values are dropped. */
+export function maskPath(raw: string, hashes: Hashes): string {
+  return replaceHashes(redactUrl(replaceHashes(raw, hashes, ID_SENTINEL)), ID_SENTINEL, "<id>");
 }
 
 function labelOf(text: string): string {
@@ -127,7 +141,7 @@ function rawNodes(html: string): RawNode[] {
 }
 
 /** Every same-origin path of the navigation, in page order, without duplicates (by masked path and label). */
-export function navEntries(html: string, origin: string, hash: string): RawEntry[] {
+export function navEntries(html: string, origin: string, hash: Hashes): RawEntry[] {
   const seen = new Set<string>();
   const entries: RawEntry[] = [];
   for (const { value, label } of rawNodes(html).flatMap(nodeValues)) {
@@ -170,12 +184,12 @@ function navigationSkeleton(html: string): string {
 interface Panel {
   http: Http;
   origin: string;
-  hash: string;
+  hash: Hashes;
   lastUrl: () => string;
 }
 
 /** Masks the child hash in a skeleton: a hash without a digit is not masked by the skeleton. */
-const hideHash = (text: string, hash: string): string => text.split(hash).join("<id>");
+const hideHash = (text: string, hashes: Hashes): string => replaceHashes(text, hashes, "<id>");
 
 async function readCandidate(panel: Panel, entry: RawEntry): Promise<CandidateRead> {
   const headers = entry.raw.includes("xhr") ? { "x-requested-with": "XMLHttpRequest" } : undefined;
@@ -215,10 +229,11 @@ async function probeLogin(deps: FetchDeps, target: ActivityTarget): Promise<Omit
   const html = await loginPage(http, origin, secrets);
   const child = childOf(html, group ?? target.child.name);
   await selectChild(http, origin, child);
-  const entries = navEntries(html, origin, child.hash);
-  const candidates = await readCandidates({ http, origin, hash: child.hash, lastUrl: tracked.lastUrl }, entries);
+  const hashes = childHashes(html, child.hash);
+  const entries = navEntries(html, origin, hashes);
+  const candidates = await readCandidates({ http, origin, hash: hashes, lastUrl: tracked.lastUrl }, entries);
   const nav = entries.map(({ path, label }) => ({ path, label }));
-  return { nav, candidates, skeleton: hideHash(navigationSkeleton(html), child.hash) };
+  return { nav, candidates, skeleton: hideHash(navigationSkeleton(html), hashes) };
 }
 
 interface Outcome {
