@@ -134,8 +134,9 @@ export function navEntries(html: string, origin: string, hash: string): RawEntry
     const raw = samePath(value, origin);
     if (raw === null) continue;
     const path = maskPath(raw, hash);
-    if (seen.has(`${path}\n${label}`)) continue;
-    seen.add(`${path}\n${label}`);
+    const key = `${path}\n${label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     entries.push({ raw, path, label });
   }
   return entries;
@@ -165,34 +166,34 @@ function navigationSkeleton(html: string): string {
   return bodySkeleton(areas.toArray().map((node) => $.html(node)).join(""));
 }
 
-async function readCandidate(
-  http: Http,
-  origin: string,
-  entry: RawEntry,
-  tracked: { lastUrl: () => string },
-  hash: string,
-): Promise<CandidateRead> {
+/** One logged-in panel: the session, its origin, the child hash to mask and the last fetched address. */
+interface Panel {
+  http: Http;
+  origin: string;
+  hash: string;
+  lastUrl: () => string;
+}
+
+/** Masks the child hash in a skeleton: a hash without a digit is not masked by the skeleton. */
+const hideHash = (text: string, hash: string): string => text.split(hash).join("<id>");
+
+async function readCandidate(panel: Panel, entry: RawEntry): Promise<CandidateRead> {
   const headers = entry.raw.includes("xhr") ? { "x-requested-with": "XMLHttpRequest" } : undefined;
-  const page = await http.request(`${origin}${entry.raw}`, { headers });
+  const page = await panel.http.request(`${panel.origin}${entry.raw}`, { headers });
   return {
     path: entry.path,
     status: page.status,
-    finalPath: maskPath(tracked.lastUrl(), hash),
+    finalPath: maskPath(panel.lastUrl(), panel.hash),
     contentType: page.contentType ?? "",
-    skeleton: answerSkeleton(page.text),
+    skeleton: hideHash(answerSkeleton(page.text), panel.hash),
   };
 }
 
-async function readCandidates(
-  http: Http,
-  origin: string,
-  entries: RawEntry[],
-  tracked: { lastUrl: () => string },
-  hash: string,
-): Promise<CandidateRead[]> {
+/** Reads the candidates in order. A 403 stops the reads. */
+async function readCandidates(panel: Panel, entries: RawEntry[]): Promise<CandidateRead[]> {
   const reads: CandidateRead[] = [];
   for (const entry of billingCandidates(entries)) {
-    const read = await readCandidate(http, origin, entry, tracked, hash);
+    const read = await readCandidate(panel, entry);
     reads.push(read);
     if (read.status === 403) break;
   }
@@ -215,9 +216,9 @@ async function probeLogin(deps: FetchDeps, target: ActivityTarget): Promise<Omit
   const child = childOf(html, group ?? target.child.name);
   await selectChild(http, origin, child);
   const entries = navEntries(html, origin, child.hash);
-  const candidates = await readCandidates(http, origin, entries, tracked, child.hash);
-  const nav = entries.map(({ path, label }) => (label === undefined ? { path } : { path, label }));
-  return { nav, candidates, skeleton: navigationSkeleton(html) };
+  const candidates = await readCandidates({ http, origin, hash: child.hash, lastUrl: tracked.lastUrl }, entries);
+  const nav = entries.map(({ path, label }) => ({ path, label }));
+  return { nav, candidates, skeleton: hideHash(navigationSkeleton(html), child.hash) };
 }
 
 interface Outcome {

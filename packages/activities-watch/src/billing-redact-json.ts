@@ -16,7 +16,7 @@ const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:
 type Shape = unknown;
 type ObjectValue = Record<string, unknown>;
 
-const isObject = (value: unknown): value is ObjectValue =>
+export const isObject = (value: unknown): value is ObjectValue =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const isScalar = (value: unknown): boolean => typeof value !== "object" || value === null;
 

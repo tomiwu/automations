@@ -1,6 +1,6 @@
 import { authHeaders, CLIENT_SECRET_NAME, login, type Login } from "./edusky-source.ts";
 import { isBlockError, errorStatus, withFetches, type FetchDeps } from "./billing-probe-common.ts";
-import { jsonShape } from "./billing-redact-json.ts";
+import { isObject, jsonShape } from "./billing-redact-json.ts";
 import { checkKeys, inputObject } from "./exports.ts";
 import { createHttp, type Http } from "./http.ts";
 import { activityTargets, type ActivityTarget } from "./targets.ts";
@@ -43,12 +43,9 @@ interface Answer {
   text: string;
 }
 
-type ObjectValue = Record<string, unknown>;
-
 const LIST_KEYS = ["data", "items", "rows"];
 
-const isObject = (value: unknown): value is ObjectValue =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+const shapeOf = (answer: Answer): string | undefined => jsonShape(answer.text) ?? undefined;
 
 function parseJson(text: string): unknown {
   try {
@@ -96,17 +93,17 @@ async function readAgreementIds(http: Http, api: string, token: string, auth: un
   const list = await get(http, `${api}agreements?page=1&perPage=20`, token);
   row.listSource = "list";
   row.listStatus = list.status;
-  row.listShape = jsonShape(list.text) ?? undefined;
+  row.listShape = shapeOf(list);
   return list.status === 200 ? listIds(parseJson(list.text)) : [];
 }
 
 async function readAgreement(http: Http, api: string, token: string, id: number, row: EduskyBillingRow): Promise<void> {
   const agreement = await get(http, `${api}ext/agreements/${id}`, token);
   row.agreementStatus = agreement.status;
-  row.agreementShape = jsonShape(agreement.text) ?? undefined;
+  row.agreementShape = shapeOf(agreement);
   const balance = await get(http, `${api}ext/agreementinvoicesbalance?idAgreement=${id}`, token);
   row.balanceStatus = balance.status;
-  row.balanceShape = jsonShape(balance.text) ?? undefined;
+  row.balanceShape = shapeOf(balance);
 }
 
 async function secretsOf(deps: FetchDeps, target: ActivityTarget): Promise<Login> {
@@ -125,7 +122,7 @@ async function probeLogin(deps: FetchDeps, target: ActivityTarget): Promise<Edus
   const token = await login(http, origin, await secretsOf(deps, target));
   const api = `${origin}/core/web/api/`;
   const auth = await get(http, `${api}common/users/auth`, token);
-  const row: EduskyBillingRow = { authStatus: auth.status, authShape: jsonShape(auth.text) ?? undefined };
+  const row: EduskyBillingRow = { authStatus: auth.status, authShape: shapeOf(auth) };
   const ids = await readAgreementIds(http, api, token, parseJson(auth.text), row);
   row.agreementCount = ids.length;
   if (ids[0] !== undefined) await readAgreement(http, api, token, ids[0], row);

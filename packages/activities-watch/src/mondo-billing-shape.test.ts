@@ -2,7 +2,7 @@ import { countFetches, fakeRuntime } from "@automations/shared";
 import type { Account, Config } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import { billingCandidates, maskPath, mondoBillingShapeExport, navEntries } from "./mondo-billing-shape.ts";
-import { CHILD1, FAMILY_ID, activeNowAccount, choirActivity, readOnlyStorage, testConfig } from "./test-fixtures.ts";
+import { FAMILY_ID, activeNowAccount, choirActivity, readOnlyStorage, testConfig } from "./test-fixtures.ts";
 
 const ORIGIN = "https://mondo.example.org";
 const HASH = "ab12cd34ef56";
@@ -194,12 +194,24 @@ describe("mondoBillingShapeExport", () => {
     }
   });
 
+  it("masks a child hash without a digit in the skeletons", async () => {
+    const nav = '<nav><a href="/parent/payments/h-one">Płatności</a><div data-url="/parent/x/h-one"></div></nav>';
+    const answers: Answers = {
+      "POST /login": { body: PANEL(true, nav).replaceAll(HASH, "h-one") },
+      "GET /parent/payments/h-one": { body: '<body><a href="/parent/invoice/h-one">Faktura</a></body>' },
+    };
+    const { deps } = setup(answers);
+    const account = (await mondoBillingShapeExport(deps, {})).accounts[0]!;
+    expect(account.candidates?.[0]?.skeleton).toContain("/parent/invoice/<id>");
+    expect(account.skeleton).toContain("/parent/payments/<id>");
+    expect(JSON.stringify(account)).not.toContain("h-one");
+  });
+
   it("writes nothing and gives no accounts without a Mondo Account", async () => {
     const { deps, runtime } = setup(happy(), configOf(activeNowAccount));
     const result = await mondoBillingShapeExport(deps, {});
     expect(result.accounts).toEqual([]);
     expect(runtime.requests).toEqual([]);
-    expect(CHILD1).toBeDefined();
   });
 });
 
