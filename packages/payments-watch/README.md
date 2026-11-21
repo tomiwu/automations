@@ -105,6 +105,13 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - The reply goes through `@tomiwu/telegram` with the secret `TELEGRAM_BOT_TOKEN`.
 - The code does not register the webhook with Telegram. The owner calls `setWebhook` by hand with the webhook URL.
 
+## The `./activenow-ledger` export
+
+- **Input:** `{ monthsBack? }`. `monthsBack` is an integer 1..6. The default is 3. Other keys are rejected.
+- **Output:** `{ today, from, accounts, fees, fetches? }`. `today` and `from` are UTC `YYYY-MM-DD` dates. `from` is the first day of the month `monthsBack - 1` months before `today`. Each Account is an enabled config row with `service = activenow`, in config order: `accountId`, `childId`, `child`, `group`, `origin`, `banner`, `rows` (with `date`, `title`, `amount` in grosze, `kind`, `upcoming`), `olderRows`, `matched` (`checked`, `openThroughToday`) or `null` on error, and `error`. `fees` lists every Fee with `activenowWithoutAccount` when the `sourceUrl` host contains `activenow` and `accountId` is null.
+- **Reads:** Supabase config and Fees, then for each enabled ActiveNow Account one login and the settlements index and upcoming table (at most 6 ActiveNow requests per Account). A block page stops further ActiveNow reads. Other Account errors are recorded and the export continues.
+- **Writes:** none. No cache, Payment, event or notification.
+
 ## The `./stored-payments` export
 
 - **Input:** `{ childId?, month? }`. `month` is `YYYY-MM`. It is the current month in the Family time zone by default, and at most 12 months back. Other keys are rejected.
