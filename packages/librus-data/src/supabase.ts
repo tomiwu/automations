@@ -37,11 +37,15 @@ function toItem(row: Row): StoredItem {
 }
 
 function toEntry(row: Row): OutboxEntry {
+  const kind = row.kind === "document" ? "document" : "text";
   return {
     key: String(row.key),
     familyId: String(row.family_id),
     chatId: String(row.chat_id),
+    kind,
     text: String(row.text),
+    storagePath: row.storage_path === null || row.storage_path === undefined ? undefined : String(row.storage_path),
+    fileName: row.file_name === null || row.file_name === undefined ? undefined : String(row.file_name),
     queuedAt: new Date(String(row.queued_at)),
     deliveredAt: row.delivered_at === null ? null : new Date(String(row.delivered_at)),
     messageId: row.message_id === null || row.message_id === undefined ? null : Number(row.message_id),
@@ -250,8 +254,13 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     key: entry.key,
     family_id: entry.familyId,
     chat_id: entry.chatId,
+    kind: entry.kind ?? "text",
     text: entry.text,
+    storage_path: entry.storagePath ?? null,
+    file_name: entry.fileName ?? null,
   });
+
+  const BUCKET = "librus-attachments";
 
   async function upsertPayment(payment: NewPayment): Promise<Payment> {
     const [added] = await insertNew("payments", "fee_id,month", [toPaymentRow(payment)]);
@@ -319,6 +328,23 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const list = keys.map((key) => `"${key.replace(/(["\\])/g, "\\$1")}"`).join(",");
       const init = { headers: headers(JSON_HEADERS), body: JSON.stringify({ delivered_at: now().toISOString() }) };
       await request("PATCH", "outbox", `key=in.(${encodeURIComponent(list)})&delivered_at=is.null`, init);
+    },
+    putAttachment: async (path, bytes, contentType) => {
+      const target = `${options.url}/storage/v1/object/${BUCKET}/${path}`;
+      const response = await options.fetch(target, {
+        method: "POST",
+        headers: { apikey: options.key, authorization: `Bearer ${options.key}`, "content-type": contentType, "x-upsert": "true" },
+        body: new Uint8Array(bytes),
+      });
+      if (!response.ok) throw new Error(`Supabase attachment upload failed: ${response.status}`);
+    },
+    getAttachment: async (path) => {
+      const target = `${options.url}/storage/v1/object/${BUCKET}/${path}`;
+      const response = await options.fetch(target, {
+        headers: { apikey: options.key, authorization: `Bearer ${options.key}` },
+      });
+      if (!response.ok) throw new Error(`Supabase attachment read failed: ${response.status}`);
+      return new Uint8Array(await response.arrayBuffer());
     },
     loadConfig,
     listFees: async (familyId) => (await select("fees", filter("family_id", "eq", familyId))).map(toFee),

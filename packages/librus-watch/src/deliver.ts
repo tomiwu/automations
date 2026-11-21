@@ -1,8 +1,9 @@
 import type { OutboxEntry, StorageAdapter } from "@automations/librus-data";
 
-/** Sends one message to one Telegram chat. It rejects when the delivery failed. */
+/** Sends text or a document to one Telegram chat. It rejects when the delivery failed. */
 export interface Messenger {
   send(chatId: string, text: string): Promise<void>;
+  sendDocument?(chatId: string, fileName: string, bytes: Uint8Array, caption: string): Promise<void>;
 }
 
 /** Default time limit of one send, in milliseconds. */
@@ -61,7 +62,21 @@ export interface DeliveryOptions {
 }
 
 async function sendEntry(options: DeliveryOptions, entry: OutboxEntry): Promise<void> {
-  const { messenger, sendTimeoutMs = SEND_TIMEOUT_MS } = options;
+  const { storage, messenger, sendTimeoutMs = SEND_TIMEOUT_MS } = options;
+  if (entry.kind === "document") {
+    const path = entry.storagePath;
+    const fileName = entry.fileName;
+    if (!path || !fileName) throw new Error("document outbox entry is incomplete");
+    const bytes = await storage.getAttachment(path);
+    const sendDocument = messenger.sendDocument;
+    if (!sendDocument) throw new Error("telegram sendDocument is not available");
+    await withTimeout(
+      sendDocument(entry.chatId, fileName, bytes, redactSecretPlaceholders(entry.text)),
+      sendTimeoutMs,
+      "telegram document",
+    );
+    return;
+  }
   await withTimeout(messenger.send(entry.chatId, redactSecretPlaceholders(entry.text)), sendTimeoutMs, "telegram send");
 }
 

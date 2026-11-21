@@ -2,6 +2,7 @@ import { countFetches, createFetchBudget, importCredentialKey } from "@automatio
 import { SUPABASE_KEY_PLACEHOLDER, createKodyRuntime, kodyHost, kodyStorage, loadDeploymentConfig } from "@automations/shared/kody";
 import { createCredentialResolver, createSupabaseCredentialStore, createSupabaseStorage } from "@automations/librus-data";
 import sendMessage from "kody:@tomiwu/telegram/send-message";
+import sendDocument from "kody:@tomiwu/telegram/send-document";
 import { splitForTelegram, type Messenger } from "../deliver.ts";
 
 /** Sends to Telegram through the external `telegram` package. A long text goes out as several messages. */
@@ -10,6 +11,9 @@ export const telegramMessenger: Messenger = {
     for (const part of splitForTelegram(text)) {
       await sendMessage({ chatId, text: part, secretName: "TELEGRAM_BOT_TOKEN", confirm: true });
     }
+  },
+  async sendDocument(chatId, fileName, document, caption) {
+    await sendDocument({ chatId, fileName, document, caption, secretName: "TELEGRAM_BOT_TOKEN", confirm: true });
   },
 };
 

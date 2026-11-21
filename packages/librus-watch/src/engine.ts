@@ -13,6 +13,7 @@ import {
   type ItemChange,
 } from "./format.ts";
 import { detailOf } from "./details.ts";
+import { announceMessages } from "./message-attachments.ts";
 import type { HomeworkItem, ItemsByWatcher, LibrusSource, SubstitutionItem, WatcherName } from "./types.ts";
 
 /** The first record of each Watcher scope. It marks the scope as baselined, even when Librus gave no Item. */
@@ -47,7 +48,7 @@ interface Changed<I> {
 }
 
 /** One Notification for all Recipients. `text` renders it in the language of one Recipient. */
-interface Announcement {
+export interface Announcement {
   key: string;
   text: (context: FormatContext) => string;
   /** The ID of the Item, and the message body when the announcer read it. */
@@ -73,6 +74,8 @@ export interface ChildCheck {
   source: LibrusSource;
   /** Receives one line for each Watcher. It never gets Item contents. */
   log?: (message: string) => void;
+  /** Returns false when the run must not make another Librus fetch. */
+  chargeFetch?: () => boolean;
 }
 
 const storedId = ({ id, hash }: HashedItem): string => (hash === undefined ? id : `${id}${HASH_SEPARATOR}${hash}`);
@@ -207,9 +210,24 @@ export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promi
   }
   if (known.size > 0) {
     const changes = changesOf(current, known);
-    const announcements = await (ANNOUNCERS[watcher] as Announce<HashedItem>)(changes, check.source);
+    let extra: Awaited<ReturnType<typeof announceMessages>>["notifications"] = [];
+    let journalEvents: Awaited<ReturnType<typeof announceMessages>>["journal"] = [];
+    const announcements =
+      watcher === "messages"
+        ? await announceMessages(changes as unknown as { item: ItemsByWatcher["messages"][number] }[], {
+            check,
+            scope,
+            chargeFetch: check.chargeFetch,
+          }).then((result) => {
+            extra = result.notifications;
+            journalEvents = result.journal;
+            return result.announcements.map((entry) => ({ ...entry, key: storedId({ id: entry.key }) }));
+          })
+        : await (ANNOUNCERS[watcher] as Announce<HashedItem>)(changes, check.source);
+    if (journalEvents.length > 0) await check.storage.appendEvents(journalEvents);
     await check.storage.recordDetails(detailsOf(check, watcher, scope, changes, announcements));
-    await check.storage.enqueueNotifications(announcements.flatMap((a) => notificationsFor(check, scope, a)));
+    const textEntries = announcements.flatMap((a) => notificationsFor(check, scope, a));
+    await check.storage.enqueueNotifications([...textEntries, ...extra]);
   }
   await check.storage.recordItems(check.familyId, scope, [BASELINE_ID, ...current.map(storedId)]);
   return current;

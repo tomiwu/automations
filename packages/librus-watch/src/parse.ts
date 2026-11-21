@@ -3,6 +3,7 @@ import type {
   AnnouncementItem,
   GradeItem,
   Lesson,
+  MessageAttachmentLink,
   MessageItem,
   TripItem,
 } from "./types.ts";
@@ -68,6 +69,22 @@ export function parseMessages(html: string): MessageItem[] {
       subject: clean(cells.eq(3).text()),
       sentAt: clean(cells.eq(4).text()),
     });
+  });
+  return items;
+}
+
+/** Reads the attachment list from a message detail page. */
+export function parseMessageAttachments(html: string): MessageAttachmentLink[] {
+  const $ = cheerio.load(html);
+  const items: MessageAttachmentLink[] = [];
+  $(".container-message-attachments a.message-attachment").each((_, link) => {
+    const element = $(link);
+    const id = element.attr("data-id") ?? "";
+    const name = clean(element.text()) || clean(element.attr("title") ?? "");
+    const downloadPath = element.attr("href") ?? "";
+    if (!id || !name || !downloadPath) return;
+    const size = Number(element.attr("data-size") ?? "0");
+    items.push({ id, name, size: Number.isFinite(size) ? size : 0, downloadPath });
   });
   return items;
 }

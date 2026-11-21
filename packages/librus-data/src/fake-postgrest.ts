@@ -120,7 +120,7 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
       return { id: randomUUID(), status: "pending", created_at: time, ...empty };
     }
     if (name === "journal_events") return { recorded_at: time };
-    return { queued_at: time, delivered_at: null, message_id: null, first_seen: time };
+    return { queued_at: time, delivered_at: null, message_id: null, first_seen: time, kind: "text", storage_path: null, file_name: null };
   };
 
   const insert = (name: string, body: Row[], ignoreDuplicates: boolean): Row[] => {

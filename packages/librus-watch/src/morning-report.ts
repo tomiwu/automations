@@ -159,10 +159,17 @@ export async function runMorningReport(deps: MorningReportDeps): Promise<boolean
     since: newItemsSince(deps.now, deps.timezone),
   });
   const entries: NewNotification[] = [];
+  const pendingDocuments = (await deps.storage.pendingNotifications(deps.familyId)).filter(
+    (entry) => entry.kind === "document",
+  ).length;
   for (const recipient of deps.recipients) {
     const language = recipient.language;
     const sections = await afterSchoolSection(deps, today, language);
-    const text = [formatMorningReport(language, deps.child.name, today, data, newItems), ...sections].join("\n\n");
+    const attachmentLine =
+      pendingDocuments > 0 ? t(language, "morning.undelivered_attachments", { count: String(pendingDocuments) }) : "";
+    const text = [formatMorningReport(language, deps.child.name, today, data, newItems), attachmentLine, ...sections]
+      .filter((part) => part !== "")
+      .join("\n\n");
     entries.push({
       key: `report:${deps.child.id}:${today}:${recipient.telegram_chat_id}`,
       familyId: deps.familyId,

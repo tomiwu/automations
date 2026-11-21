@@ -12,6 +12,10 @@ function messenger(fail: string[] = []) {
       if (fail.includes(chatId)) throw new Error("send failed");
       sent.push(`${chatId}|${text}`);
     },
+    async sendDocument(chatId, fileName, bytes, caption) {
+      if (fail.includes(chatId)) throw new Error("send failed");
+      sent.push(`${chatId}|doc:${fileName}:${bytes.byteLength}|${caption}`);
+    },
   };
   return { m, sent };
 }
@@ -72,6 +76,60 @@ describe("deliverPending", () => {
     let time = 0;
     await deliverPending({ storage, familyId: FAMILY_ID, messenger: m, chatIds: ["1000001"], budgetMs: 10, clock: () => (time += 100) });
     expect(sent).toEqual([]);
+  });
+
+  it("delivers a document after the text and marks it delivered only on success", async () => {
+    const storage = createMemoryStorage();
+    await storage.putAttachment(`${FAMILY_ID}/m1/att-001`, new Uint8Array([1, 2, 3]), "application/pdf");
+    await storage.enqueueNotifications([
+      entry("text-a", "1000001", "hello"),
+      {
+        key: "doc-a",
+        familyId: FAMILY_ID,
+        chatId: "1000001",
+        kind: "document",
+        text: "sample.pdf",
+        storagePath: `${FAMILY_ID}/m1/att-001`,
+        fileName: "sample.pdf",
+      },
+    ]);
+    const { m, sent } = messenger();
+    await deliverPending({ storage, familyId: FAMILY_ID, messenger: m, chatIds: ["1000001"] });
+    expect(sent).toEqual(["1000001|hello", "1000001|doc:sample.pdf:3|sample.pdf"]);
+    expect(await storage.pendingNotifications(FAMILY_ID)).toEqual([]);
+  });
+
+  it("retries a document after a 502 and keeps order", async () => {
+    const storage = createMemoryStorage();
+    await storage.putAttachment(`${FAMILY_ID}/m1/att-001`, new Uint8Array([9]), "application/pdf");
+    await storage.enqueueNotifications([
+      entry("text-a", "1000001", "hello"),
+      {
+        key: "doc-a",
+        familyId: FAMILY_ID,
+        chatId: "1000001",
+        kind: "document",
+        text: "sample.pdf",
+        storagePath: `${FAMILY_ID}/m1/att-001`,
+        fileName: "sample.pdf",
+      },
+    ]);
+    let attempts = 0;
+    const sent: string[] = [];
+    const m: Messenger = {
+      async send(chatId, text) {
+        sent.push(`${chatId}|${text}`);
+      },
+      async sendDocument() {
+        attempts += 1;
+        if (attempts === 1) throw new Error("Telegram sendDocument failed with status 502");
+        sent.push("1000001|doc:sample.pdf:1|sample.pdf");
+      },
+    };
+    await expect(deliverPending({ storage, familyId: FAMILY_ID, messenger: m, chatIds: ["1000001"] })).rejects.toThrow("502");
+    expect((await storage.pendingNotifications(FAMILY_ID)).map((e) => e.key)).toEqual(["doc-a"]);
+    await deliverPending({ storage, familyId: FAMILY_ID, messenger: m, chatIds: ["1000001"] });
+    expect(sent).toEqual(["1000001|hello", "1000001|doc:sample.pdf:1|sample.pdf"]);
   });
 
   it("redacts secret placeholders", async () => {

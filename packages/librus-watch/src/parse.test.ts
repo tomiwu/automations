@@ -5,6 +5,7 @@ import {
   parseClassFreeDays,
   parseGrades,
   parseHomeworks,
+  parseMessageAttachments,
   parseMessageBody,
   parseMessages,
   parseParentTeacherConferences,
@@ -41,6 +42,20 @@ describe("html parsers", () => {
   it("parses a message body with line breaks", () => {
     const html = `<div class="container-message-content"><p>Line  one<br>Line two</p><div>Last</div></div>`;
     expect(parseMessageBody(html)).toBe("Line one\nLine two\nLast");
+  });
+
+  it("parses the attachment list on a synthetic message detail page", async () => {
+    const html = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("./fixtures/message-with-attachment.html", import.meta.url), "utf8"),
+    );
+    expect(parseMessageAttachments(html)).toEqual([
+      {
+        id: "att-001",
+        name: "sample.pdf",
+        size: 11,
+        downloadPath: "/wiadomosci/1/7/att-001/0/sample.pdf",
+      },
+    ]);
   });
 
   it("parses announcements", () => {

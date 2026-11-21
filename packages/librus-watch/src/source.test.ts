@@ -167,6 +167,25 @@ describe("LibrusSource", () => {
     expect(await createLibrusSource(runtime, account, { timezone: "UTC" }).messageBody("m 1")).toBe("Hi");
   });
 
+  it("downloads attachment bytes in the same session", async () => {
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+    const runtime = librus([(url) => (url.pathname === "/file/sample.pdf" ? new Response(bytes) : undefined)]);
+    const source = createLibrusSource(runtime, account, { timezone: "UTC" });
+    await source.currentItems("grades");
+    expect(await source.fetchAttachment("/file/sample.pdf")).toEqual(bytes);
+  });
+
+  it("rejects an empty or failed attachment download", async () => {
+    const runtime = librus([
+      (url) => (url.pathname === "/file/empty" ? new Response(new Uint8Array()) : undefined),
+      (url) => (url.pathname === "/file/missing" ? new Response("", { status: 404 }) : undefined),
+    ]);
+    const source = createLibrusSource(runtime, account, { timezone: "UTC" });
+    await source.currentItems("grades");
+    await expect(source.fetchAttachment("/file/empty")).rejects.toThrow("empty file");
+    await expect(source.fetchAttachment("/file/missing")).rejects.toThrow("HTTP 404");
+  });
+
   it("reads the timetable of the next 14 days", async () => {
     const week = (date: string) => json({ Timetable: { [date]: [[{ LessonNo: "1", HourFrom: "08:00", HourTo: "08:45", Subject: { Name: "Math" } }]] } });
     const runtime = librus([
