@@ -181,8 +181,9 @@ describe("createActiveNowFeeSource", () => {
     const store = ledgerStore();
     await store.set(`activenow-ledger:${NOW_ACCOUNT}`, JSON.stringify({ day, rows, banner: { debt: false }, matched, readOk: true }));
     const storage = createMemoryStorage({ configs: [config] });
-    const fee = baseFee({ enabled: false });
+    const fee = baseFee();
     storage.setFee(fee);
+    storage.setFee(baseFee({ id: FEE2, title: "Swimming lessons" }));
     const source = createActiveNowFeeSource({
       runtime: fakeRuntime({ now: new Date(`${day}T08:00:00Z`) }),
       storage,
@@ -192,9 +193,9 @@ describe("createActiveNowFeeSource", () => {
     });
     await source.amountFor(fee, "2026-04");
     const keys = (await storage.pendingNotifications(FAMILY_ID)).map((row) => row.key);
-    expect(keys.filter((key) => key.startsWith("activenow-unmatched:"))).toHaveLength(4);
+    expect(keys.filter((key) => key.startsWith("activenow-unmatched:"))).toHaveLength(2);
     await source.amountFor(fee, "2026-04");
-    expect((await storage.pendingNotifications(FAMILY_ID)).filter((row) => row.key.startsWith("activenow-unmatched:"))).toHaveLength(4);
+    expect((await storage.pendingNotifications(FAMILY_ID)).filter((row) => row.key.startsWith("activenow-unmatched:"))).toHaveLength(2);
   });
 
   it("queues one mismatch notice per day", async () => {
@@ -220,12 +221,36 @@ describe("createActiveNowFeeSource", () => {
     expect((await storage.pendingNotifications(FAMILY_ID)).filter((row) => row.key.startsWith("activenow-mismatch:"))).toHaveLength(2);
   });
 
+  it("reads no Account that no enabled Fee uses", async () => {
+    const { source, counter } = setup(undefined, undefined, [baseFee({ enabled: false }), baseFee({ id: FEE2, accountId: null, sourceUrl: null })]);
+    await source.amountFor(baseFee({ id: FEE2, accountId: null, sourceUrl: null }), "2026-04");
+    expect(counter.count().total).toBe(0);
+  });
+
+  it("logs a failed read and queues one failure notice a day per Recipient", async () => {
+    const answers = happyAnswers();
+    answers["GET /client_panel/settlements/index"] = { status: 200, body: "<html><body><p>new layout</p></body></html>" };
+    const { source, storage, runtime } = setup(undefined, answers);
+    expect(await source.amountFor(baseFee(), "2026-04")).toBeUndefined();
+    await source.amountFor(baseFee(), "2026-04");
+    expect(runtime.logs.filter((row) => row.level === "error" && row.message.startsWith("activenow ledger: read failed:"))).toHaveLength(1);
+    const keys = (await storage.pendingNotifications(FAMILY_ID)).map((row) => row.key);
+    expect(keys.filter((key) => key.startsWith("failure:activenow:"))).toHaveLength(2);
+  });
+
+  it("answers settledFor without a fetch", async () => {
+    const { source, counter } = setup();
+    expect(await source.settledFor!(baseFee(), "2026-04")).toBe(false);
+    expect(counter.count().total).toBe(0);
+  });
+
   it("stops ActiveNow reads in the pass after a block page", async () => {
     const blocked = readFileSync(new URL("../../activities-watch/src/fixtures/activenow-blocked.html", import.meta.url), "utf8");
     const second: Account = { ...account, id: "00000000-0000-4000-8000-0000000000a2", login_secret: "CHILD2_ACTIVENOW_LOGIN" };
     const wide = { ...config, accounts: [account, second] };
     const storage = createMemoryStorage({ configs: [wide] });
     storage.setFee(baseFee());
+    storage.setFee(baseFee({ id: FEE2, accountId: second.id }));
     const store = ledgerStore();
     let hits = 0;
     const answers = happyAnswers();

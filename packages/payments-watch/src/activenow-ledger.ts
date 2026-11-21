@@ -91,14 +91,17 @@ export function parseLedgerDate(text: string): string | undefined {
   return `${polish[3]}-${pad2(month)}-${pad2(Number(polish[1]))}`;
 }
 
+/** -1 or +1 for an explicit sign, 0 for an amount without a sign. Undefined when the text has no amount. */
 function amountSign(text: string): number | undefined {
   const trimmed = text.trim();
-  if (trimmed.startsWith("-")) return -1;
+  if (grosze(trimmed) === undefined) return undefined;
+  if (/^[-−–]/.test(trimmed)) return -1;
   if (trimmed.startsWith("+")) return 1;
-  const value = grosze(trimmed);
-  if (value === undefined) return undefined;
-  return value >= 0 ? 1 : -1;
+  return 0;
 }
+
+/** The class tokens of an element. Tailwind variants such as `[&.danger]:border-red` are tokens of their own. */
+const tokensOf = (classes: string): Set<string> => new Set(classes.split(/\s+/).filter(Boolean));
 
 /** Visible for tests: the colour token of a pill or mobile amount line. */
 export function ledgerColourOf(classes: string, mobileTextClass: string): "red" | "green" | null {
@@ -110,19 +113,20 @@ export function ledgerColourOf(classes: string, mobileTextClass: string): "red" 
   return null;
 }
 
+/** The colour decides. An explicit sign that contradicts the colour is an error; an amount without a sign is fine. */
 function kindOf(colour: "red" | "green", sign: number): LedgerKind {
-  const charge = colour === "red" || sign < 0;
-  const payment = colour === "green" || sign > 0;
-  if (charge === payment) throw new Error(COLOUR_SIGN);
-  return charge ? "charge" : "payment";
+  if ((colour === "red" && sign > 0) || (colour === "green" && sign < 0)) throw new Error(COLOUR_SIGN);
+  return colour === "red" ? "charge" : "payment";
 }
 
 function isDesktopDataRow(classes: string): boolean {
-  return classes.includes("hidden") && classes.includes("desktop:flex") && classes.includes("items-start") && !classes.includes("w-full");
+  const tokens = tokensOf(classes);
+  return tokens.has("hidden") && tokens.has("desktop:flex") && tokens.has("items-start") && !tokens.has("w-full");
 }
 
 function isMobileCard(classes: string): boolean {
-  return classes.includes("desktop:hidden") && classes.includes("rounded-xl");
+  const tokens = tokensOf(classes);
+  return tokens.has("desktop:hidden") && tokens.has("rounded-xl");
 }
 
 function hasHeader($: cheerio.CheerioAPI, root: Row): boolean {
@@ -131,8 +135,8 @@ function hasHeader($: cheerio.CheerioAPI, root: Row): boolean {
     .toArray()
     .find((node) => {
       const el = $(node);
-      const cls = el.attr("class") ?? "";
-      return cls.includes("desktop:flex") && cls.includes("w-full") && cls.includes("label");
+      const tokens = tokensOf(el.attr("class") ?? "");
+      return tokens.has("desktop:flex") && tokens.has("w-full") && tokens.has("label");
     });
   if (!header) return false;
   const text = $(header).text();
@@ -170,25 +174,35 @@ function rowFromDesktop($: cheerio.CheerioAPI, row: Row): LedgerRow {
   return ledgerRowFromParts(parts.eq(0).text().trim(), parts.eq(1).text().trim(), amountText, pill.attr("class") ?? "");
 }
 
+/**
+ * The overdue banner. Its class list always has the variant token `[&.danger]:border-red`; only the plain token
+ * `danger` means a debt.
+ */
 function parseBanner($: cheerio.CheerioAPI): LedgerBanner {
-  const el = $('[data-controller*="settlements"] div.group').filter((_, node) => ($(node).attr("class") ?? "").includes("rounded-xl")).first();
-  const debt = (el.attr("class") ?? "").includes("danger");
+  const el = $('[data-controller*="settlements"] div.group').filter((_, node) => tokensOf($(node).attr("class") ?? "").has("rounded-xl")).first();
+  const debt = tokensOf(el.attr("class") ?? "").has("danger");
   const heading = el.find("h3.font-semibold").first().text().trim();
   const debtAmount = debt && heading ? grosze(heading) : undefined;
   return { debt, debtAmount: debtAmount === undefined ? undefined : Math.abs(debtAmount) };
 }
 
-function tableRoot($: cheerio.CheerioAPI): Row {
+function tableRoot($: cheerio.CheerioAPI, fragment: boolean): Row {
   const target = $(TABLE_TARGET);
   if (target.length > 0) return target.first();
+  // The upcoming table answer is the inner HTML of the table target (ReplaceHTML.fetchAndUpdate), so it has no target.
+  if (fragment) return $.root();
   throw new Error(TABLE_MISSING);
 }
 
-/** Pure parser for one settlements page or table fragment. */
-export function parseLedger(html: string): ParsedLedger {
+/**
+ * Pure parser for the settlements page, or (`fragment`) for the answer of `/client_panel/settlements/table`.
+ * A fragment needs no header when it has no rows.
+ */
+export function parseLedger(html: string, fragment = false): ParsedLedger {
   const $ = cheerio.load(html);
-  const root = tableRoot($);
-  if (!hasHeader($, root)) throw new Error(HEADER_MISSING);
+  const root = tableRoot($, fragment);
+  const desktopCount = desktopRows($, root).length;
+  if (!hasHeader($, root) && !(fragment && desktopCount === 0)) throw new Error(HEADER_MISSING);
   const desktop = desktopRows($, root);
   const mobile = mobileRows($, root);
   if (desktop.length !== mobile.length) throw new Error(ROW_MISMATCH);
@@ -228,13 +242,15 @@ export function matchLedger(rows: readonly LedgerRow[], banner: LedgerBanner, to
     const n = counts.get(base) ?? 0;
     counts.set(base, n + 1);
     const key = rowKey(accountId, row, hash, n);
-    const upcoming = row.date > today;
-    if (upcoming) return { date: row.date, title: row.title, amount: row.amount, kind: "charge", status: "upcoming", key };
+    // Oldest first: a payment that is left after the past charges also covers a later (upcoming) charge.
     if (pool >= row.amount) {
       pool -= row.amount;
       return { date: row.date, title: row.title, amount: row.amount, kind: "charge", status: "covered", key };
     }
-    return { date: row.date, title: row.title, amount: row.amount, kind: "charge", status: "open", key };
+    // A charge that is not fully covered takes the rest of the payments; later charges stay open.
+    pool = 0;
+    const status: ChargeStatus = row.date > today ? "upcoming" : "open";
+    return { date: row.date, title: row.title, amount: row.amount, kind: "charge", status, key };
   });
   const openThroughToday = matched
     .filter((row) => row.date <= today && row.status !== "covered")
@@ -280,7 +296,7 @@ export async function readActiveNowLedger(
   const table = await checked(http, `${origin}${SETTLEMENTS_TABLE}`, {
     headers: { "x-requested-with": "XMLHttpRequest" },
   });
-  const future = parseLedger(table.text);
+  const future = parseLedger(table.text, true);
   const rows = mergeLedgerRows(current.rows, future.rows);
   const banner = current.banner;
   const matched = matchLedger(rows, banner, today, accountId);

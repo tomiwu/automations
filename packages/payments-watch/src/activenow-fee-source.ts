@@ -123,6 +123,7 @@ async function readAccount(
   day: string,
   http: Http,
   blocked: { value: boolean },
+  config: Config,
 ): Promise<AccountLedger> {
   if (blocked.value) return { account, loaded: false };
   const cached = await loadCache(deps.ledgerStore, account.id, day);
@@ -132,8 +133,19 @@ async function readAccount(
     return { account, cache: entry, loaded: true };
   } catch (error) {
     if (isActiveNowBlock(error)) blocked.value = true;
+    await notifyReadFailure(deps, config, account, day, error);
     return { account, loaded: false };
   }
+}
+
+/**
+ * A failed read (for example "site changed?") must be visible: one error log line (the message has no page values)
+ * and one failure notice a day for each Recipient of the Child. The Fees of the Account then use the config amount.
+ */
+async function notifyReadFailure(deps: ActiveNowFeeSourceDeps, config: Config, account: Account, day: string, error: unknown): Promise<void> {
+  const reason = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+  deps.runtime.log("error", `activenow ledger: read failed: ${reason}`);
+  await notifyRow(deps, config, account.child_id, `failure:activenow:${account.id}:${day}`, "error.fetch", { reason });
 }
 
 async function accountsOf(deps: ActiveNowFeeSourceDeps): Promise<{ config: Config; activenow: Account[] }> {
@@ -252,10 +264,15 @@ export function createActiveNowFeeSource(deps: ActiveNowFeeSourceDeps): FeeSourc
   let passReady = false;
   const blocked = { value: false };
 
+  let activenowAccounts: Account[] = [];
+
   async function ensurePass(): Promise<void> {
     if (passReady) return;
-    const loaded = await accountsOf(deps);
+    const all = await accountsOf(deps);
     fees = await deps.storage.listFees(deps.familyId);
+    activenowAccounts = all.activenow;
+    // Only Accounts that an enabled Fee uses are read: an ActiveNow Account of the Activities alone costs no login here.
+    const loaded = { config: all.config, activenow: all.activenow.filter((account) => enabledFeesForAccount(fees, account.id).length > 0) };
     const day = utcDay(deps.runtime.now());
     const http = createHttp(deps.runtime, REQUEST_TIMEOUT_MS);
     const map = new Map<string, AccountLedger>();
@@ -263,7 +280,7 @@ export function createActiveNowFeeSource(deps: ActiveNowFeeSourceDeps): FeeSourc
     let open = 0;
     let checked = true;
     for (const account of loaded.activenow) {
-      const ledger = await readAccount(deps, account, childName(loaded.config, account.child_id), day, http, blocked);
+      const ledger = await readAccount(deps, account, childName(loaded.config, account.child_id), day, http, blocked, loaded.config);
       map.set(account.id, ledger);
       if (ledger.cache?.readOk) {
         rows += ledger.cache.rows.length;
@@ -301,9 +318,8 @@ export function createActiveNowFeeSource(deps: ActiveNowFeeSourceDeps): FeeSourc
     async amountFor(fee, month) {
       observations.delete(`${fee.id}:${month}`);
       settled.delete(`${fee.id}:${month}`);
-      const { activenow } = await accountsOf(deps);
-      if (!feeUsesActivenow(fee, activenow)) return deps.fallback.amountFor(fee, month);
       await ensurePass();
+      if (!feeUsesActivenow(fee, activenowAccounts)) return deps.fallback.amountFor(fee, month);
       const configAmount = await configSource.amountFor(fee, month);
       const charges = monthCharges(fee, month);
       if (charges.length === 0) {
@@ -334,8 +350,8 @@ export function createActiveNowFeeSource(deps: ActiveNowFeeSourceDeps): FeeSourc
       }
       return configAmount && configAmount.amount !== amount ? { ...found, configAmount: configAmount.amount } : found;
     },
+    // No fetch: it reads what the last `amountFor` call for the Fee and the month found (a web Fee is never settled).
     async settledFor(fee, month) {
-      if (!settled.has(`${fee.id}:${month}`)) await this.amountFor!(fee, month);
       return settled.get(`${fee.id}:${month}`) ?? false;
     },
   };

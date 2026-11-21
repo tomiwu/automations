@@ -46,9 +46,33 @@ describe("parseLedger", () => {
   });
 
   it("merges future rows that are not on the index page", () => {
-    const rows = mergeLedgerRows(parseLedger(settlements).rows, parseLedger(future).rows);
+    const rows = mergeLedgerRows(parseLedger(settlements).rows, parseLedger(future, true).rows);
     expect(rows).toHaveLength(4);
     expect(rows[3]).toMatchObject({ date: "2026-06-01", kind: "charge", amount: 20000 });
+  });
+
+  it("needs fragment mode for the table answer, which has no table target", () => {
+    expect(() => parseLedger(future)).toThrow("table not found");
+    expect(parseLedger(future, true).rows).toHaveLength(1);
+  });
+
+  it("reads an empty table answer as no rows", () => {
+    expect(parseLedger("", true).rows).toEqual([]);
+  });
+
+  it("reads no debt when the banner has only the danger variant class", () => {
+    expect(settlements).toContain("[&.danger]:border-red");
+    expect(parseLedger(settlements).banner.debt).toBe(false);
+  });
+
+  it("lets the colour decide for an amount without a sign", () => {
+    const unsigned = settlements.replace(/red "><p>-150 zł<\/p>/, 'red "><p>150 zł</p>').replace(">-150 zł</div>", ">150 zł</div>");
+    expect(parseLedger(unsigned).rows[0]).toMatchObject({ kind: "charge", amount: 15000 });
+  });
+
+  it("does not take the desktop:hidden mobile card for a desktop row", () => {
+    const ledger = parseLedger(settlements);
+    expect(ledger.rows).toHaveLength(3);
   });
 
   it("throws when the table is missing", () => {
@@ -69,13 +93,13 @@ describe("parseLedger", () => {
   });
 
   it("throws when colour and sign disagree", () => {
-    const bad = settlements.replace('rounded-full px-3 py-1 green"><p>150 zł</p>', 'rounded-full px-3 py-1 red"><p>150 zł</p>');
+    const bad = settlements.replace('green "><p>150 zł</p>', 'red "><p>+150 zł</p>');
     expect(() => parseLedger(bad)).toThrow("colour and sign disagree");
   });
 
   it("reads a debt banner with an amount", () => {
     const debt = settlements
-      .replace('class="group flex items-center rounded-xl"', 'class="group flex items-center danger rounded-xl"')
+      .replace("rounded-xl p-4 \"", "rounded-xl p-4 danger\"")
       .replace("Brak zaległości", "1 200 zł zaległości");
     expect(parseLedger(debt).banner).toEqual({ debt: true, debtAmount: 120000 });
   });
@@ -98,6 +122,26 @@ describe("matchLedger", () => {
     const may = matched.charges.find((row) => row.date === "2026-05-01");
     expect(april?.status).toBe("covered");
     expect(may?.status).toBe("upcoming");
+  });
+
+  it("covers an upcoming charge that is already paid", () => {
+    const rows = [
+      { date: "2026-04-01", title: "Monthly tuition April", amount: 15000, kind: "charge" as const },
+      { date: "2026-04-10", title: "Bank transfer", amount: 35000, kind: "payment" as const },
+      { date: "2099-05-01", title: "Monthly tuition May", amount: 20000, kind: "charge" as const },
+    ];
+    const matched = matchLedger(rows, { debt: false }, TODAY, accountId);
+    expect(matched.charges.map((row) => row.status)).toEqual(["covered", "covered"]);
+  });
+
+  it("covers strictly oldest first: a later small charge is not covered past an open one", () => {
+    const rows = [
+      { date: "2026-04-01", title: "Charge A", amount: 15000, kind: "charge" as const },
+      { date: "2026-04-05", title: "Charge B", amount: 5000, kind: "charge" as const },
+      { date: "2026-04-10", title: "Payment", amount: 10000, kind: "payment" as const },
+    ];
+    const matched = matchLedger(rows, { debt: false }, TODAY, accountId);
+    expect(matched.charges.map((row) => row.status)).toEqual(["open", "open"]);
   });
 
   it("marks a partially paid charge as open", () => {
