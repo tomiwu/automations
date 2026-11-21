@@ -35,7 +35,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
-  CLAUDE_LIMIT, effortFor, isClaudeLabel, limitWait, modelOfLabel, nextAgentAfterStall, phaseOfName, sleepUntil, writeStatus,
+  CLAUDE_LIMIT, LIMIT_ERROR, effortFor, isClaudeLabel, limitWait, modelOfLabel, nextAgentAfterStall, phaseOfName, sleepUntil, stallKind, writeStatus,
 } from "./loop-policy.mts";
 
 const MAX_ITERATIONS = Number(process.env.MAX_ITERATIONS ?? "10");
@@ -49,7 +49,6 @@ const PAUSE_MINUTES = Number(process.env.PAUSE_MINUTES ?? "30");
 const MAX_PAUSES = Number(process.env.MAX_PAUSES ?? "12");
 const LIMIT_MAX_HOURS = Number(process.env.LIMIT_MAX_HOURS ?? "6");
 const STATUS_FILE = process.env.STATUS_FILE ?? "/tmp/automations-loop.status.json";
-const LIMIT_ERROR = /credit|quota|usage limit|rate limit|payment|out of (fast )?requests|insufficient|hit your (?:[\w-]+ )?limit|limit reached/i;
 
 interface PhaseOpts { effort: ReturnType<typeof effortFor>; env: Record<string, string> }
 type Provider = ReturnType<typeof sandcastle.cursor>;
@@ -74,8 +73,9 @@ function saveStatus(): void {
 
 type RunOptions = Omit<Parameters<sandcastle.Sandbox["run"]>[0], "agent">;
 
-// Run one agent phase. On a stall, change to the next agent; a Claude limit skips the other Claude
-// models. When no agent is left, pause until the parsed reset time (wall clock) and retry.
+// Run one agent phase. On a stall (limit, invalid key or login, idle timeout; see stallKind), change to
+// the next agent; a Claude limit or login error skips the other Claude models. When no agent is left,
+// pause until the parsed reset time (wall clock) and retry. Other errors are thrown.
 async function runPhase(sandbox: sandcastle.Sandbox, options: RunOptions & { checkLog?: string }) {
   const { checkLog = "", ...runOptions } = options;
   const name = options.name ?? "phase";
@@ -93,6 +93,7 @@ async function runPhase(sandbox: sandcastle.Sandbox, options: RunOptions & { che
       try { if (f) { loopStatus.lastOutputAt = new Date(statSync(f).mtimeMs).toISOString(); saveStatus(); } } catch { /* next beat */ }
     }, 30_000);
     let failure = "";
+    let kind = "limit";
     try {
       const result = await sandbox.run({ idleTimeoutSeconds: 1800, ...runOptions, agent: provider });
       const tail = logTail(name);
@@ -100,11 +101,13 @@ async function runPhase(sandbox: sandcastle.Sandbox, options: RunOptions & { che
       failure = `limit text in the agent log: ${tail.match(new RegExp(`.{0,80}(?:${LIMIT_ERROR.source}).{0,120}`, "i"))?.[0] ?? ""}`;
     } catch (error) {
       failure = `${error} ${logTail(name).slice(-600)}`;
-      if (!LIMIT_ERROR.test(failure)) throw error;
+      const stall = stallKind(failure);
+      if (!stall) throw error;
+      kind = stall;
     } finally {
       clearInterval(beat);
     }
-    console.log(`${label} stalled in ${name}: ${failure.slice(0, 300)}`);
+    console.log(`${label} stalled in ${name} (${kind}): ${failure.slice(0, 300)}`);
     let until = Date.now() + PAUSE_MINUTES * 60_000;
     if (isClaudeLabel(a.label) && CLAUDE_LIMIT.test(failure)) {
       const w = limitWait(failure, Date.now(), PAUSE_MINUTES, LIMIT_MAX_HOURS);
