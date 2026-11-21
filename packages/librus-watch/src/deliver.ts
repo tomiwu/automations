@@ -88,6 +88,15 @@ interface DeliveryRun {
   blocked: Set<string>;
 }
 
+/**
+ * Entries of one insert share one queued_at, and Postgres gives no order between equal values. A message text then
+ * goes before its documents.
+ */
+function inSendOrder(entries: OutboxEntry[]): OutboxEntry[] {
+  const rank = (entry: OutboxEntry) => (entry.kind === "document" ? 1 : 0);
+  return [...entries].sort((a, b) => a.queuedAt.getTime() - b.queuedAt.getTime() || rank(a) - rank(b));
+}
+
 async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: DeliveryRun): Promise<void> {
   try {
     await sendEntry(options, entry);
@@ -106,7 +115,7 @@ async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: Deliv
 export async function deliverPending(options: DeliveryOptions): Promise<void> {
   const { storage, familyId, chatIds, log = () => {}, clock = Date.now, budgetMs = DELIVERY_BUDGET_MS } = options;
   const start = clock();
-  const queue = (await storage.pendingNotifications(familyId)).filter((entry) => chatIds.includes(entry.chatId));
+  const queue = inSendOrder((await storage.pendingNotifications(familyId)).filter((entry) => chatIds.includes(entry.chatId)));
   const run: DeliveryRun = { sentKeys: [], failures: [], blocked: new Set() };
   try {
     for (const entry of queue) {

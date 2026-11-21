@@ -99,6 +99,27 @@ describe("deliverPending", () => {
     expect(await storage.pendingNotifications(FAMILY_ID)).toEqual([]);
   });
 
+  it("sends the text before a document queued at the same time", async () => {
+    const storage = createMemoryStorage();
+    await storage.putAttachment(`${FAMILY_ID}/m1/att-001`, new Uint8Array([1]), "application/pdf");
+    const doc = {
+      key: "doc-a",
+      familyId: FAMILY_ID,
+      chatId: "1000001",
+      kind: "document" as const,
+      text: "sample.pdf",
+      storagePath: `${FAMILY_ID}/m1/att-001`,
+      fileName: "sample.pdf",
+    };
+    await storage.enqueueNotifications([doc, entry("text-a", "1000001", "hello")]);
+    const same = new Date(0);
+    const pending = storage.pendingNotifications;
+    storage.pendingNotifications = async (familyId) => (await pending(familyId)).map((e) => ({ ...e, queuedAt: same }));
+    const { m, sent } = messenger();
+    await deliverPending({ storage, familyId: FAMILY_ID, messenger: m, chatIds: ["1000001"] });
+    expect(sent).toEqual(["1000001|hello", "1000001|doc:sample.pdf:1|sample.pdf"]);
+  });
+
   it("retries a document after a 502 and keeps order", async () => {
     const storage = createMemoryStorage();
     await storage.putAttachment(`${FAMILY_ID}/m1/att-001`, new Uint8Array([9]), "application/pdf");
