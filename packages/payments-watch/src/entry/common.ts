@@ -1,5 +1,5 @@
 import { importCredentialKey } from "@automations/shared";
-import { SUPABASE_KEY_PLACEHOLDER, createKodyRuntime, kodyHost, kodyStorage, loadDeploymentConfig } from "@automations/shared/kody";
+import { SUPABASE_KEY_PLACEHOLDER, createKodyRuntime, kodyHost, kodyStorage, loadDeploymentConfig, type KodyHost } from "@automations/shared/kody";
 import { createCredentialResolver, createSupabaseCredentialStore, createSupabaseStorage } from "@automations/librus-data";
 import { splitForTelegram, type Messenger } from "@tomiwu/librus-watch";
 import { loadDashboardAllowlist } from "../dashboard-config.ts";
@@ -22,12 +22,13 @@ export const telegramMessenger: Messenger = {
  * The deployment serves one Family. The Supabase URL, the Family ID and the credential key are config in the
  * package storage (set with `./configure`). `SUPABASE_KEY` is the only Kody secret. The service logins are
  * encrypted rows in Supabase; `runtime.secret(name)` decrypts them.
+ * `host` lets an export count every fetch (Supabase, credentials and the services) with one counter.
  */
-export async function entryDeps() {
+export async function entryDeps(host: KodyHost = kodyHost) {
   const { supabaseUrl, familyId, credentialKey, paymentPhotos = false } = await loadDeploymentConfig(kodyStorage());
-  const supabase = { url: supabaseUrl, key: SUPABASE_KEY_PLACEHOLDER, fetch: kodyHost.fetch };
+  const supabase = { url: supabaseUrl, key: SUPABASE_KEY_PLACEHOLDER, fetch: host.fetch };
   const resolve = createCredentialResolver(createSupabaseCredentialStore(supabase), await importCredentialKey(credentialKey), familyId);
-  const runtime = createKodyRuntime(kodyHost, resolve);
+  const runtime = createKodyRuntime(host, resolve);
   return { runtime, storage: createSupabaseStorage(supabase), familyId, paymentPhotos, counters: kodyStorage() };
 }
 
