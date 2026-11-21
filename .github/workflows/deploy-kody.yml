@@ -23,7 +23,8 @@ concurrency:
   group: deploy-kody
   cancel-in-progress: true
 env:
-  KODY_CLI: "@kodycodes/cli@1.31.4"
+  # 3.46.0 or newer: Kody refuses older CLIs for packageCheck (HTTP 426 upgrade_required).
+  KODY_CLI: "@kodycodes/cli@3.46.5"
 jobs:
   deploy:
     if: >-
@@ -80,9 +81,10 @@ jobs:
               fs.statSync(p).isDirectory() ? walk(p) : (files[path.relative(root, p)] = fs.readFileSync(p, "utf8")); } };
             walk(root); fs.writeFileSync(process.argv[2], JSON.stringify({ files }));
           ' "$RUNNER_TEMP/stage" "$RUNNER_TEMP/check.json"
-          # Retries on 5xx, 429 and timeouts. Exit 3 = Kody did not answer. The synchronous check of a big
-          # package (librus-watch: about 60 s) can end in a gateway 503 although the tree is good. Publish
-          # runs the same checks durably, so a deploy goes on with a warning; a dry run fails.
+          # Durable check: upload the tree (check-uploads), packageCheck({ upload_id }), then poll
+          # packageRunResult. Retries on 5xx, 429 and timeouts. Exit 3 = Kody did not answer or the run ended
+          # without a result. Publish runs the same checks durably, so a deploy goes on with a warning; a dry
+          # run fails.
           rc=0
           node tools/kody-deploy/kody-check.mjs "$RUNNER_TEMP/check.json" "$RUNNER_TEMP/check-result.json" || rc=$?
           if [ "$rc" = 3 ] && [ "$DRY_RUN" = "false" ]; then
@@ -124,10 +126,12 @@ jobs:
           KODY_API_TOKEN: ${{ secrets.KODY_DEPLOY_TOKEN }}
           PKG: "@tomiwu/${{ matrix.package }}"
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # 18 min, below the 20 min step timeout, so a slow publish ends with a clear message.
+          KODY_PUBLISH_WAIT_MS: "1080000"
         run: |
-          # When Kody hands the publish off to a background job, the script reads the job status
-          # (workflowRunList, needs the token scope job:read). Without that scope it publishes again each
-          # 10 s: Kody dedupes an active publish and answers already_published when it is done.
+          # The publish is durable: Kody answers "dispatched" with a workflow_id, and the script polls
+          # packageRunResult (token scope package:read) until the run has its result (published or
+          # already_published = done; a refusal ends the run errored with the reason in last_error).
           echo "Publishing $PKG (automations SHA $SHA)"
           node tools/kody-deploy/kody-publish.mjs "$PKG"
       - name: Report a package that was not deployed
