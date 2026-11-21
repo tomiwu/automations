@@ -12,18 +12,21 @@ export interface EduskyBillingDeps extends FetchDeps {
   familyId: string;
 }
 
-/** What one Edusky login shows. It has statuses, shapes and one count. It never has a value of the family. */
+/** What one Edusky login shows. It has statuses, shapes, three flags and the roles. It never has a value of the family. */
 export interface EduskyBillingRow {
   authStatus?: number;
   authShape?: string;
-  listSource?: "auth" | "list";
-  listStatus?: number;
-  listShape?: string;
-  agreementCount?: number;
-  agreementStatus?: number;
-  agreementShape?: string;
-  balanceStatus?: number;
-  balanceShape?: string;
+  flags?: FinanceFlags;
+  roles?: string[];
+}
+
+/** `0` or `1` for a boolean-like value, `null` for a missing key, `"<other>"` for anything else. */
+export type FlagValue = 0 | 1 | null | "<other>";
+
+export interface FinanceFlags {
+  financeDisable: FlagValue;
+  blockSettlementView: FlagValue;
+  blockSettlementInfo: FlagValue;
 }
 
 export interface EduskyBillingAccount extends EduskyBillingRow {
@@ -43,7 +46,8 @@ interface Answer {
   text: string;
 }
 
-const LIST_KEYS = ["data", "items", "rows"];
+const FLAG_NAMES = ["financeDisable", "blockSettlementView", "blockSettlementInfo"] as const;
+const ROLE = /^ROLE_[A-Z_]{1,40}$/;
 
 const shapeOf = (answer: Answer): string | undefined => jsonShape(answer.text) ?? undefined;
 
@@ -55,25 +59,27 @@ function parseJson(text: string): unknown {
   }
 }
 
-/** The numeric `id` of every object in an array. */
-function idsOf(rows: unknown): number[] {
-  if (!Array.isArray(rows)) return [];
-  return rows.flatMap((row) => (isObject(row) && typeof row.id === "number" ? [row.id] : []));
+const FLAG_OFF = new Set<unknown>([0, "0", false]);
+const FLAG_ON = new Set<unknown>([1, "1", true]);
+
+export function flagValue(value: unknown): FlagValue {
+  if (value === undefined) return null;
+  if (FLAG_OFF.has(value)) return 0;
+  return FLAG_ON.has(value) ? 1 : "<other>";
 }
 
-/** The agreements in the answer of `common/users/auth`: an array under a key with `agreement` in its name. */
-function authIds(auth: unknown): number[] {
-  if (!isObject(auth)) return [];
-  const key = Object.keys(auth).find((name) => /agreement/i.test(name) && idsOf(auth[name]).length > 0);
-  return key ? idsOf(auth[key]) : [];
+/** The three finance flags of the answer of `common/users/auth`. */
+export function financeFlags(auth: unknown): FinanceFlags {
+  const source = isObject(auth) ? auth : {};
+  const [financeDisable, blockSettlementView, blockSettlementInfo] = FLAG_NAMES.map((name) => flagValue(source[name]));
+  return { financeDisable, blockSettlementView, blockSettlementInfo } as FinanceFlags;
 }
 
-/** The agreements in the answer of the list endpoint: a top-level array, or under `data`, `items` or `rows`. */
-function listIds(list: unknown): number[] {
-  if (Array.isArray(list)) return idsOf(list);
-  if (!isObject(list)) return [];
-  const key = LIST_KEYS.find((name) => idsOf(list[name]).length > 0);
-  return key ? idsOf(list[key]) : [];
+/** The values of `roles` that look like a role name. Other values become `<text>`. */
+export function rolesOf(auth: unknown): string[] {
+  const roles = isObject(auth) ? auth.roles : undefined;
+  if (!Array.isArray(roles)) return [];
+  return roles.map((role) => (typeof role === "string" && ROLE.test(role) ? role : "<text>"));
 }
 
 async function get(http: Http, url: string, accessToken: string): Promise<Answer> {
@@ -82,28 +88,6 @@ async function get(http: Http, url: string, accessToken: string): Promise<Answer
     throw new Error("Edusky: blocked by the Cloudflare challenge (HTTP 403)");
   }
   return response;
-}
-
-async function readAgreementIds(http: Http, api: string, token: string, auth: unknown, row: EduskyBillingRow): Promise<number[]> {
-  const fromAuth = authIds(auth);
-  if (fromAuth.length > 0) {
-    row.listSource = "auth";
-    return fromAuth;
-  }
-  const list = await get(http, `${api}agreements?page=1&perPage=20`, token);
-  row.listSource = "list";
-  row.listStatus = list.status;
-  row.listShape = shapeOf(list);
-  return list.status === 200 ? listIds(parseJson(list.text)) : [];
-}
-
-async function readAgreement(http: Http, api: string, token: string, id: number, row: EduskyBillingRow): Promise<void> {
-  const agreement = await get(http, `${api}ext/agreements/${id}`, token);
-  row.agreementStatus = agreement.status;
-  row.agreementShape = shapeOf(agreement);
-  const balance = await get(http, `${api}ext/agreementinvoicesbalance?idAgreement=${id}`, token);
-  row.balanceStatus = balance.status;
-  row.balanceShape = shapeOf(balance);
 }
 
 async function secretsOf(deps: FetchDeps, target: ActivityTarget): Promise<Login> {
@@ -115,18 +99,14 @@ async function secretsOf(deps: FetchDeps, target: ActivityTarget): Promise<Login
   };
 }
 
-/** At most 6 requests: base config, token, users/auth, the list, the agreement and its balance. */
+/** At most 3 requests: base config, token and users/auth. A parent has no agreement list. */
 async function probeLogin(deps: FetchDeps, target: ActivityTarget): Promise<EduskyBillingRow> {
   const http = createHttp(deps.runtime);
   const { origin } = target.account;
   const token = await login(http, origin, await secretsOf(deps, target));
-  const api = `${origin}/core/web/api/`;
-  const auth = await get(http, `${api}common/users/auth`, token);
-  const row: EduskyBillingRow = { authStatus: auth.status, authShape: shapeOf(auth) };
-  const ids = await readAgreementIds(http, api, token, parseJson(auth.text), row);
-  row.agreementCount = ids.length;
-  if (ids[0] !== undefined) await readAgreement(http, api, token, ids[0], row);
-  return row;
+  const auth = await get(http, `${origin}/core/web/api/common/users/auth`, token);
+  const body = parseJson(auth.text);
+  return { authStatus: auth.status, authShape: shapeOf(auth), flags: financeFlags(body), roles: rolesOf(body) };
 }
 
 interface Outcome {
