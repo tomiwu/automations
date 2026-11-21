@@ -135,7 +135,7 @@ function markupPaths($: cheerio.CheerioAPI): { paths: string[]; param?: string }
   for (const node of nodes) {
     const attrs = $(node).attr() ?? {};
     for (const [name, value] of Object.entries(attrs)) {
-      if (isUpcomingMarkupAttr(name)) collectMarkupPath(value, paths);
+      if (isUpcomingMarkupAttr(name)) collectMarkupPath(String(value), paths);
     }
   }
   return { paths: [...paths], param: upcomingParam($, nodes) };
