@@ -111,6 +111,18 @@ describe("matchLedger", () => {
     expect(matched.checked).toBe(false);
   });
 
+  it("covers several charges when payments overpay", () => {
+    const rows = [
+      { date: "2026-04-01", title: "Charge A", amount: 5000, kind: "charge" as const },
+      { date: "2026-04-05", title: "Charge B", amount: 7000, kind: "charge" as const },
+      { date: "2026-04-10", title: "Large payment", amount: 20000, kind: "payment" as const },
+    ];
+    const matched = matchLedger(rows, { debt: false }, TODAY, accountId);
+    expect(matched.charges.map((row) => row.status)).toEqual(["covered", "covered"]);
+    expect(matched.openThroughToday).toBe(0);
+    expect(matched.checked).toBe(true);
+  });
+
   it("fails banner check when open debt remains", () => {
     const ledger = parseLedger(settlements);
     const rows = ledger.rows.filter((row) => row.kind === "charge" || (row.kind === "payment" && row.date !== "2026-04-10"));

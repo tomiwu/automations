@@ -150,12 +150,17 @@ describe("createActiveNowFeeSource", () => {
 
   it("gives charge_absent observation when the month has no charge", async () => {
     const { source } = setup();
-    await source.amountFor(baseFee(), "2026-03");
+    expect(await source.amountFor(baseFee(), "2026-03")).toBeUndefined();
     expect(source.observationFor!(baseFee(), "2026-03")).toEqual({
       kind: "candidate",
       reason: "organizer_void",
       evidence: "activenow:charge_absent",
     });
+  });
+
+  it("does not use the config amount when the ledger has no charge", async () => {
+    const { source } = setup(undefined, happyAnswers(), [baseFee({ amounts: { "2026-03": 9900 } })]);
+    expect(await source.amountFor(baseFee({ amounts: { "2026-03": 9900 } }), "2026-03")).toBeUndefined();
   });
 
   it("reuses the cached ledger on a second pass the same UTC day", async () => {

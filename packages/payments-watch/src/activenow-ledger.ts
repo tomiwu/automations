@@ -188,7 +188,6 @@ function tableRoot($: cheerio.CheerioAPI): Row {
 export function parseLedger(html: string): ParsedLedger {
   const $ = cheerio.load(html);
   const root = tableRoot($);
-  if (root.length === 0) throw new Error(TABLE_MISSING);
   if (!hasHeader($, root)) throw new Error(HEADER_MISSING);
   const desktop = desktopRows($, root);
   const mobile = mobileRows($, root);

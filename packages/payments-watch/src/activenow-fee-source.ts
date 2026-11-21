@@ -2,11 +2,6 @@ import type { Account, Config } from "@automations/shared";
 import type { Fee, StorageAdapter } from "@automations/librus-data";
 import { createHttp, REQUEST_TIMEOUT_MS, type Http } from "@tomiwu/activities-watch";
 import { localDate, t, type MessageKey, type Runtime } from "@automations/shared";
-
-function formatAmount(grosze: number): string {
-  const pad = (value: number): string => String(value).padStart(2, "0");
-  return `${Math.trunc(grosze / 100)}.${pad(grosze % 100)}`;
-}
 import {
   isActiveNowBlock,
   readActiveNowLedger,
@@ -14,6 +9,7 @@ import {
   type MatchedCharge,
   type ReadLedgerResult,
 } from "./activenow-ledger.ts";
+import { formatAmount } from "./engine.ts";
 import { createConfigFeeSource, type FeeAmount, type FeeSource, type PageObservation } from "./fee-source.ts";
 import { createWebFeeSource, type WebFeeSourceDeps } from "./page-source.ts";
 
@@ -312,12 +308,15 @@ export function createActiveNowFeeSource(deps: ActiveNowFeeSourceDeps): FeeSourc
       const charges = monthCharges(fee, month);
       if (charges.length === 0) {
         const ledger = ledgerOf(fee);
-        if (ledger?.cache?.readOk && ledger.cache.rows.length > 0) {
-          observations.set(`${fee.id}:${month}`, {
-            kind: "candidate",
-            reason: "organizer_void",
-            evidence: "activenow:charge_absent",
-          });
+        if (ledger?.cache?.readOk) {
+          if (ledger.cache.rows.length > 0) {
+            observations.set(`${fee.id}:${month}`, {
+              kind: "candidate",
+              reason: "organizer_void",
+              evidence: "activenow:charge_absent",
+            });
+          }
+          return undefined;
         }
         return configAmount;
       }
