@@ -127,10 +127,11 @@ function sumBy<K extends { child: string }>(rows: readonly DashboardRow[], keyOf
   return [...sums.values()].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }
 
-/** Paid rows, newest decision first by the real instant. A row without a date goes last. */
+/** Newest decision first by the real instant, not the local text (DST repeats an hour). A row without a date goes last. */
 function newestFirst(rows: readonly DashboardRow[], payments: readonly Payment[]): DashboardRow[] {
-  const instant = (row: DashboardRow): number => payments.find((payment) => payment.id === row.paymentId)?.decidedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
-  return [...rows].sort((a, b) => Math.sign(instant(b) - instant(a)) || 0);
+  const instants = new Map(payments.map((payment) => [payment.id, payment.decidedAt?.getTime() ?? 0]));
+  const instant = (row: DashboardRow): number => instants.get(row.paymentId) ?? 0;
+  return [...rows].sort((a, b) => instant(b) - instant(a));
 }
 
 /**

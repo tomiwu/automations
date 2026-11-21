@@ -2,7 +2,7 @@ import type { StorageAdapter } from "@automations/librus-data";
 import { localDate, t, type Language, type MessageKey } from "@automations/shared";
 import { decidePayment } from "./decision.ts";
 import { formatAmount } from "./engine.ts";
-import { buildDashboard, type Dashboard, type DashboardRow, type MarkedBy } from "./dashboard-data.ts";
+import { buildDashboard, type Dashboard, type DashboardRow } from "./dashboard-data.ts";
 import type { DashboardUser } from "./dashboard-config.ts";
 
 export interface DashboardDeps {
@@ -134,21 +134,12 @@ function refundCell(language: Language, row: DashboardRow): string {
   return `<td>${row.refundCheck ? escapeHtml(t(language, "dashboard.refund_check")) : ""}</td>`;
 }
 
-function markedByText(language: Language, markedBy: MarkedBy): string {
-  switch (markedBy.kind) {
-    case "telegram": return t(language, "dashboard.marked.telegram");
-    case "dashboard": return t(language, "dashboard.marked.dashboard", { user: markedBy.user });
-    case "organizer": return t(language, "dashboard.marked.organizer", { service: markedBy.service });
-    case "unknown": return t(language, "dashboard.marked.unknown");
-  }
-}
-
 const PAID_HEAD: MessageKey[] = [...ROW_HEAD, "dashboard.col.paid_at", "dashboard.col.marked_by", "dashboard.col.amount_source", "dashboard.col.refund"];
 
 const paidCells = (language: Language, row: DashboardRow): string[] => [
   ...rowCells(row),
   row.decidedAt ?? "",
-  markedByText(language, row.markedBy),
+  t(language, `dashboard.marked.${row.markedBy.kind}`, row.markedBy),
   t(language, `dashboard.source.${row.amountSource}`),
 ];
 

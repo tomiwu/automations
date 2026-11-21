@@ -236,7 +236,7 @@ describe("Paid section details", () => {
     }
     return { storage, familyId: FAMILY, now: () => new Date("2026-04-01T08:00:00Z"), allowlist: [{ user: "adult-one", tokenDigest: await tokenDigest(TOKEN) }] };
   }
-  const paidSection = (body: string): string => body.slice(body.indexOf("<h2>Paid") === -1 ? body.indexOf("<h2>Zapłacone") : body.indexOf("<h2>Paid"), body.indexOf("<h2>Cancelled") === -1 ? body.indexOf("<h2>Anulowane") : body.indexOf("<h2>Cancelled"));
+  const paidSection = (body: string): string => body.split("<h2>").find((part) => /^(Paid|Zapłacone)</.test(part)) ?? "";
 
   it("shows the three columns and the values in English, newest first", async () => {
     const d = await paidDeps("en");
