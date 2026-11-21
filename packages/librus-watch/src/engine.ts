@@ -210,24 +210,22 @@ export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promi
   }
   if (known.size > 0) {
     const changes = changesOf(current, known);
-    let extra: Awaited<ReturnType<typeof announceMessages>>["notifications"] = [];
-    let journalEvents: Awaited<ReturnType<typeof announceMessages>>["journal"] = [];
-    const announcements =
-      watcher === "messages"
-        ? await announceMessages(changes as unknown as { item: ItemsByWatcher["messages"][number] }[], {
-            check,
-            scope,
-            chargeFetch: check.chargeFetch,
-          }).then((result) => {
-            extra = result.notifications;
-            journalEvents = result.journal;
-            return result.announcements.map((entry) => ({ ...entry, key: storedId({ id: entry.key }) }));
-          })
-        : await (ANNOUNCERS[watcher] as Announce<HashedItem>)(changes, check.source);
-    if (journalEvents.length > 0) await check.storage.appendEvents(journalEvents);
-    await check.storage.recordDetails(detailsOf(check, watcher, scope, changes, announcements));
-    const textEntries = announcements.flatMap((a) => notificationsFor(check, scope, a));
-    await check.storage.enqueueNotifications([...textEntries, ...extra]);
+    if (watcher === "messages") {
+      const result = await announceMessages(changes as unknown as { item: ItemsByWatcher["messages"][number] }[], {
+        check,
+        scope,
+        chargeFetch: check.chargeFetch,
+      });
+      if (result.journal.length > 0) await check.storage.appendEvents(result.journal);
+      const announcements = result.announcements.map((entry) => ({ ...entry, key: storedId({ id: entry.key }) }));
+      await check.storage.recordDetails(detailsOf(check, watcher, scope, changes, announcements));
+      const textEntries = announcements.flatMap((a) => notificationsFor(check, scope, a));
+      await check.storage.enqueueNotifications([...textEntries, ...result.notifications]);
+    } else {
+      const announcements = await (ANNOUNCERS[watcher] as Announce<HashedItem>)(changes, check.source);
+      await check.storage.recordDetails(detailsOf(check, watcher, scope, changes, announcements));
+      await check.storage.enqueueNotifications(announcements.flatMap((a) => notificationsFor(check, scope, a)));
+    }
   }
   await check.storage.recordItems(check.familyId, scope, [BASELINE_ID, ...current.map(storedId)]);
   return current;

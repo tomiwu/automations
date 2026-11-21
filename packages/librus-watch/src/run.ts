@@ -57,6 +57,14 @@ export async function watchersFor(deps: RunDeps): Promise<readonly WatcherName[]
   return WATCHERS_IN_ORDER.filter((watcher) => !OPTIONAL_WATCHERS.includes(watcher));
 }
 
+/**
+ * Returns false when the weekly ledger has no room for another fetch in this run. Each call uses the current
+ * fetch count, so attachment downloads stop before the plan limit without an extra fetch.
+ */
+export function createChargeFetch(remainingAtStart: number, countTotal: () => number, startTotal: number): () => boolean {
+  return () => remainingAtStart > countTotal() - startTotal;
+}
+
 /** Adds the fetches of the run to the ledger, and marks the day when a fetch failed on the plan limit. */
 async function recordFetches(deps: RunDeps, failures: readonly string[]): Promise<void> {
   if (!deps.budget || !deps.counter) return;
@@ -149,7 +157,12 @@ async function runTarget(
       names: nameOptionsFor(deps.nameStore, target.account.id),
     });
   const log = (message: string) => runtime.log("info", `account ${target.account.id}: ${message}`);
-  const check: ChildCheck = { familyId, child: target.child, recipients: target.recipients, storage, source, log };
+  let chargeFetch: (() => boolean) | undefined;
+  if (deps.budget && deps.counter) {
+    const startTotal = deps.counter.count().total;
+    chargeFetch = createChargeFetch(await deps.budget.remaining(), () => deps.counter!.count().total, startTotal);
+  }
+  const check: ChildCheck = { familyId, child: target.child, recipients: target.recipients, storage, source, log, chargeFetch };
   const { failures, homework } = await checkChild(check, watchers);
   failures.push(...(await journalStep(deps, config, target, source, homework, log)));
   if (failures.length > 0) await notifyFailure(deps, target, failures, localDate(runtime.now(), timezone));

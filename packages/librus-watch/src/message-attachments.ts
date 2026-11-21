@@ -58,7 +58,7 @@ function mapNotifications(
   }));
 }
 
-async function journalForStored(
+function journalForStored(
   check: ChildCheck,
   message: MessageItem,
   link: MessageAttachmentLink,
@@ -66,7 +66,7 @@ async function journalForStored(
   sha256: string,
   size: number,
   mimeType: string,
-): Promise<NewJournalEvent> {
+): NewJournalEvent {
   const stream = attachmentStream(check.child.id, message.id, link.id);
   return {
     familyId: check.familyId,
@@ -126,7 +126,7 @@ async function storeOne(
       sha256,
       size: bytes.byteLength,
       mimeType,
-      journal: await journalForStored(check, message, link, path, sha256, bytes.byteLength, mimeType),
+      journal: journalForStored(check, message, link, path, sha256, bytes.byteLength, mimeType),
     };
   } catch {
     return fallback();
