@@ -38,13 +38,33 @@ export const LABEL_ALLOWLIST = new Set([
   "Szczegóły",
   "Faktura",
   "Paragon",
+  "Płatności",
+  "Należności",
+  "Faktury",
+  "Wpłaty",
+  "Rozliczenie",
+  "Umowy",
+  "Umowa",
+  "Harmonogram płatności",
+  "Zaległość",
+  "Pozostało do zapłaty",
+  "Zapłacono",
+  "Opłać",
+  "Panel rodzica",
+  "Zajęcia",
+  "Obecności",
+  "Wiadomości",
+  "Kalendarz",
+  "Profil",
+  "Wyloguj",
+  "Ustawienia",
 ]);
 
 const BODY_LIMIT = 200_000;
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 const LONG_TOKEN = /\b[A-Za-z0-9+/=_-]{24,}\b/g;
 const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
-const DATE_MARK =
+export const DATE_MARK =
   /^\d{4}-\d{2}-\d{2}$|^\d{1,2}\.\d{1,2}\.\d{4}$|^\d{1,2} [a-ząćęłńóśźż]+ \d{4}$/i;
 const AMOUNT_MARK = /^-?\d[\d\s]*(?:[,.]\d+)?\s*(?:zł|PLN)$/i;
 const NUMBER_MARK = /^-?\d+(?:[,.]\d+)?$/;
@@ -155,7 +175,7 @@ function tryJsonShape(raw: string): string | null {
   }
 }
 
-function valueMark(text: string): string {
+export function valueMark(text: string): string {
   if (DATE_MARK.test(text)) return "<date>";
   if (AMOUNT_MARK.test(text)) return "<amount>";
   if (NUMBER_MARK.test(text)) return "<number>";

@@ -1,3 +1,4 @@
+import { createMemoryStorage, type StorageAdapter } from "@automations/librus-data";
 import type { Account, Activity, Config } from "@automations/shared";
 import type { Session } from "./sessions.ts";
 import type { SessionSource } from "./targets.ts";
@@ -156,4 +157,15 @@ export function card({
 /** A month section of the lessons page. */
 export function month(isoMonth: string, ...cards: string[]): string {
   return `<div class="flex flex-col gap-3" data-navigation-date="${isoMonth}"><h3 class="label">${isoMonth}</h3>${cards.join("")}</div>`;
+}
+
+/** A storage that reads the config and throws on every other call: a read-only probe must not write. */
+export function readOnlyStorage(config: Config): StorageAdapter {
+  const storage = createMemoryStorage({ configs: [config] });
+  return new Proxy(storage, {
+    get(target, name) {
+      if (name === "loadConfig") return target.loadConfig.bind(target);
+      throw new Error(`The probe used storage.${String(name)}`);
+    },
+  });
 }

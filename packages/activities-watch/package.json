@@ -12,6 +12,8 @@
     "./stored-sessions": "./src/entry/stored-sessions.ts",
     "./after-school": "./src/entry/after-school.ts",
     "./activenow-billing-shape": "./src/entry/activenow-billing-shape.ts",
+    "./edusky-billing-shape": "./src/entry/edusky-billing-shape.ts",
+    "./mondo-billing-shape": "./src/entry/mondo-billing-shape.ts",
     "./configure": "./src/entry/configure.ts"
   },
   "dependencies": {

@@ -14,6 +14,8 @@ import afterSchool from "kody:@tomiwu/activities-watch/after-school";
 | `./sessions` | none | `{ sessions, errors }`, every Session of the next 14 days, ordered by start | logs in to the apps, read-only |
 | `./stored-sessions` | `{ childId?, from?, to? }` | `{ timezone, from, to, accounts, sessions }`. Each Session has `childId` (the Journal `child_id`), `vanished`, `seq`, `lastChanged`. Each Account has `childId` and `lastSavedAt` | none (reads Supabase only, 3 fetches at most) |
 | `./after-school` | `{ childId, day: "YYYY-MM-DD", language?: "pl" \| "en" }` | `{ text }` | read-only |
+| `./edusky-billing-shape` | none | `{ accounts, fetches? }`: shapes of the Edusky agreement and balance answers per Account (no values) | logs in to Edusky, read-only, 6 requests at most per Account |
+| `./mondo-billing-shape` | none | `{ accounts, fetches? }`: masked navigation, up to 3 billing-page skeletons per Account (no values) | logs in to Mondo, read-only, 5 requests at most per Account |
 | `./scheduled` | none | `{ ok: true }` | runs the Watchers, writes Items and the Outbox, sends Telegram messages |
 
 `./scheduled` is the job in `package.json` (`kody.jobs`). Do not call it as a test: it can send real messages.

@@ -13,6 +13,8 @@ export interface RequestOptions {
 export interface HttpResult {
   status: number;
   text: string;
+  /** The `content-type` header of the answer, or an empty text. */
+  contentType?: string;
 }
 
 export interface Http {
@@ -34,7 +36,7 @@ export function createHttp(runtime: Runtime, timeoutMs: number = REQUEST_TIMEOUT
           ...init.headers,
         },
       });
-      return { status: response.status, text: await response.text() };
+      return { status: response.status, text: await response.text(), contentType: response.headers.get("content-type") ?? "" };
     },
   };
 }

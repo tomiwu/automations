@@ -15,7 +15,7 @@ import { firstActivity, type ActivityTarget, type SessionSource } from "./target
  */
 export const CLIENT_SECRET_NAME = "EDUSKY_CLIENT_SECRET";
 
-interface Login {
+export interface Login {
   login: string;
   password: string;
   clientSecret: string;
@@ -25,7 +25,7 @@ interface BaseConfig {
   OAuth2: { clientId: string; accessTokenUri: string };
 }
 
-const authHeaders = (accessToken: string): Record<string, string> => ({
+export const authHeaders = (accessToken: string): Record<string, string> => ({
   accept: "application/json",
   ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
 });
@@ -73,7 +73,7 @@ function loginFailure(host: string, grant: { status: number; text: string }): st
   return `Edusky: login rejected at ${host} (HTTP ${grant.status}, ${detail})`;
 }
 
-async function login(http: Http, origin: string, secrets: Login): Promise<string> {
+export async function login(http: Http, origin: string, secrets: Login): Promise<string> {
   const config = await getJson<BaseConfig>(http, `${origin}/core/web/external/baseconfig`, "", "configuration");
   // Cloudflare in front of Edusky challenges every POST to the token endpoint from a data-center
   // network (HTTP 403 "Just a moment..."), but lets a GET through. The token endpoint also takes
