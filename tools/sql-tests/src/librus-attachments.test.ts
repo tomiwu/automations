@@ -13,7 +13,7 @@ const STORAGE_STAND_IN = `
   end $$;
   create schema storage;
   create table storage.buckets (id text primary key, name text not null, public boolean not null default false);
-  create table storage.objects (id bigserial primary key, bucket_id text references storage.buckets (id), name text not null);
+  create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text references storage.buckets (id), name text not null);
   alter table storage.objects enable row level security;
   insert into storage.buckets (id, name, public) values ('other-bucket', 'other-bucket', false);
 `;
@@ -57,7 +57,8 @@ describe.skipIf(!url)("0017_librus_attachments_bucket.sql", () => {
       const added = asWatcher(db, "insert into storage.objects (bucket_id, name) values ('librus-attachments', 'any-family/m1/a1') returning name");
       expect(added.ok).toBe(true);
       const read = asWatcher(db, "insert into storage.objects (bucket_id, name) values ('librus-attachments', 'f/m/a'); select count(*) from storage.objects");
-      expect(read.output.trim().split("\n").pop()).toBe("1");
+      expect(read.ok).toBe(true);
+      expect(read.output).toMatch(/^\s*1\s*$/m);
     });
 
     it("keeps the watcher out of other buckets", () => {

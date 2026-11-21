@@ -96,14 +96,7 @@ function attachmentFallback(check: ChildCheck, scope: string, messageId: string,
   }));
 }
 
-type StoreResult = {
-  path?: string;
-  sha256?: string;
-  size?: number;
-  mimeType?: string;
-  journal?: NewJournalEvent;
-  fallback?: NewNotification[];
-};
+type StoreResult = { stored: true; path: string; journal: NewJournalEvent } | { stored: false; fallback: NewNotification[] };
 
 async function storeOne(
   ctx: AttachmentRunContext,
@@ -112,7 +105,7 @@ async function storeOne(
   storage: StorageAdapter,
 ): Promise<StoreResult> {
   const { check, chargeFetch } = ctx;
-  const fallback = (): StoreResult => ({ fallback: attachmentFallback(check, ctx.scope, message.id, link) });
+  const fallback = (): StoreResult => ({ stored: false, fallback: attachmentFallback(check, ctx.scope, message.id, link) });
   if (link.size > ATTACHMENT_SIZE_LIMIT || chargeFetch?.() === false) return fallback();
   try {
     const bytes = await check.source.fetchAttachment(link.downloadPath);
@@ -121,13 +114,7 @@ async function storeOne(
     const mimeType = mimeOf(link.name);
     const sha256 = await sha256Hex(bytes);
     await storage.putAttachment(path, bytes, mimeType);
-    return {
-      path,
-      sha256,
-      size: bytes.byteLength,
-      mimeType,
-      journal: journalForStored(check, message, link, path, sha256, bytes.byteLength, mimeType),
-    };
+    return { stored: true, path, journal: journalForStored(check, message, link, path, sha256, bytes.byteLength, mimeType) };
   } catch {
     return fallback();
   }
@@ -164,9 +151,9 @@ async function attachmentsOf(
   for (const link of opened.attachments) {
     counts.found += 1;
     const stored = await storeOne(ctx, item, link, check.storage);
-    if (stored.fallback || !stored.path || !stored.journal) {
+    if (!stored.stored) {
       counts.fallback += 1;
-      notifications.push(...(stored.fallback ?? attachmentFallback(check, scope, item.id, link)));
+      notifications.push(...stored.fallback);
       continue;
     }
     counts.stored += 1;
