@@ -46,7 +46,6 @@ interface Answer {
   text: string;
 }
 
-const FLAG_NAMES = ["financeDisable", "blockSettlementView", "blockSettlementInfo"] as const;
 const ROLE = /^ROLE_[A-Z_]{1,40}$/;
 
 const shapeOf = (answer: Answer): string | undefined => jsonShape(answer.text) ?? undefined;
@@ -71,8 +70,11 @@ export function flagValue(value: unknown): FlagValue {
 /** The three finance flags of the answer of `common/users/auth`. */
 export function financeFlags(auth: unknown): FinanceFlags {
   const source = isObject(auth) ? auth : {};
-  const [financeDisable, blockSettlementView, blockSettlementInfo] = FLAG_NAMES.map((name) => flagValue(source[name]));
-  return { financeDisable, blockSettlementView, blockSettlementInfo } as FinanceFlags;
+  return {
+    financeDisable: flagValue(source.financeDisable),
+    blockSettlementView: flagValue(source.blockSettlementView),
+    blockSettlementInfo: flagValue(source.blockSettlementInfo),
+  };
 }
 
 /** The values of `roles` that look like a role name. Other values become `<text>`. */

@@ -306,6 +306,17 @@ describe("script helpers", () => {
     expect(snippet).toBe('var t = "<text>"');
   });
 
+  it("drops a hash, e-mail or host that the window edge cuts in a comment", () => {
+    const secrets = `${HASH} parent@example.org mondo.example.org`;
+    const before = scriptSnippets([`// ${secrets} ${"x ".repeat(73)}saldo`], mask);
+    const after = scriptSnippets([`saldo ${"y ".repeat(70)}  // ${secrets}`], mask);
+    expect(before[0]).toMatch(/^ x x .* saldo$/);
+    expect(after[0]).toMatch(/^saldo y y .* \/\/ $/);
+    for (const part of [HASH.slice(1), "ent@", ".org", "pare", HASH.slice(0, 3)]) {
+      expect([...before, ...after].join("\n")).not.toContain(part);
+    }
+  });
+
   it("reads path literals, with a variable or a template placeholder", () => {
     expect(scriptPaths("a('/x/' + id); b('/y/'); c(`/z/${id}`); d('/w'); e('other')")).toEqual([
       { raw: "/x/", placeholder: "variable" },

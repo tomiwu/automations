@@ -34,6 +34,8 @@ export interface SkippedPath {
   reason: string;
 }
 
+type Followed = (XhrRead | SkippedPath)[];
+
 export interface MondoBillingAccount {
   account: string;
   status?: string;
@@ -43,7 +45,7 @@ export interface MondoBillingAccount {
   /** Up to 12 redacted script snippets around `xhr-` or `saldo`. */
   snippets?: string[];
   /** Up to 2 followed paths, and the paths that were skipped with a reason. */
-  followed?: (XhrRead | SkippedPath)[];
+  followed?: Followed;
   /** The skeleton of the navigation area of the panel page, or of the whole body without one. */
   skeleton?: string;
 }
@@ -294,23 +296,34 @@ export function redactLiteral(body: string, mask: Mask): string {
   return plain ? `"${clean}"` : '"<text>"';
 }
 
-function redactPiece(piece: Piece, from: number, to: number, mask: Mask): string {
+interface Window {
+  from: number;
+  to: number;
+}
+
+/** A word (hash, e-mail, host) that the window edge cuts is not masked, so it is dropped. */
+const CUT_WORD_START = /^[\w.@-]+/;
+const CUT_WORD_END = /[\w.@-]+$/;
+
+/** The part of a code piece inside the window, without the words that the window edges cut. */
+function codeInWindow(piece: Piece, window: Window): string {
+  const text = piece.text.slice(Math.max(window.from - piece.start, 0), window.to - piece.start);
+  const head = window.from > piece.start ? text.replace(CUT_WORD_START, "") : text;
+  return window.to < piece.end ? head.replace(CUT_WORD_END, "") : head;
+}
+
+function redactPiece(piece: Piece, window: Window, mask: Mask): string {
   if (piece.quote !== undefined) return redactLiteral(piece.text, mask);
-  return redactCode(piece.text.slice(Math.max(from - piece.start, 0), to - piece.start), mask);
+  return redactCode(codeInWindow(piece, window), mask);
 }
 
 /** The redacted text of a script between two offsets. A literal that touches the window is redacted whole. */
 function redactWindow(pieces: Piece[], window: Window, mask: Mask): string {
   const inside = pieces.filter((piece) => piece.end > window.from && piece.start < window.to);
   return inside
-    .map((piece) => redactPiece(piece, window.from, window.to, mask))
+    .map((piece) => redactPiece(piece, window, mask))
     .join("")
     .slice(0, SNIPPET_LIMIT);
-}
-
-interface Window {
-  from: number;
-  to: number;
 }
 
 /** The windows around each match of `xhr-` or `saldo`. A match inside the last window gives no new window. */
@@ -376,7 +389,6 @@ function resolvePath(found: ScriptPath, panel: Panel): Resolved | null {
 
 const isFetchable = (resolved: Resolved): resolved is Fetchable => "raw" in resolved;
 
-/** Paths of the attributes of an answer. */
 const attributePaths = (html: string, origin: string): ScriptPath[] =>
   navEntries(html, origin, []).map((entry) => ({ raw: entry.raw }));
 
@@ -426,7 +438,6 @@ async function selectChild(http: Http, origin: string, child: { hash: string; se
 }
 
 type Row = Omit<MondoBillingAccount, "account">;
-type Followed = (XhrRead | SkippedPath)[];
 
 /** The follow-up: reads up to 2 new paths and lists the skipped ones. */
 async function followUp(panel: Panel, html: string, answers: Fetched[]): Promise<{ followed: Followed; blocked: boolean }> {
