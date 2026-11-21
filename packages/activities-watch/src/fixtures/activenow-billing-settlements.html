@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="csrf-token" content="csrf-fake-token-abc123" />
+  <script src="/assets/app-7f3e9a2b1c4d5e6f.js"></script>
+  <link rel="modulepreload" href="/assets/chunk-settlements_controller.js" />
+</head>
+<body>
+  <nav class="panel-menu">
+    <a href="/client_panel/settlements/index" class="nav-link">Rozliczenia</a>
+  </nav>
+  <div
+    data-controller="client-panel-page-settlements"
+    data-action="click->client-panel-page-settlements#toggle:prevent"
+    data-client-panel-page-settlements-target="root"
+    data-client-panel-page-settlements-upcoming-url-value="/client_panel/settlements/upcoming?x=1"
+    data-client-panel-page-settlements-upcoming-value="true"
+  >
+    <label data-client-panel-page-settlements-target="switch">Pokaż nadchodzące</label>
+  </div>
+  <table class="billing-table">
+    <thead><tr><th>Data</th><th>Tytuł</th><th>Kwota</th></tr></thead>
+    <tbody><tr><td>2026-05-01</td><td>Czesne</td><td>-200 zł</td></tr></tbody>
+  </table>
+</body>
+</html>

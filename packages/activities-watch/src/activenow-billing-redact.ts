@@ -43,6 +43,7 @@ export const LABEL_ALLOWLIST = new Set([
 const BODY_LIMIT = 200_000;
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 const LONG_TOKEN = /\b[A-Za-z0-9+/=_-]{24,}\b/g;
+const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 const DATE_MARK =
   /^\d{4}-\d{2}-\d{2}$|^\d{1,2}\.\d{1,2}\.\d{4}$|^\d{1,2} [a-ząćęłńóśźż]+ \d{4}$/i;
 const AMOUNT_MARK = /^-?\d[\d\s]*(?:[,.]\d+)?\s*(?:zł|PLN)$/i;
@@ -52,10 +53,12 @@ const JSON_SCRIPT = new Set(["application/json", "application/ld+json"]);
 const KEEP_ATTR_VALUE = new Set(["role", "type"]);
 /** These values are kept, but a record id in them (digits, a UUID, a long token) is masked. */
 const MASKED_ATTR_VALUE = new Set(["class", "id", "name", "for"]);
+const STIMULUS_CODE = new Set(["data-controller", "data-action"]);
 const PATH_IN_TEXT = /https?:\/\/\S+|\/[^\s)]+/g;
 const VOID_TAG = new Set(["meta", "img", "input", "br", "hr", "link"]);
 const SKIP_NODE = new Set(["comment", "cdata"]);
 const ELEMENT_NODE = new Set(["script", "tag"]);
+const STIMULUS_VALUE_SUFFIX = /-(?:url|path|src)-value$/;
 
 /** A long word is a token only when it has a digit, so long class names like `client-panel-billing-table` stay. */
 const tokenMark = (word: string): string => (/\d/.test(word) ? "<id>" : word);
@@ -68,8 +71,48 @@ export function maskIds(segment: string): string {
     .replace(/\d+/g, "<n>");
 }
 
+function maskEmails(text: string): string {
+  return text.replace(EMAIL, "<email>");
+}
+
+function fileNameMark(file: string): string {
+  const match = file.match(/^(.*)\.([A-Za-z0-9]+)$/);
+  if (!match) return "<file>";
+  return `<file>.${match[2]}`;
+}
+
+/** Redacts a file path: directory segments are masked; the file name becomes `<file>.<ext>`. */
+function redactFilePath(raw: string): string {
+  try {
+    const url = new URL(raw, "https://example.invalid");
+    const parts = url.pathname.split("/");
+    const last = parts.pop() ?? "";
+    const dir = parts.map((part) => (part === "" ? "" : maskIds(part))).join("/");
+    const file = fileNameMark(last);
+    return dir === "" ? `/${file}` : `${dir}/${file}`;
+  } catch {
+    return "<text>";
+  }
+}
+
+function redactSrcset(raw: string): string {
+  return raw
+    .split(",")
+    .map((piece) => {
+      const trimmed = piece.trim();
+      const space = trimmed.indexOf(" ");
+      const url = space === -1 ? trimmed : trimmed.slice(0, space);
+      const rest = space === -1 ? "" : trimmed.slice(space);
+      return `${redactFilePath(url)}${rest}`;
+    })
+    .join(", ");
+}
+
 /** Redacts a URL for the skeleton: path segments, query key names only, no fragment. */
 export function redactUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.toLowerCase().startsWith("mailto:")) return "mailto:<email>";
+  if (trimmed.toLowerCase().startsWith("tel:")) return "tel:<n>";
   try {
     const url = new URL(raw, "https://example.invalid");
     const path = url.pathname
@@ -119,12 +162,28 @@ function valueMark(text: string): string {
   return "<text>";
 }
 
-function stringMark(raw: string): string {
-  const text = raw.trim();
-  if (text === "") return "<empty>";
+function scalarText(text: string): string | null {
+  if (!text) return "<empty>";
   if (text === "true" || text === "false") return "<bool>";
+  return null;
+}
+
+function stringMark(raw: string): string {
+  const text = maskEmails(raw.trim());
+  const scalar = scalarText(text);
+  if (scalar) return scalar;
   if (LABEL_ALLOWLIST.has(text)) return text;
+  if (text.includes("<email>")) return "<email>";
   return valueMark(text);
+}
+
+function isStimulusCode(name: string): boolean {
+  if (STIMULUS_CODE.has(name)) return true;
+  return name.endsWith("-target");
+}
+
+function isPathOrUrl(value: string): boolean {
+  return /^(\/|https?:)/.test(value) || (value.includes("=") && value.includes("?"));
 }
 
 function isUrlLike(name: string, value: string): boolean {
@@ -132,18 +191,44 @@ function isUrlLike(name: string, value: string): boolean {
   return name.startsWith("data-") && /^(\/|https?:)/.test(value);
 }
 
-function attrValue(name: string, value: string): string {
+function stimulusValueMark(value: string): string {
+  return isPathOrUrl(value) ? redactUrl(value) : stringMark(value);
+}
+
+function maskedNameValue(name: string, value: string): string | null {
+  if (isStimulusCode(name)) return maskIds(value);
+  if (name.endsWith("-value")) return stimulusValueMark(value);
   if (KEEP_ATTR_VALUE.has(name)) return value;
   if (MASKED_ATTR_VALUE.has(name)) return maskIds(value);
+  return null;
+}
+
+function bundleMediaAttr(el: Element, name: string, value: string): string | null {
+  if (el.name !== "img") return null;
+  if (name === "srcset") return redactSrcset(value);
+  if (name === "src") return redactFilePath(value);
+  return null;
+}
+
+function attrValue(el: Element, name: string, value: string): string {
+  const masked = maskedNameValue(name, value);
+  if (masked !== null) return masked;
+  const media = bundleMediaAttr(el, name, value);
+  if (media !== null) return media;
   if (isUrlLike(name, value)) return redactUrl(value);
-  const json = tryJsonShape(value);
-  if (json !== null) return json;
-  return stringMark(value);
+  return tryJsonShape(value) ?? stringMark(value);
 }
 
 function formatAttrs(el: Element): string {
   if (!el.attribs) return "";
-  return Object.entries(el.attribs).map(([name, value]) => ` ${name}="${attrValue(name, String(value))}"`).join("");
+  return Object.entries(el.attribs)
+    .map(([name, value]) => {
+      const text = String(value);
+      const icon = el.name === "link" && name === "href" && (el.attribs?.rel ?? "").includes("icon");
+      const redacted = icon ? redactFilePath(text) : attrValue(el, name, text);
+      return ` ${name}="${redacted}"`;
+    })
+    .join("");
 }
 
 function textContent(el: Element): string {
@@ -203,13 +288,66 @@ function buildSkeleton(children: readonly AnyNode[]): string {
   return skeleton.length > BODY_LIMIT ? `${skeleton.slice(0, BODY_LIMIT)}<cut>` : skeleton;
 }
 
+export interface HeadSummary {
+  scripts: string[];
+  modulepreload: string[];
+  preloadScripts: string[];
+  importmap?: { keys: string[]; paths: Record<string, string> };
+}
+
+/** Builds a redacted summary of the document head (scripts and preloads only, no inline text). */
+export function headSummary(html: string): HeadSummary {
+  const $ = cheerio.load(html);
+  const scripts = $("head script[src]")
+    .map((_, el) => redactUrl($(el).attr("src") ?? ""))
+    .get();
+  const modulepreload = $("head link[rel=modulepreload]")
+    .map((_, el) => redactUrl($(el).attr("href") ?? ""))
+    .get();
+  const preloadScripts = $('head link[rel="preload"][as="script"]')
+    .map((_, el) => redactUrl($(el).attr("href") ?? ""))
+    .get();
+  const importmapRaw = $('head script[type="importmap"]').first().text();
+  let importmap: HeadSummary["importmap"];
+  if (importmapRaw.trim()) {
+    try {
+      const parsed = JSON.parse(importmapRaw) as { imports?: Record<string, string> };
+      const imports = parsed.imports ?? {};
+      importmap = {
+        keys: Object.keys(imports),
+        paths: Object.fromEntries(Object.entries(imports).map(([key, path]) => [key, redactUrl(path)])),
+      };
+    } catch {
+      importmap = { keys: [], paths: {} };
+    }
+  }
+  return { scripts, modulepreload, preloadScripts, importmap };
+}
+
+/** Redacts response text as JSON shape, HTML body skeleton, or a short text mark. */
+function skeletonByType(text: string, type: string): string {
+  if (type.includes("json")) return tryJsonShape(text) ?? "<text>";
+  if (type.includes("html") || text.includes("<")) return bodySkeleton(text);
+  return "<text>";
+}
+
+export function responseSkeleton(text: string, contentType: string): string {
+  const type = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  return skeletonByType(text, type);
+}
+
 /** Redacts every URL and path in a text, for example in an error message. */
 export function redactPaths(text: string): string {
-  return text.replace(PATH_IN_TEXT, (path) => redactUrl(path));
+  return maskEmails(text).replace(PATH_IN_TEXT, (path) => redactUrl(path));
 }
 
 /** Builds a redacted skeleton of the document body. It has no family data and no secrets. */
 export function bodySkeleton(html: string): string {
   const children = (cheerio.load(html)("body").get(0) as unknown as AnyNode | undefined)?.children;
   return children?.length ? buildSkeleton(children) : "";
+}
+
+/** True when an attribute name can hold a settlements upcoming address from markup. */
+export function isUpcomingMarkupAttr(name: string): boolean {
+  return STIMULUS_VALUE_SUFFIX.test(name) || URL_ATTRS.has(name);
 }
