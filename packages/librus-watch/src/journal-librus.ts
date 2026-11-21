@@ -164,13 +164,13 @@ async function planParts(deps: LibrusJournalDeps, today: string, down: Downloads
 /**
  * Appends the Lesson and homework Journal events of one Child. It uses only data that the run read
  * already: the memoized timetable and the homework Items. A failed part gives no event and no vanished
- * event. Returns the number of appended events.
+ * event. When both parts failed, it still appends one failed `CheckCompleted`, so readers see the outage.
+ * Returns the number of appended events.
  */
 export async function appendLibrusJournal(deps: LibrusJournalDeps): Promise<number> {
   const today = localDate(deps.now, deps.timezone);
   const timetable = await deps.source.fullTimetable();
   const down: Downloads = { lessons: timetable.error === undefined ? timetable.lessons : undefined, homework: deps.homework };
-  if (down.lessons === undefined && down.homework === undefined) return 0;
   const streams = streamsOf(deps.childId, down);
   const heads = await readHeads(deps, today, streams);
   const count = await deps.storage.appendEvents(await planParts(deps, today, down, heads));

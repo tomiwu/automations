@@ -161,6 +161,17 @@ describe("storedLessonsExport", () => {
     expect(result.lastCheck).toEqual({ timetableOk: false, homeworkOk: true });
   });
 
+  it("reports a failed check after a good one and keeps the stored data", async () => {
+    const { deps } = await setup(([c]) => [
+      lessonEvent(c!, "2026-01-10", 1),
+      check(c!, { timetableOk: true, homeworkOk: true, lessons: 1, homework: 0 }),
+      { ...check(c!, { timetableOk: false, homeworkOk: false, lessons: 0, homework: 0 }), seq: 2 },
+    ]);
+    const result = await storedLessonsExport(deps, {});
+    expect(result.lastCheck).toEqual({ timetableOk: false, homeworkOk: false });
+    expect(result.lessons.map((l) => l.vanished)).toEqual([false]);
+  });
+
   it("gives null with no check event and no data", async () => {
     const { deps } = await setup(() => []);
     expect(await storedLessonsExport(deps, { childId: "00000000-0000-4000-8000-0000000000c1" })).toMatchObject({ lastSavedAt: null, lastCheck: null, lessons: [], homework: [] });

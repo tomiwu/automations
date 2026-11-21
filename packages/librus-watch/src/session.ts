@@ -189,13 +189,19 @@ export class LibrusSession {
   }
 }
 
-/** Finds the login iframe of the portal page: the old one has an id, the new one is told by its src. */
+/** Finds the login iframe of the portal page: the old one has an id, the newer one is told by its src. */
 export function loginIframeSource(html: string): string | undefined {
   for (const [tag] of html.matchAll(/<iframe\b[^>]*>/g)) {
     const src = tag.match(/\ssrc="([^"]+)"/)?.[1];
     if (src && (/id="caLoginIframe"/.test(tag) || /\/loguj\//.test(src))) return src.replaceAll("&amp;", "&");
   }
-  return undefined;
+  return portalConfigLoginUrl(html);
+}
+
+/** The portal is a JS app since 2026-11: the login URL is in `window.__PORTAL_CONFIG__`. The JS bundle does not run. */
+function portalConfigLoginUrl(html: string): string | undefined {
+  const url = html.match(/"VITE_SYNERGIA_LOGIN_URL_FAMILY"\s*:\s*"([^"]+)"/)?.[1]?.replaceAll("\\/", "/");
+  return url && /^https:\/\/[a-z0-9.-]+\.librus\.pl\/loguj\//.test(url) ? url : undefined;
 }
 
 /** Reads the answer of the login form. It returns the landing URL, or throws. */
