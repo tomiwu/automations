@@ -1,11 +1,20 @@
 import { createMemoryStorage, type ItemKind, type NewItemDetail } from "@automations/librus-data";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { formatMorningReport, isMorningReportRun, newItemsSince, runMorningReport, type MorningReportDeps } from "./morning-report.ts";
+import { MORNING_REPORT_UTC_HOUR, formatMorningReport, isMorningReportRun, newItemsSince, runMorningReport, type MorningReportDeps } from "./morning-report.ts";
 import { CHILD1, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
 import { upcoming } from "./upcoming.ts";
 
 const child = { id: CHILD1, name: "Child One" };
 const MONDAY_0430Z = new Date("2026-01-05T04:30:00Z");
+const SCHEDULED_CRON_HOURS = (
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    kody: { jobs: { "scheduled-check": { schedule: { expression: string } } } };
+  }
+).kody.jobs["scheduled-check"].schedule.expression
+  .split(" ")[1]
+  ?.split(",")
+  .map(Number) ?? [];
 
 function setup(now = MONDAY_0430Z) {
   const config = testConfig();
@@ -74,6 +83,10 @@ describe("isMorningReportRun", () => {
     expect(isMorningReportRun(MONDAY_0430Z, "Europe/Warsaw")).toBe(true);
     expect(isMorningReportRun(new Date("2026-01-05T12:30:00Z"), "Europe/Warsaw")).toBe(false);
     expect(isMorningReportRun(new Date("2026-07-06T04:30:00Z"), "Europe/Warsaw")).toBe(true);
+  });
+
+  it("uses an hour that the package cron expression schedules", () => {
+    expect(SCHEDULED_CRON_HOURS).toContain(MORNING_REPORT_UTC_HOUR);
   });
 });
 

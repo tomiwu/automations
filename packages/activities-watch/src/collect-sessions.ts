@@ -18,7 +18,6 @@ export interface AccountReading {
   accountId: string;
   service: string;
   cached: boolean;
-  /** ISO time of the fetch that made the Sessions, or null when there was none. */
   fetchedAt: string | null;
 }
 
@@ -27,13 +26,11 @@ export interface CollectDeps {
   storage: StorageAdapter;
   familyId: string;
   createSource?: CreateSource;
-  /** The cache of the ActiveNow Sessions. */
   activeNow?: ActiveNowOptions;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-/** Adds the Sessions of one Account to the result. A cached read with an error gives both. */
 async function readTarget(result: SessionsResult, source: SessionSource, target: ActivityTarget): Promise<void> {
   const reading = source.read ? await source.read() : { sessions: await source.sessions(), cached: false, fetchedAt: null };
   result.sessions.push(...reading.sessions);

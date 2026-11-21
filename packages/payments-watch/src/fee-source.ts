@@ -1,6 +1,5 @@
 import type { AmountSource, Fee } from "@automations/librus-data";
 
-/** The amount of one Fee for one month, and where it comes from. */
 export interface FeeAmount {
   feeId: string;
   /** Month `YYYY-MM`. */
@@ -27,7 +26,6 @@ export interface FeeSource {
   observationFor?(fee: Fee, month: string): PageObservation | undefined;
 }
 
-/** Fee source that reads the `amounts` of the Fee row. */
 export function createConfigFeeSource(): FeeSource {
   return {
     amountFor: async (fee, month) => {

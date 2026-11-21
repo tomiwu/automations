@@ -11,7 +11,6 @@ import type {
   WatcherName,
 } from "./types.ts";
 
-/** Where a detail belongs: the Family, the scope of the Watcher and the Child. */
 export interface DetailContext {
   familyId: string;
   scope: string;
@@ -20,11 +19,9 @@ export interface DetailContext {
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}/;
 
-/** The day of a Librus date text such as "2026-01-05 10:30:00", or null. */
 const dayOf = (value: string): string | null =>
   value.match(DATE_PATTERN)?.[0] ?? null;
 
-/** The moment of a Librus date text (read as UTC), or null when it is not a date and time. */
 function momentOf(value: string): Date | null {
   if (!DATE_PATTERN.test(value)) return null;
   const moment = new Date(
@@ -33,7 +30,6 @@ function momentOf(value: string): Date | null {
   return Number.isNaN(moment.getTime()) ? null : moment;
 }
 
-/** The text, or null when it is empty. */
 const orNull = (value: string): string | null => (value === "" ? null : value);
 
 const emptyDetail = (
@@ -55,7 +51,6 @@ const emptyDetail = (
   sourceUpdatedAt: null,
 });
 
-/** The content of a message: sender, subject, send time and the whole body. */
 export function messageDetail(
   context: DetailContext,
   message: MessageItem,
@@ -72,7 +67,6 @@ export function messageDetail(
   };
 }
 
-/** The content of an announcement: the title, the whole text and the publication time. */
 export function announcementDetail(
   context: DetailContext,
   announcement: AnnouncementItem,
@@ -86,7 +80,6 @@ export function announcementDetail(
   };
 }
 
-/** The content of a trip. The date is the first day. The text has the date range, the route, the transport and the coordinator. */
 export function tripDetail(
   context: DetailContext,
   trip: TripItem,
@@ -106,7 +99,6 @@ export function tripDetail(
   };
 }
 
-/** The content of a Terminarz entry: date, category, subject, teacher and the whole content. */
 export function terminarzDetail(
   context: DetailContext,
   entry: HomeworkItem,
@@ -122,7 +114,6 @@ export function terminarzDetail(
   };
 }
 
-/** The content of a meeting: date, times, topic, room and teacher. */
 export function meetingDetail(
   context: DetailContext,
   meeting: MeetingItem,
@@ -140,7 +131,6 @@ export function meetingDetail(
   };
 }
 
-/** The content of a day off. The date is the first day. The text has the name and the date range. */
 export function dayOffDetail(
   context: DetailContext,
   dayOff: DayOffItem,
@@ -155,7 +145,6 @@ export function dayOffDetail(
   };
 }
 
-/** The content of a grade: subject, date, category and teacher. The text is the grade value. */
 export function gradeDetail(
   context: DetailContext,
   grade: GradeItem,
@@ -188,10 +177,6 @@ const DETAIL_BUILDERS: Partial<Record<WatcherName, DetailBuilder>> = {
   classFreeDays: dayOffDetail,
 };
 
-/**
- * The content of one Item of a Watcher. A message needs its `body`. Returns undefined when the
- * Watcher has no stored content.
- */
 export function detailOf(
   watcher: WatcherName,
   context: DetailContext,

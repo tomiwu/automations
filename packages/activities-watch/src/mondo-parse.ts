@@ -1,11 +1,8 @@
 import * as cheerio from "cheerio";
 
-/** One element of the page, as the cheerio API gives it. */
 type Row = ReturnType<ReturnType<cheerio.CheerioAPI["root"]>["find"]>;
 
-/** A class of the Mondo parent panel, before the Activity is applied. */
 export interface MondoEvent {
-  /** Local start and end, "YYYY-MM-DDTHH:MM". */
   start: string;
   end: string;
   place: string;
@@ -20,7 +17,6 @@ const MONTHS = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "
 
 const pad = (value: string | undefined): string => (value ?? "").padStart(2, "0");
 
-/** Reads "26 paź 2026" as "2026-10-26". Returns undefined when the text has no date. */
 export function isoDate(text: string): string | undefined {
   const match = DATE.exec(text);
   const month = MONTHS.indexOf((match?.[2] ?? "").toLowerCase());
@@ -46,15 +42,8 @@ function toEvent(row: Row): MondoEvent | undefined {
   };
 }
 
-/** Returns the class ID in "showDetails('<tab id>', '<class id>', '<group id>')". */
 const classId = (onclick: string | undefined): string => /showDetails\('[^']*',\s*'([^']+)'/.exec(onclick ?? "")?.[1] ?? "";
 
-/**
- * Reads the class list of the Mondo parent panel (`/parent/xhr-activity/<child>`). Each class is one
- * `button[onclick^=showDetails]` with the group name, the group text (used as the place), the date
- * "26 paź 2026", the time range and an optional status badge ("Obecny", "Nieobecny", "Odwołane").
- * The same class shows in more than one tab. The first button of a class ID gives the class.
- */
 export function parseMondoEvents(html: string): MondoEvent[] {
   const $ = cheerio.load(html);
   if ($("#pills-tabContent").length === 0) throw new Error("Mondo: class list not found (site changed?)");
