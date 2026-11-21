@@ -1,14 +1,12 @@
 import type { HomeworkItem, Lesson, LibrusSource } from "./types.ts";
 import { norm, type ChildRef } from "./upcoming.ts";
 
-/** A homework entry given at a Lesson. */
 export interface HomeworkNote {
   category: string;
   content: string;
   teacher: string;
 }
 
-/** A test or quiz at a later Lesson. */
 export interface TestNote {
   date: string;
   period: number;
@@ -16,14 +14,12 @@ export interface TestNote {
   content: string;
 }
 
-/** One Lesson as the calendar agent reads it. */
 export interface LessonRecord extends Lesson {
   /** A stable key: Child, date and period. The agent updates one calendar event with it. */
   id: string;
   childId: string;
   child: string;
   homeworkGiven: HomeworkNote[];
-  /** Tests and quizzes at the next Lesson of the same subject. */
   testAtNextLesson: TestNote[];
 }
 
@@ -58,7 +54,6 @@ function testAtNextLesson(lesson: Lesson, sorted: Lesson[], homework: HomeworkIt
     .map((h) => ({ date: next.date, period: next.period, category: h.category, content: h.content }));
 }
 
-/** Returns one record for each Lesson, ordered by date and period. */
 export function lessonRecords(child: ChildRef, lessons: Lesson[], homework: HomeworkItem[]): LessonRecord[] {
   const sorted = [...lessons].sort(byTime);
   return sorted.map((lesson) => ({

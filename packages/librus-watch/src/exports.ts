@@ -15,9 +15,7 @@ export interface ExportDeps {
   runtime: Runtime;
   storage: StorageAdapter;
   familyId: string;
-  /** Makes the source of one Account. The default reads Librus. The tests replace it. */
   createSource?: (account: Account, timezone: string) => LibrusSource;
-  /** Keeps the Librus names between runs. Without it each export fetches the names again. */
   nameStore?: NameStore;
   /** Counts the fetches of the run. With it the export logs the count and returns it as `fetches`. */
   counter?: FetchCounter;
@@ -58,14 +56,12 @@ function checkDays(days: unknown): number {
   return days;
 }
 
-/** Checks the input of an export. Unknown keys, a bad `childId` and a bad `days` give an error. */
 export function parseExportInput(input: unknown, allowed: readonly ("childId" | "days")[]): ExportInput {
   const object = inputObject(input);
   checkKeys(object, allowed);
   return { childId: checkChildId(object.childId), days: checkDays(object.days ?? MAX_DAYS) };
 }
 
-/** Picks the Librus Account of the Child. Without a `childId` the Family must have one Librus Child. */
 export function pickTarget(targets: readonly LibrusTarget[], childId: string | undefined): LibrusTarget {
   if (childId === undefined) return onlyTarget(targets);
   const target = targets.find((candidate) => candidate.child.id === childId);
@@ -105,7 +101,6 @@ export interface UpcomingExport {
   entries: UpcomingEntry[];
 }
 
-/** Read-only export: upcoming homework and tests of one Child, each with the first Lesson of its subject that day. */
 export async function upcomingExport(deps: ExportDeps, input: unknown = {}): Promise<UpcomingExport & { fetches?: FetchCount }> {
   const { childId, days } = parseExportInput(input, ["childId", "days"]);
   const { target, source, timezone } = await openTarget(deps, childId);
@@ -120,7 +115,6 @@ export interface LessonsExport extends LessonsResult {
   timezone: string;
 }
 
-/** Read-only export: the Lessons of one Child for the next 14 days. */
 export async function lessonsExport(deps: ExportDeps, input: unknown = {}): Promise<LessonsExport & { fetches?: FetchCount }> {
   const { childId } = parseExportInput(input, ["childId"]);
   const { target, source, timezone } = await openTarget(deps, childId);
@@ -134,10 +128,6 @@ export interface CalendarExport extends CalendarResult {
   timezone: string;
 }
 
-/**
- * Read-only export: the Lessons of the next 14 days and the homework and tests of the same days, in one read
- * with one Librus login. It replaces a `lessons` call plus an `upcoming` call.
- */
 export async function calendarExport(deps: ExportDeps, input: unknown = {}): Promise<CalendarExport & { fetches?: FetchCount }> {
   const { childId } = parseExportInput(input, ["childId"]);
   const { target, source, timezone } = await openTarget(deps, childId);
@@ -149,7 +139,6 @@ export interface ChildrenExport {
   children: { id: string; name: string; calendar_id: string | null }[];
 }
 
-/** Read-only export: every Child of the Family, so a calendar agent finds the calendars. */
 export async function childrenExport(deps: ExportDeps, input: unknown = {}): Promise<ChildrenExport & { fetches?: FetchCount }> {
   checkKeys(inputObject(input), []);
   const config = await deps.storage.loadConfig(deps.familyId);
@@ -165,10 +154,6 @@ export interface EventsExport {
   events: CalendarEvent[];
 }
 
-/**
- * Read-only export: the stored content of the Items of one Child (meetings, days off, trips, Terminarz entries,
- * announcements, messages, grades). It reads Supabase only: no Librus login. The calendar routine places the events.
- */
 export async function eventsExport(deps: ExportDeps, input: unknown = {}): Promise<EventsExport & { fetches?: FetchCount }> {
   const object = inputObject(input);
   checkKeys(object, ["childId", "from", "to", "since"]);

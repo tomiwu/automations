@@ -1,8 +1,3 @@
-/**
- * The only code that knows how ActiveNow is read: a Rails login form with a CSRF token, a profile
- * picker, then the page of all lessons of the chosen profile. The secret values come from
- * `Runtime.secret`. They go only into the login form.
- */
 import * as cheerio from "cheerio";
 import { localDate, type Runtime } from "@automations/shared";
 import { parseActiveNowEvents } from "./activenow-parse.ts";
@@ -21,10 +16,6 @@ const loginRejected = (html: string): boolean => html.includes('name="user[passw
 
 const blockPage = (text: string): boolean => /Dostęp zablokowany|tymczasowo zablokowany/.test(text);
 
-/**
- * Sends one request and checks its status. A 403 block page means ActiveNow blocks the network for about an
- * hour. The error ends the read of the Account, so no request is repeated: a retry makes the block longer.
- */
 async function checked(http: Http, url: string, init?: RequestOptions): Promise<HttpResult> {
   const result = await http.request(url, init);
   if (result.status >= 200 && result.status < 400) return result;
@@ -49,7 +40,6 @@ async function login(http: Http, origin: string, secrets: Login): Promise<string
   return after.text;
 }
 
-/** Opens the profile of the Child when the login shows a picker. A login with one Child goes straight to the panel. */
 async function chooseProfile(http: Http, origin: string, html: string, profile: string | null): Promise<void> {
   const $ = cheerio.load(html);
   const links = $('a[href*="change_role"]').toArray();
@@ -75,9 +65,7 @@ async function allLessons(http: Http, target: ActivityTarget, secrets: Login): P
 }
 
 export interface ActiveNowOptions {
-  /** Keeps the Sessions between runs. Without it every read fetches from ActiveNow. */
   store?: CacheStore;
-  /** Time between two fetches of one Account. */
   ttlMs?: number;
 }
 
@@ -98,7 +86,6 @@ function windowed(sessions: Session[], runtime: Runtime, timezone: string): Sess
   return sessions.filter((session) => inWindow(session, today)).sort((a, b) => a.start.localeCompare(b.start));
 }
 
-/** Gives the cached Sessions that still are in the window, with the error of the last attempt. */
 function fromCache(runtime: Runtime, timezone: string, entry: CacheEntry | undefined, error?: string): SourceReading {
   const reading: SourceReading = {
     sessions: windowed(entry?.sessions ?? [], runtime, timezone),
@@ -136,12 +123,6 @@ function logLine(runtime: Runtime, entry: CacheEntry, ttlMs: number, fetched: bo
   else runtime.log("info", entry.error === null ? "activenow: fetched" : `activenow: fetch failed (next fetch after ${next})`);
 }
 
-/**
- * Reads the Sessions of one ActiveNow Account for the next 14 days. The `group` of the Account is the
- * name of the profile of the Child when one login serves several Children. With a store, ActiveNow is
- * fetched at most once in the TTL for the Account, counted from the last attempt. A failed or empty fetch
- * keeps the last good Sessions.
- */
 export function createActiveNowSource(
   runtime: Runtime,
   target: ActivityTarget,

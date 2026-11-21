@@ -1,10 +1,6 @@
 import { packageContext, packageStorage } from "kody:runtime";
 import type { FetchFn, LogLevel, Runtime } from "./runtime.ts";
 
-/**
- * The names that `kody:runtime` really exports (seen on Kody on 2026-10-22).
- * Code may import only these names; `kody.test.ts` checks every import of `kody:runtime` against this list.
- */
 export const KODY_RUNTIME_EXPORTS = [
   "KodyRuntime",
   "createAuthenticatedFetch",
@@ -23,28 +19,18 @@ export const KODY_RUNTIME_EXPORTS = [
   "workflows",
 ] as const;
 
-/**
- * The only Kody secret the packages use, as a literal placeholder (Kody requires literal secret names). Kody fills
- * it in when a fetch sends it to the allowed host of the secret. The code never sees the value.
- */
 export const SUPABASE_KEY_PLACEHOLDER = "{{secret:SUPABASE_KEY}}";
 
-/** The key-value storage of the package (`packageStorage()` of `kody:runtime`). */
 export interface KodyStorage {
   get(key: string): Promise<unknown>;
   set(key: string, value: string): Promise<unknown>;
 }
 
-/** The platform parts that the Kody Runtime uses. */
 export interface KodyHost {
   fetch: FetchFn;
   log(level: LogLevel, message: string): void;
 }
 
-/**
- * `secret(name)` gives the service credential with this name (for example `accounts.login_secret`). The value comes
- * from `resolveCredential`: on Kody it is the encrypted row in Supabase, decrypted with the credential key.
- */
 export function createKodyRuntime(
   host: KodyHost,
   resolveCredential: (name: string) => Promise<string>,
@@ -61,17 +47,14 @@ export function createKodyRuntime(
   };
 }
 
-/** Plain (non-secret) settings of one deployment. They live in the package storage, not in the code. */
 export interface DeploymentConfig {
   supabaseUrl: string;
   familyId: string;
   /** Base64 AES-256 key that decrypts the service credentials in Supabase. Never returned by an export. */
   credentialKey: string;
-  /** Hours between two fetches of one ActiveNow Account. Optional; the default is 24. */
   activenowCacheHours?: number;
   /** payments-watch: send the Payment Notifications and reminders as QR photos with Paid and Skip. Optional; default false (text). */
   paymentPhotos?: boolean;
-  /** Fetches that the watchers keep free in the week for the time-critical jobs. Optional; the default is 150. */
   fetchReserve?: number;
 }
 
@@ -155,7 +138,6 @@ export async function loadDeploymentConfig(storage: KodyStorage): Promise<Deploy
   return parseDeploymentConfig(typeof stored === "string" ? JSON.parse(stored) : stored);
 }
 
-/** What `./configure` returns: the config without the key. */
 export type SavedConfig = Omit<DeploymentConfig, "credentialKey"> & { credentialKey: "set" };
 
 /** Validates and saves the deployment config. The result never contains the key. */
@@ -165,7 +147,6 @@ export async function saveDeploymentConfig(storage: KodyStorage, raw: unknown): 
   return { supabaseUrl: config.supabaseUrl, familyId: config.familyId, credentialKey: "set" };
 }
 
-/** Only the entry files of the packages import this module. This is the only file that imports `kody:runtime`. */
 export const kodyHost: KodyHost = {
   fetch: (input, init) => fetch(input, init),
   log: (level, message) => console.log(`[${level}] ${message}`),

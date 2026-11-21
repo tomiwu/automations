@@ -1,4 +1,3 @@
-// The privacy check command. It prints `place:line:category` for each finding and never a value.
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -40,7 +39,6 @@ const PLAIN_FLAGS = new Map<string, (options: Options) => void>([
   ["--require-words", (options) => { options.requireWords = true; }],
 ]);
 
-/** Applies one flag. A value flag takes its value from `rest`. Gives false for an unknown flag or a missing value. */
 function applyFlag(options: Options, flag: string, rest: string[]): boolean {
   const plain = PLAIN_FLAGS.get(flag);
   if (plain !== undefined) {
@@ -57,7 +55,6 @@ function applyFlag(options: Options, flag: string, rest: string[]): boolean {
 const commandOf = (args: string[]): { command: Options["command"]; rest: string[] } =>
   args[0] === "hash" ? { command: "hash", rest: args.slice(1) } : { command: "check", rest: [...args] };
 
-/** Gives the options, or the text of the usage error. Without a mode, the mode is `tree`. */
 export function parseArgs(args: string[]): Options | string {
   const { command, rest } = commandOf(args);
   const options: Options = { command, repo: ".", modes: [], diffBase: "", input: undefined, requireWords: false };
@@ -95,7 +92,6 @@ function findings(lines: TextRecord[], allowValues: Set<string>, isPrivate: (lin
 
 interface WordCheck {
   isPrivate: (line: string) => boolean;
-  /** The reason why the private word check cannot run. */
   problem?: string;
 }
 

@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-// Tests of scripts/check.sh with stub npm, git and gitleaks programs: nothing real runs.
 const script = new URL("../../../scripts/check.sh", import.meta.url).pathname;
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));

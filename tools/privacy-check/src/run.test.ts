@@ -5,7 +5,6 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { run } from "./run.ts";
 
-// Every test uses a throwaway git repository with invented data. The positive samples are built at run time.
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 

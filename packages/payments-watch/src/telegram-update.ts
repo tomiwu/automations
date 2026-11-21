@@ -13,7 +13,6 @@ function asRecord(value: unknown): Fields | undefined {
   return value as Fields;
 }
 
-/** Reads a Telegram update, or the webhook envelope `{ webhook, request }` that wraps one. */
 function updateOf(raw: unknown): TelegramUpdate | undefined {
   const record = asRecord(raw);
   if (!record) return undefined;
@@ -31,7 +30,6 @@ function locationOf(message: Fields | undefined): Located | undefined {
   return { chatId: String(chatId), messageId: message.message_id, caption };
 }
 
-/** Maps the `callback_query` of an update to a `CallbackQuery`. Gives `undefined` when the message is missing. */
 function queryOf(update: TelegramUpdate): CallbackQuery | undefined {
   const raw = asRecord(update.callback_query);
   const location = locationOf(asRecord(raw?.message));
@@ -48,10 +46,6 @@ async function handlePayment(deps: UpdateDeps, update: TelegramUpdate): Promise<
   await handlePaymentCallback(deps.callback, query);
 }
 
-/**
- * Handles one Telegram update from the `telegram-update` webhook. A `pay:` callback goes to
- * `handlePaymentCallback`. Any other update is ignored and logged.
- */
 export async function handleTelegramUpdate(deps: UpdateDeps, raw: unknown): Promise<void> {
   const update = updateOf(raw);
   if (!update) {

@@ -136,6 +136,14 @@ describe("kody:runtime imports", () => {
     expect(used).toEqual([]);
   });
 
+  it("are imported only by kody.ts", () => {
+    const importers = files(join(root, "packages"))
+      .filter((file) => !file.endsWith(".test.ts") && !file.endsWith("kody-runtime.d.ts"))
+      .filter((file) => /from\s+["']kody:runtime["']/.test(readFileSync(file, "utf8")))
+      .map((file) => file.slice(root.length + 1));
+    expect(importers).toEqual(["packages/shared/src/kody.ts"]);
+  });
+
   it("build no secret placeholder at runtime (Kody requires literal names)", () => {
     const computed = files(join(root, "packages"))
       .filter((file) => !file.endsWith(".test.ts"))

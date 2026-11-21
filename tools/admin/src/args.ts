@@ -3,7 +3,6 @@ export interface ParsedArgs {
   flags: Record<string, string>;
 }
 
-/** Splits arguments into positional values and `--name value` flags. A flag without a value is "true". */
 export function parseArgs(args: readonly string[]): ParsedArgs {
   const parsed: ParsedArgs = { positional: [], flags: {} };
   let i = 0;
@@ -11,7 +10,6 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
   return parsed;
 }
 
-/** Reads the argument at `index`. Returns how many arguments it used. */
 function takeArg(args: readonly string[], index: number, parsed: ParsedArgs): number {
   const arg = String(args[index]);
   if (!arg.startsWith("--")) {
@@ -37,7 +35,6 @@ export function oneOf(value: string, allowed: readonly string[], name: string): 
 
 const SECRET_NAME = /^[A-Z][A-Z0-9_]*$/;
 
-/** A secret NAME has upper-case letters, digits and underscores. This stops a pasted secret value. */
 export function secretName(value: string, name: string): string {
   if (!SECRET_NAME.test(value)) throw new Error(`Option --${name} takes a secret NAME, for example CHILD1_LIBRUS_LOGIN. Never enter a value.`);
   return value;

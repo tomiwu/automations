@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inflectedForms } from "./inflect.ts";
 
-// Invented words only. The endings are the Polish case endings without diacritics.
 describe("inflectedForms", () => {
   it("gives the case forms of a word that ends with a", () => {
     const forms = inflectedForms("zorka");

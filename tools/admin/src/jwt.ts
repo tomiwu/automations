@@ -5,7 +5,6 @@ const TEN_YEARS_SECONDS = 10 * 365 * 24 * 3600;
 
 const encode = (value: object): string => Buffer.from(JSON.stringify(value)).toString("base64url");
 
-/** Signs an HS256 JWT for the role `automations_watcher` with the project JWT secret. */
 export function signWatcherKey(jwtSecret: string, nowSeconds: number): string {
   const header = encode({ alg: "HS256", typ: "JWT" });
   const payload = encode({ role: WATCHER_ROLE, iss: "supabase", iat: nowSeconds, exp: nowSeconds + TEN_YEARS_SECONDS });

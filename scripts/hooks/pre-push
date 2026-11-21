@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Pre-push hook: the full scripts/ci-local.sh for each commit that the push sends. A red result stops the push.
-#   - It runs on a normal push and on a force push. A branch delete sends no commit, so ci-local does not run.
-#   - ci-local runs in a temporary checkout of the commit (a detached worktree in TMPDIR). It checks the commit,
-#     not the files of the working directory. The checkout runs its own scripts/ci-local.sh.
-#   - Green cache: one stamp file for each green commit SHA in <common git dir>/ci-local-green. All worktrees of
-#     the clone use it. A second push of the same SHA does not run ci-local again. A red result is not cached.
-# A green full run takes minutes (see CONTRIBUTING.md). Install the hook with: scripts/install-hooks.sh
-# Do not use `git push --no-verify` for this hook.
 set -u
 COMMON="$(git rev-parse --path-format=absolute --git-common-dir)" || exit 1
 CACHE="$COMMON/ci-local-green"
@@ -19,7 +11,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Prints each different commit of the push one time. The lines of stdin are: <local ref> <local sha> <remote ref> <remote sha>.
 pushed_commits() {
   local local_ref local_sha remote_ref remote_sha commit seen=" "
   while read -r local_ref local_sha remote_ref remote_sha; do
@@ -37,7 +28,6 @@ pushed_commits() {
   done
 }
 
-# Runs the ci-local of the commit in a temporary checkout of the commit. The git variables of the hook must not go to it.
 run_ci_local() {
   local sha="$1" rc
   WORK="$(mktemp -d)" || return 1
@@ -56,7 +46,6 @@ run_ci_local() {
   return "$rc"
 }
 
-# Uses the green cache or runs ci-local. It writes the stamp file of the commit only after a green run.
 check_commit() {
   local sha="$1" start
   if [ -f "$CACHE/$sha" ]; then

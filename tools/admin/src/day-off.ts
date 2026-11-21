@@ -3,7 +3,6 @@ import type { RestClient, Row } from "./rest.ts";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Checks a `YYYY-MM-DD` option: the format and a real calendar day. */
 export function isoDate(value: string, name: string): string {
   const real = DATE.test(value) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
   if (!real) throw new Error(`Option --${name} must be a real date YYYY-MM-DD`);
@@ -20,7 +19,6 @@ export interface DayOffInput {
   sourceStream: string;
 }
 
-/** The `dayOff` Item payload. The date range line is the same as in the Librus day-off Items, so `rangeEnd` reads `to`. */
 export function dayOffPayload(input: DayOffInput): Record<string, unknown> {
   return {
     scope: `manualDaysOff:${input.childId}`,
@@ -53,7 +51,6 @@ export type JournalRow = {
   source: "admin";
 };
 
-/** The next event of a stream, or null if the head already has this content. */
 export async function nextEvent(base: Pick<JournalRow, "family_id" | "child_id" | "stream" | "day">, payload: Record<string, unknown>, head: Row | undefined): Promise<JournalRow | null> {
   const hash = await contentHash(payload);
   if (head?.content_hash === hash) return null;
@@ -63,7 +60,6 @@ export async function nextEvent(base: Pick<JournalRow, "family_id" | "child_id" 
 
 const eq = (value: string): string => encodeURIComponent(value);
 
-/** The head of one stream of the Family, or undefined. One read. */
 export async function headOf(rest: RestClient, familyId: string, stream: string): Promise<Row | undefined> {
   const query = `select=stream,seq,content_hash,payload&family_id=eq.${eq(familyId)}&stream=eq.${eq(stream)}`;
   return (await rest.select("journal_heads", query))[0];

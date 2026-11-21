@@ -3,15 +3,12 @@ import type { Fee, JournalEvent, NewJournalEvent, NewPayment, Payment } from "./
 
 const SOURCE = "payments-watch";
 
-/** The state of one Payment. A new Payment has only the `NewPayment` fields. */
 export type PaymentInput = NewPayment & Partial<Pick<Payment, "status" | "notifiedAt" | "remindedAt" | "decidedAt" | "decidedBy">>;
 
 export type PaymentDecision = "paid" | "skipped";
 
-/** Why a Payment is cancelled (payments contract v0.2 section 3b, PC6). */
 export type PaymentCancelReason = "fee_disabled" | "organizer_void" | "organizer_withdrawn";
 
-/** The stream of the Payment of one Fee in one month (`YYYY-MM`). */
 export const paymentStream = (childId: string, feeId: string, month: string): string =>
   `payment:${childId}:${feeId}:${month}`;
 
@@ -153,7 +150,6 @@ export async function planPaymentReappeared(head: JournalEvent): Promise<NewJour
   };
 }
 
-/** The `CheckCompleted` event of one pass of `payments-watch`. There is one check stream for each Child. */
 export function checkCompletedForPayments(
   familyId: string,
   childId: string,

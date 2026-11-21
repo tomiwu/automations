@@ -1,9 +1,7 @@
 import type { DetailFilter, ItemDetail, ItemKind, JournalEvent, JournalFilter, NewItemDetail, NewJournalEvent, StorageAdapter } from "./storage.ts";
 
-/** Rows per request when the adapter stores details. */
 export const DETAIL_BATCH_SIZE = 100;
 
-/** A SHA-256 hex digest of the content of a detail. Changed content gives another hash. */
 export async function detailHash(row: NewItemDetail): Promise<string> {
   const content = JSON.stringify([
     row.kind,
@@ -22,11 +20,9 @@ export async function detailHash(row: NewItemDetail): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** The identity of a stored detail: Family, scope, source ID and content hash. */
 export const detailSlot = (row: NewItemDetail, hash: string): string =>
   JSON.stringify([row.familyId, row.scope, row.sourceId, hash]);
 
-/** The rows without repeats, in the first-seen order. A repeat has the same Family, scope, source ID and hash. */
 export async function uniqueDetails(
   rows: readonly NewItemDetail[],
 ): Promise<{ row: NewItemDetail; hash: string }[]> {
@@ -39,7 +35,6 @@ export async function uniqueDetails(
   return [...unique.values()];
 }
 
-/** The kinds of Item events in the Journal. */
 export const ITEM_KINDS: readonly ItemKind[] = ["meeting", "dayOff", "trip", "terminarz", "announcement", "message", "grade"];
 
 const itemStream = (row: Pick<NewItemDetail, "scope" | "sourceId">): string => `item:${row.scope}:${row.sourceId}`;
@@ -66,7 +61,6 @@ function itemPayload(row: NewItemDetail): Record<string, unknown> {
 
 const headSlot = (head: { familyId: string; stream: string }): string => JSON.stringify([head.familyId, head.stream]);
 
-/** The Item events for rows whose content differs from the head of their stream. Repeats in the rows are skipped. */
 export async function itemEvents(
   rows: readonly NewItemDetail[],
   heads: readonly JournalEvent[],
@@ -96,7 +90,6 @@ export async function itemEvents(
   return events;
 }
 
-/** The heads of the Item streams of the rows, read with one request for each 100 streams. */
 async function itemHeads(storage: StorageAdapter, rows: readonly NewItemDetail[]): Promise<JournalEvent[]> {
   const heads: JournalEvent[] = [];
   for (const familyId of new Set(rows.map((row) => row.familyId))) {
@@ -106,14 +99,12 @@ async function itemHeads(storage: StorageAdapter, rows: readonly NewItemDetail[]
   return heads;
 }
 
-/** Appends the Item events for the rows. One `appendEvents` call, or none if no row is new. */
 export async function appendItemEvents(storage: StorageAdapter, rows: readonly NewItemDetail[]): Promise<void> {
   if (rows.length === 0) return;
   const events = await itemEvents(rows, await itemHeads(storage, rows));
   if (events.length > 0) await storage.appendEvents(events);
 }
 
-/** The Item detail that an Item event shows. */
 export function detailOfEvent(event: JournalEvent): ItemDetail {
   const payload = event.payload as Record<string, string | null>;
   return {
@@ -135,11 +126,9 @@ export function detailOfEvent(event: JournalEvent): ItemDetail {
   };
 }
 
-/** The details that Item events show, oldest first. Events with the same time keep their order. */
 export const detailsOfEvents = (events: readonly JournalEvent[]): ItemDetail[] =>
   events.map(detailOfEvent).sort((a, b) => a.firstSeen.getTime() - b.firstSeen.getTime());
 
-/** Reads the details of a Family from the Item events of the Journal, oldest first. */
 export async function detailsFromJournal(
   storage: StorageAdapter,
   familyId: string,

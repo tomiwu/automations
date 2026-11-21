@@ -9,20 +9,16 @@ const INSERT_NEW = "resolution=ignore-duplicates,return=representation";
 type Row = Record<string, unknown>;
 
 export interface SupabaseStorageOptions {
-  /** The project URL, for example `https://<project-ref>.supabase.co`. */
   url: string;
-  /** The key of the restricted role `automations_watcher`. */
   key: string;
   fetch: FetchFn;
   now?: () => Date;
 }
 
 export interface SupabaseStorage extends StorageAdapter {
-  /** Reads one row. It keeps the free Supabase project awake. */
   keepalive(): Promise<void>;
 }
 
-/** Makes a PostgREST filter such as `family_id=eq.<value>`. */
 function filter(column: string, operator: string, value: string): string {
   return `${column}=${operator}.${encodeURIComponent(value)}`;
 }
@@ -121,7 +117,6 @@ function toJournalEvent(row: Row): JournalEvent {
   };
 }
 
-/** A PostgREST list such as `("a","b")`, URL-encoded. */
 const inList = (values: readonly string[]): string =>
   encodeURIComponent(`(${values.map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",")})`);
 
@@ -138,7 +133,6 @@ function journalQuery(familyId: string, where: JournalFilter): string[] {
   return [filter("family_id", "eq", familyId), ...parts];
 }
 
-/** The streams of a filter in groups of at most `DETAIL_BATCH_SIZE`. One group with no stream filter if unset. */
 function streamGroups(streams: readonly string[] | undefined): (readonly string[] | undefined)[] {
   if (streams === undefined) return [undefined];
   const groups: string[][] = [];
@@ -181,7 +175,6 @@ function toActivity(row: Row): Row {
   return { ...row, start_time: String(row.start_time).slice(0, 5), end_time: String(row.end_time).slice(0, 5) };
 }
 
-/** StorageAdapter on top of the PostgREST API of Supabase. It uses plain fetch. */
 export function createSupabaseStorage(options: SupabaseStorageOptions): SupabaseStorage {
   const base = `${options.url.replace(/\/+$/, "")}/rest/v1`;
   const now = options.now ?? (() => new Date());
@@ -191,7 +184,6 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     ...extra,
   });
 
-  /** Patches the Payments that match the query. Returns true if a row changed. */
   async function patchPayment(query: string, body: Record<string, unknown>): Promise<boolean> {
     const init = { headers: headers({ ...JSON_HEADERS, prefer: "return=representation" }), body: JSON.stringify(body) };
     return ((await (await request("PATCH", "payments", query, init)).json()) as Row[]).length > 0;
@@ -208,7 +200,6 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
   const select = async (table: string, query: string): Promise<Row[]> =>
     (await (await request("GET", table, query, { headers: headers() })).json()) as Row[];
 
-  /** Inserts rows and returns the rows that are new. */
   async function insertNew(table: string, conflict: string, rows: Row[]): Promise<Row[]> {
     const init = { headers: headers({ ...JSON_HEADERS, prefer: INSERT_NEW }), body: JSON.stringify(rows) };
     return (await (await request("POST", table, `on_conflict=${conflict}`, init)).json()) as Row[];
@@ -231,7 +222,6 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
   const listItems = async (familyId: string, watcher: string): Promise<StoredItem[]> =>
     (await select("items", itemQuery(familyId, watcher))).map(toItem);
 
-  /** One request: the Family with its Children, Accounts, Activities and Recipients embedded. */
   async function loadConfig(familyId: string): Promise<Config> {
     const embed = "select=*,children(*),accounts(*),activities(*),recipients(*)";
     const family = (await select("families", `${embed}&${filter("id", "eq", familyId)}`))[0];

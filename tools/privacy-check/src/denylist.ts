@@ -1,16 +1,11 @@
-// The private word list. The repository holds only salted hashes (`privacy/denylist.hashes.json`).
-// The plain list stays in a git-ignored local file.
 import { createHmac } from "node:crypto";
 import { inflectedForms } from "./inflect.ts";
 import { phrases, tokens } from "./normalize.ts";
 
 export interface Denylist {
   version: 1;
-  /** Random text that is part of the HMAC key. It is not secret. */
   salt: string;
-  /** True when the hashes also need the secret `PRIVACY_PEPPER`. */
   peppered: boolean;
-  /** Number of words of the longest entry. */
   maxWords: number;
   hashes: string[];
 }
@@ -19,7 +14,6 @@ export function hashPhrase(salt: string, pepper: string, phrase: string): string
   return createHmac("sha256", `${salt}:${pepper}`).update(phrase).digest("hex");
 }
 
-/** The entries of the plain list: one for each line, without empty lines and `#` comments. Each entry is its tokens. */
 export function denylistEntries(plain: string): string[][] {
   return plain
     .split("\n")
@@ -47,7 +41,6 @@ export function parseDenylist(text: string | undefined): Denylist {
   return JSON.parse(text) as Denylist;
 }
 
-/** Gives the function that says if a line contains a private word. It hashes every token and token sequence. */
 export function denylistHit(list: Denylist, pepper: string): (line: string) => boolean {
   if (list.hashes.length === 0) return () => false;
   const hashes = new Set(list.hashes);

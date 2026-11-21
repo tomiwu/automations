@@ -106,7 +106,6 @@ describe("storedPaymentsExport", () => {
 });
 
 describe("storedPaymentsExport month range", () => {
-  // Each month: its last day is in the export, the first day of the next month is not.
   it.each([
     ["2026-11", 30, "2026-12"],
     ["2027-02", 28, "2027-03"],

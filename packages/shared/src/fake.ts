@@ -13,7 +13,6 @@ export interface FakeRuntimeOptions {
   respond?: (input: string, init?: RequestInit) => Response | Promise<Response>;
 }
 
-/** Runtime for tests. It uses no network and no clock. */
 export function fakeRuntime(options: FakeRuntimeOptions = {}): FakeRuntime {
   let current = options.now ?? new Date("2025-01-01T00:00:00Z");
   const respond = options.respond ?? (() => new Response("", { status: 200 }));

@@ -25,7 +25,6 @@ export function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
-/** SHA-256 of a text, in hex. */
 export async function tokenDigest(token: string): Promise<string> {
   const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)));
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -107,7 +106,6 @@ function headRow(language: Language, keys: readonly MessageKey[]): string {
   return `<tr>${keys.map((key) => `<th>${escapeHtml(t(language, key))}</th>`).join("")}</tr>`;
 }
 
-/** Rows are text cells. `extra` is trusted HTML for one more cell at the end of a row. */
 function section(language: Language, title: MessageKey, head: readonly MessageKey[], rows: readonly string[][], extra: readonly string[] = []): string {
   const heading = `<h2>${escapeHtml(t(language, title))}</h2>`;
   if (rows.length === 0) return `${heading}<p>${escapeHtml(t(language, "dashboard.none"))}</p>`;
@@ -174,10 +172,6 @@ async function decideKnown(context: Context, paymentId: string, decision: "paid"
   if (payment && fee) await decidePayment({ storage, familyId, payment, fee, decision, decidedBy, at: now() });
 }
 
-/**
- * Sets the status with the same function as the Telegram callback (`decidePayment`). The first press wins.
- * A repeated press changes nothing. Both end in a redirect to the overview.
- */
 async function decide(request: Request, context: Context, route: string): Promise<Response> {
   const user = await sessionUser(request, context.deps.allowlist);
   if (!user) return html(page(context, loginHtml(context, false)));
@@ -197,10 +191,6 @@ async function readRoute(request: Request, context: Context, route: string): Pro
   return overview(context);
 }
 
-/**
- * Serves the Dashboard: the read view and the Paid and Skip buttons. Every page except the login needs a session of a user on the allowlist.
- * A request without one gets the login page and no data.
- */
 export async function handleDashboard(request: Request, deps: DashboardDeps, base: string): Promise<Response> {
   const config = await deps.storage.loadConfig(deps.familyId);
   const context: Context = { deps, base, language: config.family.default_language };

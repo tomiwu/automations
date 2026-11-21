@@ -7,7 +7,6 @@ import { runPayments } from "./engine.ts";
 import { createWebFeeSource } from "./page-source.ts";
 import { loadCounters, type CounterStore } from "./organizer-cancel.ts";
 
-// Issue #222: refund-check flag for a paid Payment that the Organizer cancels (payments contract v0.2 section 3b, PC2). Invented data only.
 const load = (name: string): string => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
 const LISTED = load("organizer-fees.html");
 const CANCELLED = load("organizer-fees-cancelled.html");
@@ -59,7 +58,6 @@ function setup(overrides: Partial<Fee> = {}) {
     const source = createWebFeeSource({ runtime, storage, familyId: FAMILY_ID });
     await runPayments({ familyId: FAMILY_ID, storage, source, now, counters });
   };
-  // A page amount that is gone gives a PaymentChanged (the amount source goes back to config): not the subject here.
   const events = async () => (await storage.listEvents(FAMILY_ID, { kinds: ["payment"] })).map((event) => event.eventType).filter((type) => type !== "PaymentChanged");
   const payment = async () => (await storage.listPayments(FAMILY_ID))[0]!;
   const decide = async (status: "paid" | "skipped") => void (await storage.setPaymentStatus((await payment()).id, status, "1000001"));

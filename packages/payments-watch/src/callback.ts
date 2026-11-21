@@ -5,13 +5,11 @@ import type { TelegramClient } from "./notifier.ts";
 
 const PREFIX = "pay:";
 
-/** One button press, read from a Telegram `callback_query`. */
 export interface CallbackQuery {
   id: string;
   data: string;
   chatId: string;
   messageId: number;
-  /** The caption of the message with the buttons. */
   caption?: string;
 }
 

@@ -7,8 +7,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ALLOWLIST_PATH, run } from "./run.ts";
 import { isSkipped } from "./sources.ts";
 
-// Tests of scripts/clean-publish.sh, scripts/hooks/pre-commit, scripts/install-hooks.sh and the privacy step of scripts/ci-local.sh.
-// Every repository is a throwaway one with invented data. The positive samples are built at run time.
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
@@ -45,7 +43,6 @@ function commit(repo: string, files: Record<string, string>, message: string): v
   git(repo, "commit", "-q", "-m", message);
 }
 
-/** A source repository with a clean tree and a history with a private author, message and removed line. */
 function source(): string {
   const repo = join(temp(), "source");
   mkdirSync(repo);
@@ -61,14 +58,12 @@ function publish(repo: string, extraEnv: Record<string, string> = {}, options: s
   return { target, status: result.status, out: result.stdout + result.stderr };
 }
 
-/** The `git filter-repo` program (GIT_FILTER_REPO, the PATH, or the git program directory), if this computer has one. */
 function realFilterRepo(): string | undefined {
   const inPath = spawnSync("bash", ["-c", "command -v git-filter-repo"], { encoding: "utf8" }).stdout.trim();
   const inGit = join(execFileSync("git", ["--exec-path"], { encoding: "utf8" }).trim(), "git-filter-repo");
   return [process.env.GIT_FILTER_REPO ?? "", inPath, inGit].find((path) => path !== "" && existsSync(path));
 }
 
-/** The state of a repository that the script must not change: HEAD, the status, the history, the refs, the remotes and the configuration. */
 function state(repo: string): string[] {
   return [
     git(repo, "rev-parse", "HEAD"),
@@ -82,7 +77,6 @@ function state(repo: string): string[] {
 
 const trailers = [`Co-authored-by: Private Helper <${privateEmail}>`, `Signed-off-by: Private Person <${privateEmail}>`];
 
-/** A source repository whose history has private data only in the commit metadata and the trailers. */
 function sourceWithTrailers(): string {
   const repo = join(temp(), "source");
   mkdirSync(repo);
@@ -178,7 +172,6 @@ describe("scripts/clean-publish.sh --filtered-history", () => {
     expect(state(repo)).toEqual(before);
   });
 
-  // These cases use the real git filter-repo program. They are skipped on a computer without it.
   const filterRepo = realFilterRepo();
   describe.skipIf(filterRepo === undefined)("with the real git filter-repo", () => {
     const filtered = (repo: string, extraEnv: Record<string, string> = {}) => publish(repo, { GIT_FILTER_REPO: filterRepo ?? "", ...extraEnv }, ["--filtered-history"]);
@@ -230,7 +223,6 @@ describe("scripts/clean-publish.sh --filtered-history", () => {
   });
 });
 
-/** A stub gitleaks program. It records its arguments in `<stub>.calls`. */
 function stubGitleaks(exitCode: number): string {
   const stub = join(temp(), "gitleaks");
   writeFileSync(stub, `#!/bin/bash\necho "$*" >> "${stub}.calls"\nexit ${exitCode}\n`);
@@ -238,7 +230,6 @@ function stubGitleaks(exitCode: number): string {
   return stub;
 }
 
-/** The real gitleaks program (GITLEAKS, the PATH, or the cache of scripts/install-hooks.sh), if this computer has one. */
 function realGitleaks(): string | undefined {
   const cached = join(process.env.XDG_CACHE_HOME ?? join(process.env.HOME ?? "", ".cache"), "ci-local", "gitleaks");
   const inPath = spawnSync("bash", ["-c", "command -v gitleaks"], { encoding: "utf8" }).stdout.trim();
@@ -250,12 +241,10 @@ function tryCommit(repo: string, gitleaks: string, message = "change") {
   return { status: result.status, out: result.stdout + result.stderr, head: git(repo, "log", "-1", "--format=%s").trim() };
 }
 
-/** Makes the repository use the pre-commit hook of this checkout. */
 function useHook(repo: string): void {
   git(repo, "config", "core.hooksPath", join(root, "scripts", "hooks"));
 }
 
-/** A throwaway repository that uses the pre-commit hook of this checkout. */
 function hooked(): string {
   const repo = source();
   useHook(repo);
@@ -351,7 +340,6 @@ describe("scripts/hooks/pre-commit", () => {
     });
   });
 
-  // These cases use the real gitleaks program. They are skipped on a computer without gitleaks.
   describe.skipIf(realGitleaks() === undefined)("with the real gitleaks", () => {
     const gitleaks = realGitleaks() ?? "";
     const secret = ["ghp", "x7Kq2LmN9pRt4VwY8zBc3DfG6hJs5MnP1QaE"].join("_");
@@ -386,7 +374,6 @@ describe("scripts/install-hooks.sh", () => {
     return { status: result.status, out: result.stdout + result.stderr };
   };
 
-  /** A repository whose scripts/hooks/pre-commit runs the hook of this checkout. Its pre-push hook does nothing. */
   function withHook(): string {
     const repo = source();
     commit(repo, { "scripts/hooks/pre-commit": `#!/usr/bin/env bash\necho "hook ran in $(pwd)"\nexec "${join(root, "scripts", "hooks", "pre-commit")}"\n` }, "hook");

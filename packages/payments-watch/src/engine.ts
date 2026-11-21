@@ -14,7 +14,6 @@ import { localDate, t, type Child, type Config, type MessageKey, type Recipient 
 import type { FeeAmount, FeeSource } from "./fee-source.ts";
 import { advanceCounters, loadCounters, saveCounters, type CancelDue, type CounterStep, type CounterStore, type Watched } from "./organizer-cancel.ts";
 
-/** What one run of the Payment engine needs. */
 export interface PaymentRun {
   familyId: string;
   storage: StorageAdapter;
@@ -29,13 +28,9 @@ interface RunContext {
   config: Config;
   day: number;
   month: string;
-  /** The heads of the `payment:` streams of the Family, read once. */
   heads: ReadonlyMap<string, JournalEvent>;
-  /** The Journal events of this pass. They are appended in one call at the end. */
   events: NewJournalEvent[];
-  /** The Payments of the Family at the start of the pass (for the cancel of a disabled Fee and of an Organizer page). */
   payments: readonly Payment[];
-  /** The good page readings of this pass, for the Organizer cancel. */
   watched: Watched[];
   now: Date;
 }
@@ -83,7 +78,6 @@ async function notifyPayment(context: RunContext, fee: Fee, payment: Payment): P
 
 const dateOf = (value: unknown): Date | null => (typeof value === "string" ? new Date(value) : null);
 
-/** The state to journal: the amount that was found, and the sent times that the head or the row has. */
 function journalState(stored: Payment, found: FeeAmount, head: JournalEvent | undefined): Payment {
   return {
     ...stored,
@@ -94,10 +88,6 @@ function journalState(stored: Payment, found: FeeAmount, head: JournalEvent | un
   };
 }
 
-/**
- * Plans the Journal event of a pending Payment and sets the projection to the amount that was found.
- * Returns the Payment as the Notifications must show it.
- */
 async function journalPayment(context: RunContext, fee: Fee, stored: Payment, found: FeeAmount): Promise<Payment> {
   if (stored.status !== "pending") return stored;
   const head = context.heads.get(paymentStream(fee.childId, fee.id, stored.month));
@@ -109,7 +99,6 @@ async function journalPayment(context: RunContext, fee: Fee, stored: Payment, fo
   return { ...stored, amount: next.amount, amountSource: next.amountSource };
 }
 
-/** The head to cancel: the stored head, or a `PaymentDue` (appended first) for a Payment made before the Journal. */
 async function cancelBase(context: RunContext, fee: Fee, payment: Payment): Promise<JournalEvent | undefined> {
   const head = context.heads.get(paymentStream(fee.childId, fee.id, payment.month));
   if (head) return head;
@@ -118,10 +107,6 @@ async function cancelBase(context: RunContext, fee: Fee, payment: Payment): Prom
   return due ? { ...due, recordedAt: context.now } : undefined;
 }
 
-/**
- * A Fee that an admin disabled while the Payment of the current month is pending gets one `PaymentCancelled`
- * with `fee_disabled` (payments contract v0.2, PC5: one pass is enough). Paid, skipped and cancelled stay.
- */
 async function cancelDisabled(context: RunContext, fee: Fee): Promise<void> {
   const payment = context.payments.find((p) => p.feeId === fee.id && p.month === context.month && p.status === "pending");
   if (!payment) return;
@@ -132,14 +117,12 @@ async function cancelDisabled(context: RunContext, fee: Fee): Promise<void> {
   await context.storage.cancelPendingPayment(payment.id);
 }
 
-/** Keeps the page reading of a Fee that already has a Payment this month. A new Payment has nothing to cancel. */
 function watch(context: RunContext, source: FeeSource, fee: Fee): void {
   const observation = source.observationFor?.(fee, context.month);
   const payment = context.payments.find((p) => p.feeId === fee.id && p.month === context.month);
   if (observation && payment) context.watched.push({ fee, payment, observation });
 }
 
-/** The newest event of the stream: an event of this pass, else the stored head, else a `PaymentDue` (appended first). */
 async function latestBase(context: RunContext, fee: Fee, payment: Payment): Promise<JournalEvent | undefined> {
   const stream = paymentStream(fee.childId, fee.id, payment.month);
   const planned = context.events.findLast((event) => event.stream === stream);
@@ -155,10 +138,6 @@ async function cancelOrganizer(context: RunContext, { watched, reason, evidence 
   await context.storage.cancelPendingPayment(payment.id);
 }
 
-/**
- * A `paid` Payment that the Organizer no longer lists (PC2): no Journal event and no status change. The projection gets the
- * refund-check flag, and each Recipient of the Child gets one notice. Only the first setting of the flag queues the notices.
- */
 async function flagRefund(context: RunContext, { watched }: CancelDue): Promise<void> {
   const { fee, payment } = watched;
   if (!(await context.storage.flagRefundCheck(payment.id, context.now))) return;
@@ -173,7 +152,6 @@ async function flagRefund(context: RunContext, { watched }: CancelDue): Promise<
   }
 }
 
-/** A cancelled Payment whose charge is listed again gets a new `PaymentDue` and is `pending` again (R1 to R3). */
 async function reappear(context: RunContext, { fee, payment }: Watched): Promise<void> {
   const head = context.heads.get(paymentStream(fee.childId, fee.id, payment.month));
   const event = head && (await planPaymentReappeared(head));
@@ -182,7 +160,6 @@ async function reappear(context: RunContext, { fee, payment }: Watched): Promise
   await context.storage.reopenCancelledPayment(payment.id);
 }
 
-/** A paid Payment gets the refund-check flag. A pending Payment is cancelled. */
 async function actOnDue(context: RunContext, item: CancelDue): Promise<void> {
   if (item.watched.payment.status === "paid") await flagRefund(context, item);
   else await cancelOrganizer(context, item);
@@ -195,10 +172,6 @@ async function planOrganizer(context: RunContext, step: CounterStep): Promise<vo
 
 const nothing = async (): Promise<void> => undefined;
 
-/**
- * Moves the counters by the readings of this successful pass and plans the cancels and the re-appearances.
- * Returns the step that saves the counters. It must run after the append, so a failed append counts nothing.
- */
 async function applyOrganizer(context: RunContext, store: CounterStore | undefined): Promise<() => Promise<void>> {
   if (!store || context.watched.length === 0) return nothing;
   const stored = await loadCounters(store);
@@ -225,7 +198,6 @@ async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Prom
 
 const checkStream = (childId: string): string => `check:payments-watch:${childId}`;
 
-/** One `CheckCompleted` for each Child that has an enabled Fee. */
 async function checkEvents(run: PaymentRun, fees: readonly Fee[]): Promise<NewJournalEvent[]> {
   const childIds = [...new Set(fees.filter((fee) => fee.enabled).map((fee) => fee.childId))];
   if (childIds.length === 0) return [];

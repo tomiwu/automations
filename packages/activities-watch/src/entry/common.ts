@@ -4,7 +4,6 @@ import { createCredentialResolver, createSupabaseCredentialStore, createSupabase
 import { splitForTelegram, type Messenger } from "@tomiwu/librus-watch";
 import sendMessage from "kody:@tomiwu/telegram/send-message";
 
-/** Sends to Telegram through the external `telegram` package. A long text goes out as several messages. */
 export const telegramMessenger: Messenger = {
   async send(chatId, text) {
     for (const part of splitForTelegram(text)) {
@@ -13,11 +12,6 @@ export const telegramMessenger: Messenger = {
   },
 };
 
-/**
- * The deployment serves one Family. The Supabase URL, the Family ID and the credential key are config in the
- * package storage (set with `./configure`). `SUPABASE_KEY` is the only Kody secret. The service logins are
- * encrypted rows in Supabase; `runtime.secret(name)` decrypts them.
- */
 export async function entryDeps() {
   const { supabaseUrl, familyId, credentialKey, activenowCacheHours, fetchReserve } = await loadDeploymentConfig(kodyStorage());
   const counter = countFetches(kodyHost.fetch);

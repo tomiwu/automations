@@ -1,8 +1,6 @@
 import { decryptCredential, type FetchFn } from "@automations/shared";
 
-/** Reads the encrypted service credentials of a Family. */
 export interface CredentialStore {
-  /** The ciphertext of one credential, or undefined when it is not set. */
   ciphertext(familyId: string, name: string): Promise<string | undefined>;
 }
 
@@ -12,10 +10,6 @@ export interface SupabaseCredentialStoreOptions {
   fetch: FetchFn;
 }
 
-/**
- * Reads `credentials` through PostgREST (the watcher role may only select it). The first read of a Family loads all
- * its ciphertexts in one request. Later reads use that answer, so a run makes one request for all credentials.
- */
 export function createSupabaseCredentialStore(options: SupabaseCredentialStoreOptions): CredentialStore {
   const base = `${options.url.replace(/\/+$/, "")}/rest/v1/credentials`;
   const loaded = new Map<string, Promise<Map<string, string>>>();

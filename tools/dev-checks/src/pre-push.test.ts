@@ -5,8 +5,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-// Tests of scripts/hooks/pre-push. Each test uses a throwaway repository and a bare repository on the disk as its remote.
-// The scripts/ci-local.sh of the throwaway repository is a stub: the real suite does not run and nothing uses the network.
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
@@ -21,7 +19,6 @@ const baseEnv = {
   GIT_COMMITTER_EMAIL: "author@example.com",
 };
 
-// The stub records the commit and the number of changed files of its checkout. Its exit code comes from a file.
 const STUB = `#!/usr/bin/env bash
 echo "$(git rev-parse HEAD) $(git status --porcelain | wc -l)" >> "$STUB_CALLS"
 echo "stub ci-local report"
@@ -40,9 +37,7 @@ interface Fixture {
   env: Record<string, string>;
   git: (...args: string[]) => string;
   head: () => string;
-  /** Commits the staged changes. No hook runs. */
   commitNoHooks: (...args: string[]) => string;
-  /** Writes the file, commits it and returns the new commit. No hook runs. */
   commit: (file: string, text: string) => string;
   push: (...args: string[]) => { status: number | null; out: string };
   setResult: (exitCode: number) => void;
@@ -56,7 +51,6 @@ function write(repo: string, file: string, text: string, mode = 0o644): void {
   chmodSync(join(repo, file), mode);
 }
 
-/** A repository with a stub ci-local, the pre-push hook of this checkout and a bare remote. */
 function fixture(hooksPath = join(root, "scripts", "hooks")): Fixture {
   const dir = temp();
   const repo = join(dir, "repo");

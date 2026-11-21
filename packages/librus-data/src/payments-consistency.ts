@@ -1,7 +1,6 @@
 import { paymentStream } from "./payment-journal.ts";
 import type { Fee, Payment } from "./storage.ts";
 
-/** One row of the `payments` table, with the Child of its Fee, in the shape that the Journal payload has. */
 export interface ProjectionRow {
   id: string;
   stream: string;
@@ -12,7 +11,6 @@ export interface ProjectionRow {
   remindedAt: string | null;
 }
 
-/** The head of one `payment:` stream: the last event and its full-state payload. */
 export interface PaymentHead {
   stream: string;
   payload: Record<string, unknown>;
@@ -26,7 +24,6 @@ export interface PaymentDifference {
   field?: string;
 }
 
-/** The compared fields: the Journal payload key and the row key have the same name. */
 export const COMPARED_FIELDS = ["status", "amount", "amountSource", "notifiedAt", "remindedAt"] as const;
 
 const iso = (date: Date | null): string | null => date?.toISOString() ?? null;

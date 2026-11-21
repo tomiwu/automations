@@ -15,7 +15,6 @@ export interface LibrusJournalDeps {
   source: LibrusSource;
   timezone: string;
   now: Date;
-  /** The homework Items of this run. Missing when the `homework` Watcher failed. */
   homework?: readonly HomeworkItem[];
   log?: (message: string) => void;
 }
@@ -131,7 +130,6 @@ const streamsOf = (childId: string, down: Downloads): string[] => [
   ...(down.homework ?? []).map((item) => homeworkStream(childId, item.id)),
 ];
 
-/** What the run read. A part that is `undefined` failed or did not run. */
 interface Downloads {
   lessons: readonly Lesson[] | undefined;
   homework: readonly HomeworkItem[] | undefined;
@@ -161,12 +159,6 @@ async function planParts(deps: LibrusJournalDeps, today: string, down: Downloads
   return [...events, check];
 }
 
-/**
- * Appends the Lesson and homework Journal events of one Child. It uses only data that the run read
- * already: the memoized timetable and the homework Items. A failed part gives no event and no vanished
- * event. When both parts failed, it still appends one failed `CheckCompleted`, so readers see the outage.
- * Returns the number of appended events.
- */
 export async function appendLibrusJournal(deps: LibrusJournalDeps): Promise<number> {
   const today = localDate(deps.now, deps.timezone);
   const timetable = await deps.source.fullTimetable();
