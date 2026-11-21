@@ -19,9 +19,11 @@ afterEach(() => server?.close());
 
 const ok = (body: unknown): Answer => ({ status: 200, body });
 const dispatched = ok({ status: "dispatched", workflow_id: "dynwf-1", message: "dispatched" });
-const done = ok({ status: "already_published", published_commit: "c0ffee1" });
-const noScope: Answer = { status: 403, body: { error: "insufficient_scope", message: 'this token is missing "job:read"' } };
-const run = (status: string, extra: Record<string, unknown> = {}) => ok({ workflows: [{ id: "dynwf-1", status, enqueued_commit: "c0ffee1", last_error: null, ...extra }] });
+const published = { status: "published", published_commit: "c0ffee1", previous_commit: "beef000" };
+const alreadyPublished = { status: "already_published", published_commit: "c0ffee1" };
+const running = ok({ status: "running", result: null, last_error: null });
+const complete = (result: unknown) => ok({ status: "complete", result, last_error: null });
+const errored = (last_error: string | null) => ok({ status: "errored", result: null, last_error });
 
 /** A fake Kody Open API. Each list gives the answers in order; the last answer repeats. */
 async function fakeKody(plan: Script) {
@@ -34,7 +36,7 @@ async function fakeKody(plan: Script) {
     let answer: Answer = { status: 404, body: {} };
     if (req.url === "/v1/packages") answer = ok({ packages: [{ package_id: "pkg-1", name: PKG }, { package_id: "x", name: "@other/x" }] });
     else if (req.url === "/v1/packages/pkg-1/external-push" && req.method === "POST") answer = next(plan.publish, "publish");
-    else if (req.url === "/v1/workflow-runs?workflow_id=dynwf-1") answer = next(plan.runs ?? [noScope], "runs");
+    else if (req.url === "/v1/packages/runs/dynwf-1" && req.method === "GET") answer = next(plan.runs ?? [running], "runs");
     res.writeHead(answer.status, { "content-type": "application/json" });
     res.end(JSON.stringify(answer.body));
   });
@@ -43,104 +45,110 @@ async function fakeKody(plan: Script) {
   return { seen, url: `http://127.0.0.1:${port}` };
 }
 
-function publish(url: string, env: Record<string, string> = {}) {
-  const started = performance.now();
-  return new Promise<{ code: number | null; out: string; ms: number }>((resolve) => {
-    const child = spawn("node", [script, PKG], {
+function publish(url: string, env: Record<string, string> = {}, pkg = PKG) {
+  return new Promise<{ code: number | null; out: string }>((resolve) => {
+    const child = spawn("node", [script, pkg], {
       env: { PATH: process.env.PATH ?? "", KODY_API_TOKEN: FAKE_TOKEN, KODY_API_URL: url, KODY_PUBLISH_POLL_MS: "20", KODY_PUBLISH_WAIT_MS: "5000", ...env },
     });
     let out = "";
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (out += d));
-    child.on("close", (code) => resolve({ code, out, ms: performance.now() - started }));
+    child.on("close", (code) => resolve({ code, out }));
   });
 }
 
 const posts = (seen: string[]) => seen.filter((s) => s.startsWith("POST")).length;
-const statusReads = (seen: string[]) => seen.filter((s) => s.includes("workflow-runs")).length;
+const runReads = (seen: string[]) => seen.filter((s) => s.startsWith("GET /v1/packages/runs/")).length;
 
 describe("kody-publish.mjs", () => {
-  it("returns at once when the package is already published", async () => {
-    const { seen, url } = await fakeKody({ publish: [done] });
+  it("returns at once when Kody answers already_published", async () => {
+    const { seen, url } = await fakeKody({ publish: [ok(alreadyPublished)] });
     const r = await publish(url);
     expect(r.code).toBe(0);
     expect(seen).toEqual(["GET /v1/packages", "POST /v1/packages/pkg-1/external-push"]);
     expect(r.out).toContain("done: already_published c0ffee1");
   });
 
-  it("reads the real job status and stops when it is complete", async () => {
-    const { seen, url } = await fakeKody({ publish: [dispatched, done], runs: [run("running"), run("complete")] });
+  it("follows dispatched -> running -> complete with published, with one POST", async () => {
+    const { seen, url } = await fakeKody({ publish: [dispatched], runs: [running, running, complete(published)] });
     const r = await publish(url);
     expect(r.code).toBe(0);
-    expect(statusReads(seen)).toBe(2);
-    expect(posts(seen)).toBe(2);
+    expect(runReads(seen)).toBe(3);
+    expect(posts(seen)).toBe(1);
+    expect(seen.some((s) => s.includes("workflow-runs"))).toBe(false);
     expect(r.out).toContain("status=running");
-    expect(r.out).toContain("status=complete");
+    expect(r.out).toContain("done: published c0ffee1");
   });
 
-  it("stops reading the status after insufficient_scope and is done on the next already_published, in less than 1 minute", async () => {
-    const { seen, url } = await fakeKody({ publish: [dispatched, done], runs: [noScope] });
-    const r = await publish(url, { KODY_PUBLISH_POLL_MS: "10000", KODY_PUBLISH_WAIT_MS: "300000" });
-    expect(r.code).toBe(0);
-    expect(statusReads(seen)).toBe(1);
-    expect(posts(seen)).toBe(2);
-    expect(r.ms).toBeLessThan(60000);
-    expect(r.out).toContain("cannot give the status (insufficient_scope)");
-  }, 30000);
-
-  it("publishes again while Kody still answers dispatched, without status reads", async () => {
-    const { seen, url } = await fakeKody({ publish: [dispatched, dispatched, dispatched, done], runs: [noScope] });
+  it("gives exit 0 when the run result is already_published", async () => {
+    const { url } = await fakeKody({ publish: [dispatched], runs: [complete(alreadyPublished)] });
     const r = await publish(url);
     expect(r.code).toBe(0);
-    expect(statusReads(seen)).toBe(1);
-    expect(posts(seen)).toBe(4);
+    expect(r.out).toContain("done: already_published");
   });
 
-  it("publishes once more after a failed background job, then fails on a second failure", async () => {
-    const repaired = await fakeKody({ publish: [dispatched, done], runs: [run("errored", { last_error: "artifact missing" })] });
-    const first = await publish(repaired.url);
-    expect(first.code).toBe(0);
-    expect(first.out).toContain("last_error: artifact missing");
-    server?.close();
-    const broken = await fakeKody({ publish: [dispatched, dispatched], runs: [run("errored")] });
-    const second = await publish(broken.url);
-    expect(second.code).toBe(1);
-    expect(second.out).toContain("ended with status=errored");
+  it("fails when the run ends errored with last_error (a refusal)", async () => {
+    const { seen, url } = await fakeKody({ publish: [dispatched], runs: [running, errored("checks_failed: typecheck")] });
+    const r = await publish(url);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("last_error: checks_failed: typecheck");
+    expect(r.out).toContain("ended with status=errored");
+    expect(seen.some((s) => s.includes("workflow-runs"))).toBe(false);
   });
 
-  it("fails on a refusal and on a timeout", async () => {
+  it.each(["terminated", "cancelled"])("fails when the run ends %s without a result", async (status) => {
+    const { url } = await fakeKody({ publish: [dispatched], runs: [ok({ status, result: null, last_error: null })] });
+    const r = await publish(url);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(`status=${status}`);
+  });
+
+  it("fails when the run result is a refusal status", async () => {
+    const { url } = await fakeKody({ publish: [dispatched], runs: [complete({ status: "not_fast_forward", message: "remote moved" })] });
+    const r = await publish(url);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("status=not_fast_forward");
+  });
+
+  it("fails on a refusal in the publish answer and on a missing workflow_id", async () => {
     const refused = await fakeKody({ publish: [ok({ status: "checks_failed", message: "typecheck" })] });
     const r1 = await publish(refused.url);
     expect(r1.code).toBe(1);
     expect(r1.out).toContain("status=checks_failed");
     server?.close();
-    const slow = await fakeKody({ publish: [dispatched], runs: [run("running")] });
-    const r2 = await publish(slow.url, { KODY_PUBLISH_WAIT_MS: "200" });
-    expect(r2.code).toBe(1);
-    expect(r2.out).toContain("not done within");
+    const lost = await fakeKody({ publish: [ok({ status: "dispatched" })] });
+    expect((await publish(lost.url)).code).toBe(1);
   });
 
-  it("tries again on 503 and never prints the token", async () => {
-    const { url } = await fakeKody({ publish: [{ status: 503, body: { error: FAKE_TOKEN } }, done] });
+  it("fails when the wait limit is reached", async () => {
+    const { url } = await fakeKody({ publish: [dispatched], runs: [running] });
+    const r = await publish(url, { KODY_PUBLISH_WAIT_MS: "200" });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("not done within");
+  });
+
+  it("tries again on 503 for publish and for the run read, and never prints the token", async () => {
+    const { seen, url } = await fakeKody({ publish: [{ status: 503, body: { error: FAKE_TOKEN } }, dispatched], runs: [{ status: 503, body: {} }, complete(published)] });
     const r = await publish(url);
     expect(r.code).toBe(0);
+    expect(posts(seen)).toBe(2);
     expect(r.out).toContain("no answer (HTTP 503)");
     expect(r.out).not.toContain(FAKE_TOKEN);
   });
 
-  it("fails at once on 401 and when the package is unknown", async () => {
+  it("fails at once on 401, on a 4xx run read, and when the package is unknown", async () => {
     const denied = await fakeKody({ publish: [{ status: 401, body: { error: "unauthorized" } }] });
     expect((await publish(denied.url)).code).toBe(1);
     server?.close();
-    const { url } = await fakeKody({ publish: [done] });
-    const child = await new Promise<{ code: number | null; out: string }>((resolve) => {
-      const p = spawn("node", [script, "@missing/pkg"], { env: { PATH: process.env.PATH ?? "", KODY_API_TOKEN: FAKE_TOKEN, KODY_API_URL: url } });
-      let out = "";
-      p.stderr.on("data", (d) => (out += d));
-      p.on("close", (code) => resolve({ code, out }));
-    });
-    expect(child.code).toBe(1);
-    expect(child.out).toContain("not found");
+    const noScope = await fakeKody({ publish: [dispatched], runs: [{ status: 403, body: { error: "insufficient_scope" } }] });
+    const r = await publish(noScope.url);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("HTTP 403");
+    server?.close();
+    const { url } = await fakeKody({ publish: [ok(alreadyPublished)] });
+    const missing = await publish(url, {}, "@missing/pkg");
+    expect(missing.code).toBe(1);
+    expect(missing.out).toContain("not found");
   });
 
   it("needs a token", async () => {

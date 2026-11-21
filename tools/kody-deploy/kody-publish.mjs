@@ -3,10 +3,10 @@
 //   node tools/kody-deploy/kody-publish.mjs <@owner/name>
 // It calls the same Open API operations as `kody package publish`: packageList (GET /v1/packages) and
 // packagePublishExternalPush (POST /v1/packages/{package_id}/external-push).
-// When Kody hands the publish off to a background job ("dispatched"), it reads the job status with
-// workflowRunList (GET /v1/workflow-runs?workflow_id=...). That needs the token scope job:read. When the status
-// cannot be read (for example insufficient_scope), it stops reading it at once and publishes again at each
-// interval: Kody dedupes an active publish, and a finished one answers already_published.
+// The publish is always durable: Kody answers "dispatched" with a workflow_id. The real answer (published,
+// already_published or a refusal) is in the result of packageRunResult (GET /v1/packages/runs/{workflow_id}),
+// which needs only the token scope package:read. A refused publish ends the run "errored" with the reason in
+// last_error. An active publish is deduped by Kody, so a second POST joins the same run.
 // Exit codes: 0 published or already_published, 1 refused, failed or not done in time.
 // Environment: KODY_API_TOKEN (required, never printed), KODY_API_URL (default https://api.kody.codes),
 // KODY_PUBLISH_POLL_MS (default 10000), KODY_PUBLISH_WAIT_MS (default 300000).
@@ -19,12 +19,9 @@ const redact = (text) => (token ? String(text).split(token).join("***") : String
 const log = (line) => console.log(redact(line));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const DONE = new Set(["published", "already_published"]);
-const FAILED_RUN = new Set(["errored", "terminated", "cancelled"]);
-
-if (!name || !token) {
-  console.error("Usage: KODY_API_TOKEN=... kody-publish.mjs <@owner/name>");
-  process.exit(1);
-}
+const FINAL = new Set(["complete", "errored", "terminated", "cancelled"]);
+const transient = (status) => status === 0 || status >= 500 || status === 429;
+const deadline = performance.now() + waitMs;
 
 async function call(method, path) {
   try {
@@ -49,66 +46,73 @@ async function call(method, path) {
   }
 }
 
+function refused(what, r) {
+  return new Error(`${what} refused: HTTP ${r.status}: ${redact(r.text).slice(0, 500)}`);
+}
+
+/** Calls until Kody gives a usable answer. It waits and tries again on 5xx, 429 and network errors. */
+async function until(what, method, path) {
+  for (;;) {
+    const r = await call(method, path);
+    if (r.status >= 200 && r.status < 300 && r.json) return r.json;
+    if (!transient(r.status)) throw refused(what, r);
+    log(`${what}: no answer (HTTP ${r.status}), try again`);
+    await pause();
+  }
+}
+
+async function pause() {
+  if (performance.now() + pollMs >= deadline) throw new Error(`publish of ${name} not done within ${waitMs / 1000} s`);
+  await sleep(pollMs);
+}
+
 async function packageId() {
-  const r = await call("GET", "/v1/packages");
-  const found = (r.json?.packages ?? []).find((p) => p.name === name);
-  if (!found) throw new Error(`Package ${name} not found in Kody (HTTP ${r.status}).`);
+  const body = await until("packageList", "GET", "/v1/packages");
+  const found = (body.packages ?? []).find((p) => p.name === name);
+  if (!found) throw new Error(`Package ${name} not found in Kody.`);
   return found.package_id;
 }
 
-/** One publish. Returns the API body, { status: "retry" } on 5xx/429/network, or throws on a refusal. */
-async function publish(id) {
-  const r = await call("POST", `/v1/packages/${encodeURIComponent(id)}/external-push`);
-  if (r.status === 0 || r.status >= 500 || r.status === 429) {
-    log(`publish: no answer (HTTP ${r.status}), try again`);
-    return { status: "retry" };
-  }
-  if (r.status >= 400 || !r.json) throw new Error(`publish refused: HTTP ${r.status}: ${redact(r.text).slice(0, 500)}`);
-  const { status, published_commit, previous_commit, message, workflow_id } = r.json;
+function show(body) {
+  const { status, published_commit, previous_commit, message, workflow_id } = body;
   log(JSON.stringify({ status, published_commit: published_commit ?? null, previous_commit: previous_commit ?? null, message: message ?? null, workflow_id: workflow_id ?? null }));
-  if (DONE.has(status) || status === "dispatched") return r.json;
-  throw new Error(`publish refused: status=${status}`);
 }
 
-/** The status of the background job, or null when it cannot be read. */
-async function runStatus(workflowId) {
-  const r = await call("GET", `/v1/workflow-runs?workflow_id=${encodeURIComponent(workflowId)}`);
-  const run = r.json?.workflows?.[0];
-  if (r.status !== 200 || !run) {
-    const why = r.json?.error ?? r.json?.code ?? `HTTP ${r.status}`;
-    log(`workflowRunList cannot give the status (${why}); publish again to read the state`);
-    return null;
+/** The answer of the publish: { status, ... } for a final answer or a refusal; a refusal throws. */
+function judge(body) {
+  if (DONE.has(body.status)) return body;
+  throw new Error(`publish refused: status=${body.status}${body.message ? ` (${body.message})` : ""}`);
+}
+
+/** Reads the run until it has a result; a failed run throws with its last_error. */
+async function waitForRun(workflowId) {
+  for (;;) {
+    const run = await until("packageRunResult", "GET", `/v1/packages/runs/${encodeURIComponent(workflowId)}`);
+    log(`publish run ${workflowId}: status=${run.status ?? "unknown"}`);
+    if (run.result && typeof run.result === "object") return judge(run.result);
+    if (run.last_error) log(`last_error: ${run.last_error}`);
+    if (FINAL.has(run.status) || run.status === null) {
+      throw new Error(`publish run ${workflowId} ended with status=${run.status} and no result: ${run.last_error ?? "no reason"}`);
+    }
+    await pause();
   }
-  log(`background job ${workflowId}: status=${run.status} enqueued_commit=${run.enqueued_commit ?? "n/a"}`);
-  if (run.last_error) log(`last_error: ${run.last_error}`);
-  return run.status;
 }
 
 async function main() {
   const id = await packageId();
   log(`Publishing ${name}`);
-  let result = await publish(id);
-  let workflowId = result.workflow_id ?? null;
-  let readStatus = true;
-  let repairs = 0;
-  const deadline = performance.now() + waitMs;
-  while (!DONE.has(result.status)) {
-    if (performance.now() >= deadline) throw new Error(`publish of ${name} not done within ${waitMs / 1000} s`);
-    await sleep(pollMs);
-    if (readStatus && workflowId) {
-      const status = await runStatus(workflowId);
-      if (status === null) readStatus = false;
-      else if (FAILED_RUN.has(status)) {
-        if (repairs++ > 0) throw new Error(`background publish ended with status=${status}`);
-        log("background publish failed; publish once more (Kody repairs missing artifacts on a re-run)");
-      } else if (status !== "complete") continue;
-    }
-    result = await publish(id);
-    if (result.workflow_id) workflowId = result.workflow_id;
-  }
+  const start = await until("publish", "POST", `/v1/packages/${encodeURIComponent(id)}/external-push`);
+  show(start);
+  if (start.status === "dispatched" && !start.workflow_id) throw new Error("publish dispatched without workflow_id");
+  const result = start.status === "dispatched" ? await waitForRun(start.workflow_id) : judge(start);
+  if (result !== start) show(result);
   log(`done: ${result.status} ${result.published_commit ?? ""}`.trim());
 }
 
+if (!name || !token) {
+  console.error("Usage: KODY_API_TOKEN=... kody-publish.mjs <@owner/name>");
+  process.exit(1);
+}
 main().then(
   () => process.exit(0),
   (error) => {
