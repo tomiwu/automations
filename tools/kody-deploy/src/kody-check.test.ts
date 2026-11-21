@@ -171,6 +171,25 @@ describe("kody-check.mjs", () => {
     expect(r.out).toContain("not done within");
   });
 
+  it("stops the retries of a request at the wait limit", async () => {
+    const { seen, url } = await fakeKody({ upload: [{ status: 503, body: {} }] });
+    const r = await run(url, { KODY_CHECK_DELAYS_MS: "60000,60000", KODY_CHECK_WAIT_MS: "300" });
+    expect(r.code).toBe(3);
+    expect(seen).toHaveLength(1);
+    expect(r.out).toContain("not done within");
+  });
+
+  it("cuts a request that hangs at the wait limit", async () => {
+    server = createServer(() => {});
+    await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    const started = performance.now();
+    const r = await run(`http://127.0.0.1:${port}`, { KODY_CHECK_TIMEOUT_MS: "60000", KODY_CHECK_WAIT_MS: "300" });
+    expect(r.code).toBe(3);
+    expect(performance.now() - started).toBeLessThan(5000);
+    server.closeAllConnections();
+  });
+
   it("gives exit 3 when the answers lack an id", async () => {
     const noUpload = await fakeKody({ upload: [ok({})] });
     expect((await run(noUpload.url)).code).toBe(3);
