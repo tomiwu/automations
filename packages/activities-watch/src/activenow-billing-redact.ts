@@ -39,6 +39,8 @@ const URL_ATTRS = new Set(["href", "action", "src", "data-url"]);
 const JSON_SCRIPT = new Set(["application/json", "application/ld+json"]);
 const KEEP_ATTR_VALUE = new Set(["class", "id", "role", "type", "name"]);
 const VOID_TAG = new Set(["meta", "img", "input", "br", "hr", "link"]);
+const SKIP_NODE = new Set(["comment", "cdata"]);
+const ELEMENT_NODE = new Set(["script", "tag"]);
 
 function redactPathSegment(segment: string): string {
   return segment
@@ -164,8 +166,8 @@ function walkNode(node: AnyNode, parts: string[], size: number): number {
 }
 
 function walk(node: AnyNode, parts: string[], size: number): number {
-  if (node.type === "comment" || node.type === "cdata") return size;
-  if (node.type === "script" || node.type === "tag") return walkNode(node, parts, size);
+  if (SKIP_NODE.has(node.type)) return size;
+  if (ELEMENT_NODE.has(node.type)) return walkNode(node, parts, size);
   if (node.type === "text") return walkText(node, parts, size);
   return size;
 }
