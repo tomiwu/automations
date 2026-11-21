@@ -494,4 +494,60 @@ describe("activenowBillingShapeExport", () => {
     expect(result.accounts[0]?.status).toBe("ActiveNow: HTTP 404 from /client_panel/billing/accounts/<n>");
     expect(JSON.stringify(result)).not.toContain("55");
   });
+
+  it("does not fetch a JS module from another origin", async () => {
+    const crossOrigin = billingFixture("activenow-billing-settlements-importmap.html").replace(
+      '"/assets/settlements-fake.js"',
+      '"https://cdn.example.org/assets/settlements-fake.js"',
+    );
+    const { deps, runtime } = setup({
+      "GET /users/sign_in": { body: LOGIN_FORM, cookie: "pre=1" },
+      "POST /users/sign_in": { body: PICKER, cookie: "sess=abc" },
+      "POST /role_selector/change_role": { body: PANEL_WITH_BILLING },
+      "GET /client_panel/billing": { status: 302, location: SETTLEMENTS_INDEX },
+      "GET /client_panel/settlements/index": { body: crossOrigin },
+    });
+    const result = await activenowBillingShapeExport(deps, {});
+    expect(result.accounts[0]?.upcoming?.source).toBeNull();
+    expect(runtime.requests.some((r) => r.input.includes("cdn.example.org"))).toBe(false);
+  });
+
+  it("stops the probe on a block page from the JS module", async () => {
+    const settlementsNoMarkup = billingFixture("activenow-billing-settlements-importmap.html");
+    const { deps, runtime } = setup(
+      {
+      "GET /users/sign_in": { body: LOGIN_FORM, cookie: "pre=1" },
+      "POST /users/sign_in": { body: PICKER, cookie: "sess=abc" },
+      "POST /role_selector/change_role": { body: PANEL_WITH_BILLING },
+      "GET /client_panel/billing": { status: 302, location: SETTLEMENTS_INDEX },
+        "GET /client_panel/settlements/index": { body: settlementsNoMarkup },
+        "GET /assets/settlements-fake.js": { status: 403, body: BLOCKED },
+      },
+      configWithSecondNow(),
+    );
+    const result = await activenowBillingShapeExport(deps, {});
+    expect(result.accounts).toHaveLength(1);
+    expect(result.accounts[0]?.status).toBe(ACTIVE_NOW_BLOCK);
+    expect(runtime.requests.filter((r) => new URL(r.input).pathname === "/users/sign_in")).toHaveLength(2);
+  });
+
+  it("puts the snippets about upcoming first and masks e-mails and digits in them", async () => {
+    const settlementsNoMarkup = billingFixture("activenow-billing-settlements-importmap.html");
+    const filler = "x".repeat(500);
+    const jsModule = `import { fetch as f } from "x"; ${filler} const url = 1; ${filler} const src = 2; ${filler} // owner@example.org 12345
+ this.upcomingValue = true; ${filler} visit("/client_panel/settlements/a"); visit("/client_panel/settlements/b")`;
+    const { deps } = setup({
+      "GET /users/sign_in": { body: LOGIN_FORM, cookie: "pre=1" },
+      "POST /users/sign_in": { body: PICKER, cookie: "sess=abc" },
+      "POST /role_selector/change_role": { body: PANEL_WITH_BILLING },
+      "GET /client_panel/billing": { status: 302, location: SETTLEMENTS_INDEX },
+      "GET /client_panel/settlements/index": { body: settlementsNoMarkup },
+      "GET /assets/settlements-fake.js": { body: jsModule },
+    });
+    const result = await activenowBillingShapeExport(deps, {});
+    const snippets = result.accounts[0]?.upcoming?.jsSnippets ?? [];
+    expect(snippets[0]).toContain("upcoming");
+    expect(snippets.join(" ")).not.toContain("owner@example.org");
+    expect(snippets.join(" ")).not.toContain("12345");
+  });
 });

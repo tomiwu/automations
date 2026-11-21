@@ -71,7 +71,7 @@ export function maskIds(segment: string): string {
     .replace(/\d+/g, "<n>");
 }
 
-function maskEmails(text: string): string {
+export function maskEmails(text: string): string {
   return text.replace(EMAIL, "<email>");
 }
 

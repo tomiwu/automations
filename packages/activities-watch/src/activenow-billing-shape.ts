@@ -6,6 +6,7 @@ import {
   bodySkeleton,
   headSummary,
   isUpcomingMarkupAttr,
+  maskEmails,
   maskIds,
   type HeadSummary,
   redactPaths,
@@ -54,7 +55,8 @@ export interface BillingShapeExport {
 
 const SETTLEMENTS_INDEX = "/client_panel/settlements/index";
 const UPCOMING_ACCEPT = "text/vnd.turbo-stream.html, text/html, application/json";
-const KEYWORD = /\b(upcoming|fetch|url|src|visit)\b/gi;
+/** No word boundaries: Stimulus code names the view inside words, for example `upcomingValue` or `showUpcoming`. */
+const KEYWORD = /(upcoming|fetch|url|src|visit)/gi;
 const PATH_LITERAL = /["'](\/[^"']+)["']/g;
 
 interface JsModuleState {
@@ -79,6 +81,10 @@ function billingHref(html: string, origin: string): string | null {
   return new URL(href, origin).toString();
 }
 
+/**
+ * Gives a runtime that remembers the last address it fetched. The session follows redirects by hand, so the
+ * last address is the final address of the last page.
+ */
 function trackLastUrl(runtime: Runtime): { runtime: Runtime; lastUrl: () => string } {
   let last = "";
   const fetch: Runtime["fetch"] = (input, init) => {
@@ -157,13 +163,17 @@ function rawSettlementsModuleHref(html: string): string | null {
   );
 }
 
+/** Up to 3 snippets. Hits of `upcoming` come first, because they name the view we look for. */
 function redactedSnippets(source: string): string[] {
   const hits: string[] = [];
-  for (const match of source.matchAll(KEYWORD)) {
+  const matches = [...source.matchAll(KEYWORD)];
+  const isUpcoming = (m: RegExpMatchArray): boolean => m[0].toLowerCase() === "upcoming";
+  const ordered = [...matches.filter(isUpcoming), ...matches.filter((m) => !isUpcoming(m))];
+  for (const match of ordered) {
     const index = match.index ?? 0;
     const start = Math.max(0, index - 120);
     const end = Math.min(source.length, index + 280);
-    hits.push(maskIds(source.slice(start, end)));
+    hits.push(maskIds(maskEmails(source.slice(start, end))));
     if (hits.length >= 3) break;
   }
   return hits;
@@ -194,12 +204,15 @@ function chooseJsUpcoming(paths: string[]): string | null {
 function moduleUrl(html: string, origin: string, shared: SharedProbeState): string | null {
   if (shared.js.url) return shared.js.url;
   const href = rawSettlementsModuleHref(html);
-  shared.js.url = href ? new URL(href, origin).toString() : null;
+  const url = href ? new URL(href, origin) : null;
+  // Same origin only: the probe sends the ActiveNow session cookies with this request.
+  shared.js.url = url && url.origin === new URL(origin).origin ? url.toString() : null;
   return shared.js.url;
 }
 
 async function readModuleSource(http: Http, url: string, shared: JsModuleState): Promise<void> {
   const result = await http.request(url);
+  if (result.status === 403 && blockPage(result.text)) throw new Error(ACTIVE_NOW_BLOCK);
   shared.status = result.status;
   if (result.status < 200 || result.status >= 300) {
     shared.error = `ActiveNow: HTTP ${result.status} from settlements JavaScript module`;
