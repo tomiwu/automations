@@ -131,10 +131,12 @@ describe("appendLibrusJournal homework", () => {
     expect(payloads).toBe(2);
   });
 
-  it("does nothing when both parts failed", async () => {
+  it("records one failed CheckCompleted and no other event when both parts failed", async () => {
     const { source, pass, storage } = setup();
-    source.timetableError = "Librus down";
-    expect(await pass(null)).toBe(0);
-    expect(await storage.listEvents(FAMILY_ID)).toEqual([]);
+    source.timetableError = "Librus: login iframe not found (portal changed?)";
+    expect(await pass(null)).toBe(1);
+    const events = await storage.listEvents(FAMILY_ID);
+    expect(events.map((e) => e.eventType)).toEqual(["CheckCompleted"]);
+    expect(events[0]?.payload).toEqual({ timetableOk: false, homeworkOk: false, lessons: 0, homework: 0 });
   });
 });

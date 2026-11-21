@@ -40,11 +40,15 @@ The Supabase URL and the Family ID are plain config set with `./configure` (`{ s
 - The role `automations_watcher` can only read and insert `item_details`. It cannot update or delete.
 - **Data is kept forever.** No job deletes rows: `item_details`, `items`, `journal_events` and the Outbox (delivered rows too) are kept forever.
 
+## Librus login
+
+The portal page `portal.librus.pl/rodzina/synergia/loguj` is a JS app since 2026-11. `loginIframeSource` finds the login URL in this order: an iframe with `id="caLoginIframe"`, an iframe whose src has `/loguj/`, then `VITE_SYNERGIA_LOGIN_URL_FAMILY` in `window.__PORTAL_CONFIG__`. The JS bundle does not run. The fixture is `src/fixtures/portal-spa-2026-11.html`.
+
 ## Journal events (`scheduled-check`)
 
 - After the Watchers, `scheduled-check` appends Lesson and homework events to `journal_events` (ADR 0006). It uses only data that the run read already: the timetable is memoized in the source, and the `homework` Watcher gives its Items. It makes no new Librus request.
 - Streams: `lesson:<childId>:<date>:<period>`, `homework:<childId>:<librus id>` and `check:librus-watch:<childId>`. Each pass appends one `CheckCompleted` event when a part ran.
-- A failed timetable gives no Lesson event and no `LessonVanished`. A failed `homework` Watcher gives no homework event. A journal failure is reported as `journal: <message>`, and the Morning report still runs.
+- A failed timetable gives no Lesson event and no `LessonVanished`. When the timetable and the homework both failed (for example a login error), the pass still appends one `CheckCompleted` with `timetableOk: false, homeworkOk: false`, so `stored-lessons` shows the outage in `lastCheck`. A failed `homework` Watcher gives no homework event. A journal failure is reported as `journal: <message>`, and the Morning report still runs.
 - The journal step adds about 2 to 4 Supabase fetches for each Child and pass: one read of the heads, one append, and the check stream.
 - `journal_events` is append-only (see `packages/librus-data/README.md`).
 

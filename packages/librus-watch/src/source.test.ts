@@ -1,4 +1,5 @@
 import { fakeRuntime } from "@automations/shared";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createLibrusSource, fingerprint, lessonItem, timetableWeeks } from "./source.ts";
 import { landingUrl, LibrusTimeoutError, loginIframeSource } from "./session.ts";
@@ -7,6 +8,9 @@ import { lesson } from "./test-fixtures.ts";
 const ORIGIN = "https://school.example.org";
 const account = { origin: ORIGIN, login_secret: "CHILD1_LIBRUS_LOGIN", password_secret: "CHILD1_LIBRUS_PASSWORD" };
 const secrets = { CHILD1_LIBRUS_LOGIN: "login-value", CHILD1_LIBRUS_PASSWORD: "password-value" };
+
+const PORTAL_SPA = readFileSync(new URL("./fixtures/portal-spa-2026-11.html", import.meta.url), "utf8");
+const SPA_LOGIN_URL = "https://synergia.librus.pl/loguj/portalRodzina?layout_version=2";
 
 type Handler = (url: URL, init?: RequestInit) => Response | undefined;
 
@@ -18,9 +22,10 @@ function librus(handlers: Handler[] = [], options: { reject?: boolean } = {}) {
     respond: (input, init) => {
       const url = new URL(input);
       if (url.host === "portal.librus.pl") {
-        return new Response('<iframe id="caLoginIframe" src="https://api.librus.pl/form"></iframe>', {
-          headers: { "set-cookie": "portal=1; Path=/" },
-        });
+        return new Response(PORTAL_SPA, { headers: { "set-cookie": "portal=1; Path=/" } });
+      }
+      if (url.host === "synergia.librus.pl") {
+        return new Response("", { status: 302, headers: { location: "https://api.librus.pl/form" } });
       }
       if (url.host === "api.librus.pl" && init?.method === "POST") {
         const reply = options.reject ? { status: "error" } : { status: "ok", goTo: "/landing" };
@@ -51,6 +56,12 @@ describe("LibrusSource", () => {
     expect((post?.init?.headers as Record<string, string>)["x-baner"]).toBeTruthy();
     await source.currentItems("grades");
     expect(runtime.requests.filter((r) => r.init?.method === "POST")).toHaveLength(1);
+  });
+
+  it("fails with a clear error when the portal has no iframe and no config", async () => {
+    const runtime = fakeRuntime({ secrets, now: new Date("2026-01-07T10:00:00Z"), respond: () => new Response("<div id=\"root\"></div>") });
+    const source = createLibrusSource(runtime, account, { timezone: "UTC" });
+    await expect(source.currentItems("grades")).rejects.toThrow("Librus: login iframe not found (portal changed?)");
   });
 
   it("keeps the cookies of a redirect and sends them to the next hop", async () => {
@@ -246,6 +257,21 @@ describe("helpers", () => {
 });
 
 describe("loginIframeSource", () => {
+  it("reads the login URL from the config of the JS portal (no iframe in the HTML)", () => {
+    expect(PORTAL_SPA).not.toContain("<iframe");
+    expect(loginIframeSource(PORTAL_SPA)).toBe(SPA_LOGIN_URL);
+  });
+
+  it("decodes escaped slashes in the config and ignores a foreign login URL", () => {
+    const config = (url: string) => `<script>window.__PORTAL_CONFIG__ = {"VITE_SYNERGIA_LOGIN_URL_FAMILY":"${url}"}</script>`;
+    expect(loginIframeSource(config("https:\\/\\/synergia.librus.pl\\/loguj\\/portalRodzina"))).toBe("https://synergia.librus.pl/loguj/portalRodzina");
+    expect(loginIframeSource(config("https://evil.example.com/loguj/x"))).toBeUndefined();
+  });
+
+  it("prefers an iframe over the config", () => {
+    expect(loginIframeSource(`<iframe id="caLoginIframe" src="https://api.librus.pl/form"></iframe>${PORTAL_SPA}`)).toBe("https://api.librus.pl/form");
+  });
+
   it("finds the iframe of the current portal by its src and decodes the ampersand", () => {
     const html =
       '<iframe title="Zaloguj do Synergii - formularz" class="x__iframe " src="https://synergia.librus.pl/loguj/portalRodzina?layout_version=2&amp;v=1793712592" allow="publickey-credentials-get"></iframe>';

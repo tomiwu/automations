@@ -97,6 +97,19 @@ describe("runLibrusWatch", () => {
     expect(sent[0]).toBe("1000001|Login failed for Child One. Check the account.");
   });
 
+  it("appends one failed CheckCompleted when the login fails", async () => {
+    const { deps, source, storage } = setup();
+    source.timetableError = "Librus: login iframe not found (portal changed?)";
+    source.currentItems = async () => {
+      throw new Error(source.timetableError);
+    };
+    await runLibrusWatch(deps);
+    const events = await storage.listEvents(FAMILY_ID);
+    expect(events.map((e) => [e.eventType, e.payload])).toEqual([
+      ["CheckCompleted", { timetableOk: false, homeworkOk: false, lessons: 0, homework: 0 }],
+    ]);
+  });
+
   it("does not fail the run when the morning report fails", async () => {
     const { deps, source, runtime } = setup();
     source.timetable = async () => {
