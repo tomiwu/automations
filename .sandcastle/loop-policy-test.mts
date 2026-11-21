@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  agentBeforePhase, effortFor, isFormatOnlyFailure, limitWait, nextAgentAfterStall, parseResetAt, phaseOfName, sleepUntil, writeStatus,
+  agentBeforePhase, effortFor, isFormatOnlyFailure, limitWait, nextAgentAfterStall, parseResetAt, phaseOfName, sleepUntil, stallKind, writeStatus,
 } from "./loop-policy.mts";
 
 let fails = 0;
@@ -41,6 +41,22 @@ check("chain: Claude-only chain + limit -> -1 (pause)", nextAgentAfterStall(["Cl
 check("back to Claude after the reset", agentBeforePhase(chain, 2, now - 1, now) === 0);
 check("stay on Composer before the reset", agentBeforePhase(chain, 2, now + 60_000, now) === 2);
 check("stay on Claude when no limit is known", agentBeforePhase(chain, 1, undefined, now) === 1);
+
+// #266: the two crashes of 2026-11-21 are stalls now; ordinary errors are not.
+const cursorBadKey = "AgentError: cursor exited with code 1:\n\u001b[33m⚠ Warning: The provided API key is invalid.\u001b[0m";
+const idle = "AgentIdleTimeoutError: Agent idle for 1800 seconds — no output received. Consider increasing the idle timeout with --idle-timeout.";
+check("stall: Cursor invalid API key -> auth", stallKind(cursorBadKey) === "auth");
+check("stall: Claude 'Invalid API key · Please run /login' -> auth", stallKind("Invalid API key · Please run /login") === "auth");
+check("stall: idle timeout -> idle", stallKind(idle) === "idle");
+check("stall: Claude 5-hour limit -> limit", stallKind(msg) === "limit");
+check("stall: Cursor out of fast requests -> limit", stallKind("You are out of fast requests") === "limit");
+check("stall: TypeError is not a stall", stallKind("TypeError: Cannot read properties of undefined (reading 'x')") === undefined);
+check("stall: model not found is not a stall", stallKind("AgentError: claude exited with code 1: model not found") === undefined);
+check("stall: a sandbox error is not a stall", stallKind("Error: podman: no such container sandcastle-1") === undefined);
+check("chain: Cursor invalid key -> Opus", nextAgentAfterStall(["Cursor CLI (composer-2.5-fast)", ...chain.slice(0, 2)], 0, cursorBadKey) === 1);
+check("chain: Claude login error on Opus skips Sonnet", nextAgentAfterStall(chain, 0, "Invalid API key · Please run /login") === 2);
+check("chain: idle Opus -> Sonnet", nextAgentAfterStall(chain, 0, idle) === 1);
+check("chain: Claude-only chain + login error -> -1 (pause)", nextAgentAfterStall(chain.slice(0, 2), 0, "Invalid API key") === -1);
 
 const fmtLog = "== fmt\nDiff in /home/agent/crates/ui/src/lib.rs at line 4:\n-fn a(){}\n+fn a() {}\n";
 const clippyLog = "error: this `if` has identical blocks\n  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#if_same_then_else\n  = note: `-D clippy::if-same-then-else` implied by `-D warnings`";

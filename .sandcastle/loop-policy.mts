@@ -74,10 +74,27 @@ export function limitWait(text: string, nowMs: number, pauseMinutes: number, max
   return { untilMs: until, reason: `limit resets ${new Date(reset).toISOString()}` };
 }
 
-// Next agent after a stall. A Claude limit skips the other Claude agents (same shared limit).
-// Returns -1 when no agent is left (the caller pauses).
+// Agent errors that are a stall, not a bug: change to the next agent or pause, never crash (#266).
+export const LIMIT_ERROR = /credit|quota|usage limit|rate limit|payment|out of (fast )?requests|insufficient|hit your (?:[\w-]+ )?limit|limit reached/i;
+// "Warning: The provided API key is invalid." (Cursor CLI), "Invalid API key" and login errors (Claude Code).
+export const AUTH_ERROR = /api key is invalid|invalid (?:api |x-api-)?key|authentication (?:failed|error|required)|not (?:logged|signed) in|please (?:run \S+ )?log ?in|\b401 unauthori[sz]ed/i;
+// Sandcastle: "AgentIdleTimeoutError: Agent idle for 1800 seconds — no output received."
+export const IDLE_ERROR = /AgentIdleTimeoutError|agent idle for \d+ seconds/i;
+
+export type StallKind = "limit" | "auth" | "idle";
+
+// The kind of stall in an agent error text, or undefined for an ordinary error (the caller throws it).
+export function stallKind(text: string): StallKind | undefined {
+  if (IDLE_ERROR.test(text)) return "idle";
+  if (AUTH_ERROR.test(text)) return "auth";
+  if (LIMIT_ERROR.test(text)) return "limit";
+  return undefined;
+}
+
+// Next agent after a stall. A Claude limit or login error skips the other Claude agents (same shared
+// limit and login). Returns -1 when no agent is left (the caller pauses).
 export function nextAgentAfterStall(labels: string[], index: number, failureText: string): number {
-  if (isClaudeLabel(labels[index]) && CLAUDE_LIMIT.test(failureText)) {
+  if (isClaudeLabel(labels[index]) && (CLAUDE_LIMIT.test(failureText) || AUTH_ERROR.test(failureText))) {
     for (let i = index + 1; i < labels.length; i++) if (!isClaudeLabel(labels[i])) return i;
     return -1;
   }
