@@ -73,20 +73,34 @@ export function parseMessages(html: string): MessageItem[] {
   return items;
 }
 
-/** Reads the attachment list from a message detail page. */
+/**
+ * Reads the attachment list from a message detail page. The markup is a synthetic guess, not checked on a real Librus
+ * page yet. It never throws: markup it does not know gives no link (see `unrecognizedAttachments`).
+ */
 export function parseMessageAttachments(html: string): MessageAttachmentLink[] {
-  const $ = cheerio.load(html);
-  const items: MessageAttachmentLink[] = [];
-  $(".container-message-attachments a.message-attachment").each((_, link) => {
-    const element = $(link);
-    const id = element.attr("data-id") ?? "";
-    const name = clean(element.text()) || clean(element.attr("title") ?? "");
-    const downloadPath = element.attr("href") ?? "";
-    if (!id || !name || !downloadPath) return;
-    const size = Number(element.attr("data-size") ?? "0");
-    items.push({ id, name, size: Number.isFinite(size) ? size : 0, downloadPath });
-  });
-  return items;
+  try {
+    const $ = cheerio.load(html);
+    const items: MessageAttachmentLink[] = [];
+    $(".container-message-attachments a.message-attachment").each((_, link) => {
+      const element = $(link);
+      const id = element.attr("data-id") ?? "";
+      const name = clean(element.text()) || clean(element.attr("title") ?? "");
+      const downloadPath = element.attr("href") ?? "";
+      if (!id || !name || !downloadPath) return;
+      const size = Number(element.attr("data-size") ?? "0");
+      items.push({ id, name, size: Number.isFinite(size) ? size : 0, downloadPath });
+    });
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+const ATTACHMENT_HINT = /za[łl][aą]cznik/i;
+
+/** 1 when the page mentions an attachment but no link was read (the markup is not the expected one), else 0. */
+export function unrecognizedAttachments(html: string, links: readonly MessageAttachmentLink[]): number {
+  return links.length === 0 && ATTACHMENT_HINT.test(html) ? 1 : 0;
 }
 
 /** Returns the text of an opened message. Line breaks stay. Blank lines are limited to one. */

@@ -64,7 +64,7 @@ export function fakeSource(): FakeSource {
     async openMessage(id) {
       source.opened.push(id);
       source.bodies.push(id);
-      return { body: `Body of ${id}`, attachments: [] };
+      return { body: `Body of ${id}`, attachments: [], unrecognizedAttachments: 0 };
     },
     async fetchAttachment(path) {
       return source.attachmentBytes.get(path) ?? new Uint8Array([1, 2, 3]);

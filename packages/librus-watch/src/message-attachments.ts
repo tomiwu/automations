@@ -2,7 +2,7 @@ import { attachmentObjectPath, sha256Hex, type NewJournalEvent, type NewNotifica
 import { t, type Language, type Recipient } from "@automations/shared";
 import type { Announcement, ChildCheck } from "./engine.ts";
 import { formatMessage } from "./format.ts";
-import type { MessageAttachmentLink, MessageItem } from "./types.ts";
+import type { MessageAttachmentLink, MessageItem, OpenedMessage } from "./types.ts";
 
 /** Telegram limit is 50 MB; stay below it. */
 export const ATTACHMENT_SIZE_LIMIT = 45 * 1024 * 1024;
@@ -133,27 +133,43 @@ async function storeOne(
   }
 }
 
-async function announceOne(
+/** Counts for the log. Never names, paths or contents. */
+interface AttachmentCounts {
+  found: number;
+  stored: number;
+  fallback: number;
+  unrecognized: number;
+}
+
+function unrecognizedNote(check: ChildCheck, scope: string, messageId: string): NewNotification[] {
+  return mapNotifications(check, scope, messageId, "attachments-unrecognized", (recipient) => ({
+    text: t(recipient.language as Language, "message.attachment.unrecognized"),
+  }));
+}
+
+/** Stores the files of one opened message. It never throws: a failure becomes the "open in Librus" text. */
+async function attachmentsOf(
   item: MessageItem,
+  opened: OpenedMessage,
   ctx: AttachmentRunContext,
-): Promise<{ announcement: Announcement; notifications: NewNotification[]; journal: NewJournalEvent[] }> {
+  counts: AttachmentCounts,
+): Promise<{ notifications: NewNotification[]; journal: NewJournalEvent[] }> {
   const { check, scope } = ctx;
-  const opened = await check.source.openMessage(item.id);
-  const announcement: Announcement = {
-    key: item.id,
-    text: (context) => formatMessage(context, item, opened.body),
-    itemId: item.id,
-    body: opened.body,
-  };
   const notifications: NewNotification[] = [];
   const journal: NewJournalEvent[] = [];
+  if (opened.unrecognizedAttachments > 0) {
+    counts.unrecognized += 1;
+    notifications.push(...unrecognizedNote(check, scope, item.id));
+  }
   for (const link of opened.attachments) {
+    counts.found += 1;
     const stored = await storeOne(ctx, item, link, check.storage);
-    if (stored.fallback) {
-      notifications.push(...stored.fallback);
+    if (stored.fallback || !stored.path || !stored.journal) {
+      counts.fallback += 1;
+      notifications.push(...(stored.fallback ?? attachmentFallback(check, scope, item.id, link)));
       continue;
     }
-    if (!stored.path || !stored.journal) continue;
+    counts.stored += 1;
     journal.push(stored.journal);
     notifications.push(
       ...mapNotifications(check, scope, item.id, `doc:${link.id}`, (recipient) => ({
@@ -164,18 +180,49 @@ async function announceOne(
       })),
     );
   }
-  return { announcement, notifications, journal };
+  return { notifications, journal };
 }
 
-/** Opens each new message, stores attachments and builds Outbox and Journal entries. */
+async function announceOne(
+  item: MessageItem,
+  ctx: AttachmentRunContext,
+  counts: AttachmentCounts,
+): Promise<{ announcement: Announcement; notifications: NewNotification[]; journal: NewJournalEvent[] }> {
+  const opened = await ctx.check.source.openMessage(item.id);
+  const announcement: Announcement = {
+    key: item.id,
+    text: (context) => formatMessage(context, item, opened.body),
+    itemId: item.id,
+    body: opened.body,
+  };
+  try {
+    return { announcement, ...(await attachmentsOf(item, opened, ctx, counts)) };
+  } catch {
+    counts.unrecognized += 1;
+    return { announcement, notifications: unrecognizedNote(ctx.check, ctx.scope, item.id), journal: [] };
+  }
+}
+
+/**
+ * Opens each new message one after another, stores its attachments and builds the Outbox and Journal entries. The
+ * log gets counts only.
+ */
 export async function announceMessages(
   changes: { item: MessageItem }[],
   ctx: AttachmentRunContext,
 ): Promise<{ announcements: Announcement[]; notifications: NewNotification[]; journal: NewJournalEvent[] }> {
-  const results = await Promise.all(changes.map(({ item }) => announceOne(item, ctx)));
-  return {
-    announcements: results.map((result) => result.announcement),
-    notifications: results.flatMap((result) => result.notifications),
-    journal: results.flatMap((result) => result.journal),
-  };
+  const counts: AttachmentCounts = { found: 0, stored: 0, fallback: 0, unrecognized: 0 };
+  const announcements: Announcement[] = [];
+  const notifications: NewNotification[] = [];
+  const journal: NewJournalEvent[] = [];
+  for (const { item } of changes) {
+    const result = await announceOne(item, ctx, counts);
+    announcements.push(result.announcement);
+    notifications.push(...result.notifications);
+    journal.push(...result.journal);
+  }
+  if (counts.found + counts.unrecognized > 0) {
+    ctx.check.log?.(`attachments: found=${counts.found} stored=${counts.stored} fallback=${counts.fallback} unrecognized=${counts.unrecognized}`);
+  }
+  return { announcements, notifications, journal };
 }

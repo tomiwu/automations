@@ -7,6 +7,7 @@ import {
   parseGrades,
   parseHomeworks,
   parseMessageAttachments,
+  unrecognizedAttachments,
   parseMessageBody,
   parseMessages,
   parseParentTeacherConferences,
@@ -260,7 +261,8 @@ export function createLibrusSource(
     async openMessage(id) {
       await ensureLogin();
       const html = await session.page(`/wiadomosci/1/5/${encodeURIComponent(id)}/f0`);
-      return { body: parseMessageBody(html), attachments: parseMessageAttachments(html) };
+      const attachments = parseMessageAttachments(html);
+      return { body: parseMessageBody(html), attachments, unrecognizedAttachments: unrecognizedAttachments(html, attachments) };
     },
     async fetchAttachment(downloadPath) {
       await ensureLogin();

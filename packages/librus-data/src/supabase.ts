@@ -36,6 +36,14 @@ function toItem(row: Row): StoredItem {
   };
 }
 
+/** Supabase Storage answers 409, or 400 with `statusCode: "409"`, when the object exists already. */
+async function isDuplicateUpload(response: Response): Promise<boolean> {
+  if (response.status === 409) return true;
+  if (response.status !== 400) return false;
+  const body = (await response.json().catch(() => undefined)) as { statusCode?: unknown } | undefined;
+  return String(body?.statusCode) === "409";
+}
+
 const outboxKind = (value: unknown): OutboxKind => (value === "document" ? "document" : "text");
 const optionalString = (value: unknown): string | undefined => (value === null || value === undefined ? undefined : String(value));
 const nullableDate = (value: unknown): Date | null => (value === null ? null : new Date(String(value)));
@@ -337,10 +345,11 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const target = `${options.url}/storage/v1/object/${BUCKET}/${path}`;
       const response = await options.fetch(target, {
         method: "POST",
-        headers: { apikey: options.key, authorization: `Bearer ${options.key}`, "content-type": contentType, "x-upsert": "true" },
+        headers: { apikey: options.key, authorization: `Bearer ${options.key}`, "content-type": contentType },
         body: new Uint8Array(bytes),
       });
-      if (!response.ok) throw new Error(`Supabase attachment upload failed: ${response.status}`);
+      // No upsert (the watcher may not overwrite or delete). A file stored by an earlier, unfinished run is kept.
+      if (!response.ok && !(await isDuplicateUpload(response))) throw new Error(`Supabase attachment upload failed: ${response.status}`);
     },
     getAttachment: async (path) => {
       const target = `${options.url}/storage/v1/object/${BUCKET}/${path}`;

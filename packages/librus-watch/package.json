@@ -15,12 +15,7 @@
     "./events": "./src/entry/events.ts",
     "./stored-lessons": "./src/entry/stored-lessons.ts",
     "./stream-history": "./src/entry/stream-history.ts",
-    "./configure": "./src/entry/configure.ts",
-    "./deliver": "./src/deliver.ts",
-    "./message-attachments": "./src/message-attachments.ts",
-    "./parse": "./src/parse.ts",
-    "./telegram-document": "./src/telegram-document.ts",
-    "./test-fixtures": "./src/test-fixtures.ts"
+    "./configure": "./src/entry/configure.ts"
   },
   "dependencies": {
     "@automations/librus-data": "*",

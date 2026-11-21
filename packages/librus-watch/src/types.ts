@@ -40,6 +40,8 @@ export interface MessageAttachmentLink {
 export interface OpenedMessage {
   body: string;
   attachments: MessageAttachmentLink[];
+  /** 1 when the page mentions an attachment that the parser could not read, else 0. */
+  unrecognizedAttachments: number;
 }
 
 export interface AnnouncementItem {

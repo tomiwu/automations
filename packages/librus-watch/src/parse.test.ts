@@ -6,6 +6,7 @@ import {
   parseGrades,
   parseHomeworks,
   parseMessageAttachments,
+  unrecognizedAttachments,
   parseMessageBody,
   parseMessages,
   parseParentTeacherConferences,
@@ -42,6 +43,15 @@ describe("html parsers", () => {
   it("parses a message body with line breaks", () => {
     const html = `<div class="container-message-content"><p>Line  one<br>Line two</p><div>Last</div></div>`;
     expect(parseMessageBody(html)).toBe("Line one\nLine two\nLast");
+  });
+
+  it("reads no attachment from unknown markup and never throws", () => {
+    const html = `<div class="container-message-content">Hello</div><table><tr><td>Załączniki:</td><td><a onclick="x()">plik.pdf</a></td></tr></table>`;
+    const links = parseMessageAttachments(html);
+    expect(links).toEqual([]);
+    expect(unrecognizedAttachments(html, links)).toBe(1);
+    expect(unrecognizedAttachments("<div>No files</div>", [])).toBe(0);
+    expect(parseMessageAttachments(undefined as unknown as string)).toEqual([]);
   });
 
   it("parses the attachment list on a synthetic message detail page", async () => {
