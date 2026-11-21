@@ -54,18 +54,26 @@ describe("html parsers", () => {
     expect(parseMessageAttachments(undefined as unknown as string)).toEqual([]);
   });
 
-  it("parses the attachment list on a synthetic message detail page", async () => {
+  it("parses the Pliki: rows of a message page (synthetic copy of the real markup)", async () => {
     const html = await import("node:fs/promises").then((fs) =>
       fs.readFile(new URL("./fixtures/message-with-attachment.html", import.meta.url), "utf8"),
     );
-    expect(parseMessageAttachments(html)).toEqual([
-      {
-        id: "att-001",
-        name: "sample.pdf",
-        size: 11,
-        downloadPath: "/wiadomosci/1/7/att-001/0/sample.pdf",
-      },
+    const links = parseMessageAttachments(html);
+    expect(links).toEqual([
+      { id: "2000001", name: "sample.pdf", size: 0, downloadPath: "/wiadomosci/pobierz_zalacznik/1000001/2000001" },
+      { id: "2000002", name: "zdjęcie 1.jpg", size: 0, downloadPath: "/wiadomosci/pobierz_zalacznik/1000001/2000002" },
     ]);
+    expect(unrecognizedAttachments(html, links)).toBe(0);
+    expect(parseMessageBody(html)).toBe("Please read the file.\n\nThe offer is in the attachment (załącznik).");
+  });
+
+  it("reads an unescaped download call and skips a row without a name", () => {
+    const row = (name: string, file: string) =>
+      `<tr><td>${name}</td><td><a href="javascript:void(0);"><img onclick="otworz_w_nowym_oknie('/wiadomosci/pobierz_zalacznik/7/${file}', 'o2')"></a></td></tr>`;
+    const html = `<table><tr><td><b>Pliki:</b></td></tr>${row("a.pdf", "1")}${row("a.pdf", "1")}${row(" ", "2")}</table>`;
+    const links = parseMessageAttachments(html);
+    expect(links).toEqual([{ id: "1", name: "a.pdf", size: 0, downloadPath: "/wiadomosci/pobierz_zalacznik/7/1" }]);
+    expect(unrecognizedAttachments(html, links)).toBe(1);
   });
 
   it("parses announcements", () => {

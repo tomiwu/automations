@@ -73,22 +73,29 @@ export function parseMessages(html: string): MessageItem[] {
   return items;
 }
 
+/** The download call of a "Pliki:" row: `otworz_w_nowym_oknie("\\/wiadomosci\\/pobierz_zalacznik\\/<message>\\/<file>", ...)`. */
+const DOWNLOAD_CALL = /\\?\/wiadomosci\\?\/pobierz_zalacznik\\?\/(\d+)\\?\/(\d+)/;
+
 /**
- * Reads the attachment list from a message detail page. The markup is a synthetic guess, not checked on a real Librus
- * page yet. It never throws: markup it does not know gives no link (see `unrecognizedAttachments`).
+ * Reads the attachment list from a message detail page. Librus shows a table with a "Pliki:" header. Each row has the
+ * file name as text in the first cell and a download image whose onClick opens `/wiadomosci/pobierz_zalacznik/<m>/<f>`
+ * with JSON-escaped slashes. The page gives no size: the size is the length of the downloaded body. It never throws:
+ * markup it does not know gives no link (see `unrecognizedAttachments`).
  */
 export function parseMessageAttachments(html: string): MessageAttachmentLink[] {
   try {
     const $ = cheerio.load(html);
     const items: MessageAttachmentLink[] = [];
-    $(".container-message-attachments a.message-attachment").each((_, link) => {
-      const element = $(link);
-      const id = element.attr("data-id") ?? "";
-      const name = clean(element.text()) || clean(element.attr("title") ?? "");
-      const downloadPath = element.attr("href") ?? "";
-      if (!id || !name || !downloadPath) return;
-      const size = Number(element.attr("data-size") ?? "0");
-      items.push({ id, name, size: Number.isFinite(size) ? size : 0, downloadPath });
+    const seen = new Set<string>();
+    $("[onclick]").each((_, element) => {
+      const match = DOWNLOAD_CALL.exec($(element).attr("onclick") ?? "");
+      if (!match) return;
+      const [, messageId, id] = match as unknown as [string, string, string];
+      const row = $(element).closest("tr");
+      const name = clean(row.children("td").first().text());
+      if (!name || seen.has(id)) return;
+      seen.add(id);
+      items.push({ id, name, size: 0, downloadPath: `/wiadomosci/pobierz_zalacznik/${messageId}/${id}` });
     });
     return items;
   } catch {
@@ -96,10 +103,15 @@ export function parseMessageAttachments(html: string): MessageAttachmentLink[] {
   }
 }
 
-const ATTACHMENT_HINT = /za[łl][aą]cznik/i;
+const ATTACHMENT_HINT = /za[łl][aą]cznik|pobierz_zalacznik|<b>\s*Pliki:/i;
 
-/** 1 when the page mentions an attachment but no link was read (the markup is not the expected one), else 0. */
+/**
+ * 1 when the page mentions an attachment but no link was read, or has more download calls than read links (the
+ * markup is not the expected one), else 0.
+ */
 export function unrecognizedAttachments(html: string, links: readonly MessageAttachmentLink[]): number {
+  const calls = new Set([...String(html).matchAll(new RegExp(DOWNLOAD_CALL, "g"))].map((match) => match[2]));
+  if (calls.size > links.length) return 1;
   return links.length === 0 && ATTACHMENT_HINT.test(html) ? 1 : 0;
 }
 

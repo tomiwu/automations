@@ -1,6 +1,6 @@
 import { createMemoryStorage } from "@automations/librus-data";
 import { describe, expect, it } from "vitest";
-import { deliverPending, redactSecretPlaceholders, splitForTelegram, withTimeout, type Messenger } from "./deliver.ts";
+import { deliverPending, documentTimeout, redactSecretPlaceholders, splitForTelegram, withTimeout, type Messenger } from "./deliver.ts";
 import { FAMILY_ID } from "./test-fixtures.ts";
 
 const entry = (key: string, chatId: string, text = "text") => ({ key, familyId: FAMILY_ID, chatId, text });
@@ -97,6 +97,41 @@ describe("deliverPending", () => {
     await deliverPending({ storage, familyId: FAMILY_ID, messenger: m, chatIds: ["1000001"] });
     expect(sent).toEqual(["1000001|hello", "1000001|doc:sample.pdf:3|sample.pdf"]);
     expect(await storage.pendingNotifications(FAMILY_ID)).toEqual([]);
+  });
+
+  it("gives a slow document upload more time than a text send", async () => {
+    const storage = createMemoryStorage();
+    await storage.putAttachment(`${FAMILY_ID}/m1/att-001`, new Uint8Array([1, 2]), "application/pdf");
+    await storage.enqueueNotifications([
+      {
+        key: "doc-a",
+        familyId: FAMILY_ID,
+        chatId: "1000001",
+        kind: "document",
+        text: "sample.pdf",
+        storagePath: `${FAMILY_ID}/m1/att-001`,
+        fileName: "sample.pdf",
+      },
+    ]);
+    const sent: string[] = [];
+    const slow: Messenger = {
+      send: () => new Promise((resolve) => setTimeout(resolve, 60)),
+      sendDocument: (chatId, fileName) => new Promise((resolve) => setTimeout(() => resolve(void sent.push(`${chatId}|${fileName}`)), 60)),
+    };
+    await deliverPending({ storage, familyId: FAMILY_ID, messenger: slow, chatIds: ["1000001"], sendTimeoutMs: 10, documentTimeoutMs: 500 });
+    expect(sent).toEqual(["1000001|sample.pdf"]);
+    await storage.enqueueNotification(entry("text-a", "1000001", "hello"));
+    await expect(
+      deliverPending({ storage, familyId: FAMILY_ID, messenger: slow, chatIds: ["1000001"], sendTimeoutMs: 10, documentTimeoutMs: 500 }),
+    ).rejects.toThrow("telegram send timed out");
+  });
+
+  it.each([
+    [60_000, 20_000, 45_000, 45_000],
+    [30_000, 20_000, 45_000, 30_000],
+    [5_000, 20_000, 45_000, 20_000],
+  ])("documentTimeout(%i, %i, %i) is %i", (remaining, text, document, expected) => {
+    expect(documentTimeout(remaining, text, document)).toBe(expected);
   });
 
   it("sends the text before a document queued at the same time", async () => {

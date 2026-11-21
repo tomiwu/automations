@@ -67,7 +67,7 @@ export function fakeSource(): FakeSource {
       return { body: `Body of ${id}`, attachments: [], unrecognizedAttachments: 0 };
     },
     async fetchAttachment(path) {
-      return source.attachmentBytes.get(path) ?? new Uint8Array([1, 2, 3]);
+      return { bytes: source.attachmentBytes.get(path) ?? new Uint8Array([1, 2, 3]) };
     },
     async fullTimetable(): Promise<TimetableResult> {
       return source.timetableError ? { lessons: [], error: source.timetableError } : { lessons: source.lessons };

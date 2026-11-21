@@ -1,5 +1,6 @@
 import type { Account, FetchFn, Runtime } from "@automations/shared";
 import { formBody } from "@automations/shared";
+import type { AttachmentFile } from "./types.ts";
 
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -178,13 +179,22 @@ export class LibrusSession {
     return html;
   }
 
-  /** Returns the bytes of a file download on the same session. */
-  async binary(path: string): Promise<ArrayBuffer> {
-    const { response } = await this.request(new URL(path, this.account.origin).toString());
-    if (!response.ok) throw new Error(`Librus: attachment download failed (HTTP ${response.status})`);
-    const bytes = await response.arrayBuffer();
-    if (bytes.byteLength === 0) throw new Error("Librus: attachment download failed (empty file)");
-    return bytes;
+  /**
+   * Downloads one message attachment on the same session. `/wiadomosci/pobierz_zalacznik/<m>/<f>` redirects to a
+   * "Pobieranie plików" page at `https://sandbox.librus.pl/GetFile/<key>`; the file itself is at `<that page>/get`.
+   * A body over `maxBytes` is refused by its Content-Length before it is read.
+   */
+  async attachment(path: string, options: { referer?: string; maxBytes?: number } = {}): Promise<AttachmentFile> {
+    const headers = options.referer ? { referer: new URL(options.referer, this.account.origin).toString() } : undefined;
+    const first = await this.request(new URL(path, this.account.origin).toString(), { headers });
+    return readFile(await this.followGetFilePage(first), options.maxBytes ?? Number.POSITIVE_INFINITY);
+  }
+
+  /** On the GetFile page, the file is one more GET at `<page>/get`. Any other answer is the file answer itself. */
+  private async followGetFilePage({ response, url }: { response: Response; url: string }): Promise<Response> {
+    if (!GET_FILE_PAGE.test(new URL(url).pathname) || response.headers.has("content-disposition")) return response;
+    await response.text();
+    return (await this.request(`${url.replace(/\/$/, "")}/get`)).response;
   }
 
   /** Returns the text of a Librus JSON API answer on the same login session. */
@@ -194,6 +204,46 @@ export class LibrusSession {
     const text = await response.text();
     if (/Brak dostępu/.test(text)) throw new Error("Librus: no access (session not logged in)");
     if (!/^\s*[{[]/.test(text)) throw new Error(`Librus: unexpected response (HTTP ${response.status})`);
+    return text;
+  }
+}
+
+const GET_FILE_PAGE = /^\/GetFile\/[^/]+\/?$/;
+
+function isHtml(response: Response): boolean {
+  return /^text\/html/i.test(response.headers.get("content-type") ?? "");
+}
+
+function checkFileResponse(response: Response, maxBytes: number): void {
+  if (!response.ok) throw new Error(`Librus: attachment download failed (HTTP ${response.status})`);
+  if (isHtml(response)) throw new Error("Librus: attachment download returned a page, not a file");
+  if (Number(response.headers.get("content-length")) > maxBytes) throw new Error("Librus: attachment over the size limit");
+}
+
+/** Reads the file answer: the bytes, and the name from Content-Disposition. The body is not read when it is refused. */
+async function readFile(response: Response, maxBytes: number): Promise<AttachmentFile> {
+  try {
+    checkFileResponse(response, maxBytes);
+  } catch (error) {
+    await response.body?.cancel().catch(() => {});
+    throw error;
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength === 0) throw new Error("Librus: attachment download failed (empty file)");
+  return { bytes, fileName: dispositionFileName(response.headers.get("content-disposition")) };
+}
+
+/** The file name of a Content-Disposition header: `filename*=UTF-8''...` first, then `filename="..."`. */
+export function dispositionFileName(header: string | null): string | undefined {
+  const extended = header?.match(/filename\*\s*=\s*utf-8''([^;]+)/i)?.[1];
+  const name = extended ? decodedOrRaw(extended.trim()) : header?.match(/filename\s*=\s*"?([^";]*)"?/i)?.[1];
+  return name?.trim() || undefined;
+}
+
+function decodedOrRaw(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
     return text;
   }
 }

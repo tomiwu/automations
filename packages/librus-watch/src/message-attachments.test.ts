@@ -46,7 +46,7 @@ function setup(pageOverride: Partial<OpenedMessage> = {}) {
       },
       async fetchAttachment(path) {
         if (!downloads.has(path)) throw new Error("missing");
-        return downloads.get(path)!;
+        return { bytes: downloads.get(path)! };
       },
       async fullTimetable() {
         return { lessons: [] };

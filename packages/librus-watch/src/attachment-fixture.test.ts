@@ -12,12 +12,13 @@ import { CHILD1, FAMILY_ID, testConfig } from "./test-fixtures.ts";
 // Run: npx vitest run packages/librus-watch/src/attachment-fixture.test.ts (it prints the Outbox and the Telegram calls).
 const html = readFileSync(new URL("./fixtures/message-with-attachment.html", import.meta.url), "utf8");
 const file = new Uint8Array(readFileSync(new URL("./fixtures/sample.pdf", import.meta.url)));
+const photo = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]);
 
 /** Reads chat_id, the file name and the file bytes back from the multipart body, as Telegram would. */
 function readUpload(body: Uint8Array, boundary: string) {
   const text = Buffer.from(body).toString("latin1");
   const field = (name: string) => text.match(new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)\\r\\n`))?.[1];
-  const fileName = text.match(/name="document"; filename="([^"]*)"/)?.[1];
+  const fileName = Buffer.from(text.match(/name="document"; filename="([^"]*)"/)?.[1] ?? "", "latin1").toString("utf8");
   const start = text.indexOf("\r\n\r\n", text.indexOf('name="document"')) + 4;
   const end = text.lastIndexOf(`\r\n--${boundary}--`);
   return { chatId: field("chat_id"), fileName, bytes: body.slice(start, end) };
@@ -39,7 +40,7 @@ describe("attachment fixture run (offline)", () => {
         currentItems: async () => [] as never,
         messageBody: async () => parseMessageBody(html),
         openMessage: async () => ({ body: parseMessageBody(html), attachments, unrecognizedAttachments: unrecognizedAttachments(html, attachments) }),
-        fetchAttachment: async () => file,
+        fetchAttachment: async (path) => ({ bytes: path.endsWith("/2000001") ? file : photo }),
         fullTimetable: async () => ({ lessons: [] }),
         timetable: async () => ({ lessons: [] }),
       },
@@ -75,9 +76,17 @@ describe("attachment fixture run (offline)", () => {
     await deliverPending({ storage, familyId: FAMILY_ID, messenger, chatIds });
 
     console.log(["outbox:", ...outbox, "telegram:", ...calls].join("\n"));
+    expect(attachments.map((link) => link.name)).toEqual(["sample.pdf", "zdjęcie 1.jpg"]);
+    expect(unrecognizedAttachments(html, attachments)).toBe(0);
     const sha = await sha256Hex(file);
+    const photoSha = await sha256Hex(photo);
     expect(calls.filter((c) => c.startsWith("sendDocument")).sort()).toEqual(
-      chatIds.map((chat) => `sendDocument chat=${chat} file=sample.pdf size=${file.byteLength} sha256=${sha}`).sort(),
+      chatIds
+        .flatMap((chat) => [
+          `sendDocument chat=${chat} file=sample.pdf size=${file.byteLength} sha256=${sha}`,
+          `sendDocument chat=${chat} file=zdjęcie 1.jpg size=${photo.byteLength} sha256=${photoSha}`,
+        ])
+        .sort(),
     );
     expect(await storage.pendingNotifications(FAMILY_ID)).toEqual([]);
   });

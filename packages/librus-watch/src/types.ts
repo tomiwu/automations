@@ -37,6 +37,12 @@ export interface MessageAttachmentLink {
   downloadPath: string;
 }
 
+/** One downloaded attachment: the bytes, and the name from Content-Disposition when the answer has one. */
+export interface AttachmentFile {
+  bytes: Uint8Array;
+  fileName?: string;
+}
+
 export interface OpenedMessage {
   body: string;
   attachments: MessageAttachmentLink[];
@@ -172,8 +178,11 @@ export interface LibrusSource {
   messageBody(id: string): Promise<string>;
   /** Body and attachment list from one message page. */
   openMessage(id: string): Promise<OpenedMessage>;
-  /** File bytes of one attachment download link from the same Librus session. */
-  fetchAttachment(downloadPath: string): Promise<Uint8Array>;
+  /**
+   * One attachment download from the same Librus session. Downloads run one after another; a parallel login would log
+   * the session out. A file over `maxBytes` is refused before its body is read.
+   */
+  fetchAttachment(downloadPath: string, maxBytes?: number): Promise<AttachmentFile>;
   /** Lessons of the next 14 days. It never rejects: on a failure the list is empty and `error` says why. */
   fullTimetable(): Promise<TimetableResult>;
   /** Lessons from `from` to `to`, both "YYYY-MM-DD". It never rejects: on a failure the list is empty and `error` says why. */
