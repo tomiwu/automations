@@ -115,8 +115,10 @@ export function ledgerColourOf(classes: string, mobileTextClass: string): "red" 
 
 /** The colour decides. An explicit sign that contradicts the colour is an error; an amount without a sign is fine. */
 function kindOf(colour: "red" | "green", sign: number): LedgerKind {
-  if ((colour === "red" && sign > 0) || (colour === "green" && sign < 0)) throw new Error(COLOUR_SIGN);
-  return colour === "red" ? "charge" : "payment";
+  const kind: LedgerKind = colour === "red" ? "charge" : "payment";
+  const contradiction = kind === "charge" ? 1 : -1;
+  if (sign === contradiction) throw new Error(COLOUR_SIGN);
+  return kind;
 }
 
 function isDesktopDataRow(classes: string): boolean {
