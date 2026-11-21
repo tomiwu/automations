@@ -40,6 +40,9 @@
     "credentials": {
       "SUPABASE_KEY": {
         "description": "Key of the restricted Supabase role automations_watcher (sent as {{secret:SUPABASE_KEY}} to the Supabase project host)."
+      },
+      "TELEGRAM_BOT_TOKEN": {
+        "description": "Telegram bot token. The package passes only its name (secretName) to @tomiwu/telegram send-message, which sends it as {{secret:TELEGRAM_BOT_TOKEN}} to api.telegram.org for the Notifications."
       }
     }
   }

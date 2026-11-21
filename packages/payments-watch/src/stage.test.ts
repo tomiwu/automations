@@ -39,7 +39,7 @@ describe("Kody staging of payments-watch", () => {
     const manifest = readManifest();
     expect(manifest.kody.jobs["scheduled-check"].entry).toBe("./src/entry/scheduled.ts");
     expect(manifest.kody.app.entry).toBe("./src/entry/app.ts");
-    expect(Object.keys(manifest.kody.credentials)).toEqual(["SUPABASE_KEY"]);
+    expect(Object.keys(manifest.kody.credentials)).toEqual(["SUPABASE_KEY", "TELEGRAM_BOT_TOKEN"]);
     expect(manifest.kody.dependencies).toEqual({ "@tomiwu/telegram": "*" });
     expect(manifest.private).toBe(true);
   });
