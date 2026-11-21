@@ -79,6 +79,7 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 - Only a Recipient of the Child of the Fee can change the Payment. Another chat gets an error answer and the Payment stays as it is.
 - The first press appends the decision event and then sets the status and `decidedBy` (the chat ID) in the projection (see Decision steps), answers the press, edits the caption with the new status and removes the buttons.
 - A second press changes nothing and appends nothing. The chat gets the answer "already". A `seq` conflict gives the same answer.
+- The paid table is ordered by the time of the decision, newest first (no date last). It has three more columns: "Paid at" (`payments.decided_at`, local `YYYY-MM-DD HH:MM` in the Family time zone), "Marked by" and "Amount source" (`page` or `config`). `markedByOf` (`src/dashboard-data.ts`) maps `decided_by`: digits with an optional `-` is "Telegram" (the chat ID is never shown), `organizer:<service>` is "Auto (<service>)", any other text is "Dashboard (<user>)", null is "—".
 - The texts come from the pl/en catalogs. A chat that is not a Recipient gets the default language of the Family.
 
 ## Entry files and Kody job

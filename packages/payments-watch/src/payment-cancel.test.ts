@@ -136,7 +136,7 @@ describe("Dashboard", () => {
     await run("2026-12-10T08:00:00Z");
     storage.setFee({ ...FEE1, enabled: false });
     await run("2026-12-12T08:00:00Z");
-    const view = buildDashboard({ children: config.children, fees: [FEE1, FEE2], payments: await storage.listPayments(FAMILY_ID), today: "2026-12-12" });
+    const view = buildDashboard({ children: config.children, fees: [FEE1, FEE2], payments: await storage.listPayments(FAMILY_ID), today: "2026-12-12", timezone: "Europe/Warsaw" });
     expect(view.cancelled.map((row) => row.status)).toEqual(["cancelled"]);
     expect(view.nextDue).toHaveLength(1);
     expect(view.spendByMonth).toEqual([]);

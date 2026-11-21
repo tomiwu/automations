@@ -218,3 +218,72 @@ describe("Paid and Skip buttons", () => {
     expect(await eventTypes(d)).toEqual([]);
   });
 });
+
+describe("Paid section details", () => {
+  async function paidDeps(language: "en" | "pl"): Promise<DashboardDeps> {
+    let clock = new Date("2026-01-10T10:00:00Z");
+    const storage = createMemoryStorage({ configs: [{ ...config, family: { ...config.family, default_language: language } }], now: () => clock });
+    storage.setFee(fee);
+    const marks: [string, string, string, "page" | "config"][] = [
+      ["2026-01", "1000000", "2026-01-10T10:00:00Z", "config"],
+      ["2026-02", "adult-one", "2026-03-29T01:30:00Z", "config"],
+      ["2026-03", "organizer:activenow", "2026-03-29T00:30:00Z", "page"],
+    ];
+    for (const [month, by, at, source] of marks) {
+      const payment = await storage.upsertPayment({ familyId: FAMILY, feeId: fee.id, month, amount: 12000, amountSource: source });
+      clock = new Date(at);
+      await storage.setPaymentStatus(payment.id, "paid", by);
+    }
+    return { storage, familyId: FAMILY, now: () => new Date("2026-04-01T08:00:00Z"), allowlist: [{ user: "adult-one", tokenDigest: await tokenDigest(TOKEN) }] };
+  }
+  const paidSection = (body: string): string => body.slice(body.indexOf("<h2>Paid") === -1 ? body.indexOf("<h2>Zapłacone") : body.indexOf("<h2>Paid"), body.indexOf("<h2>Cancelled") === -1 ? body.indexOf("<h2>Anulowane") : body.indexOf("<h2>Cancelled"));
+
+  it("shows the three columns and the values in English, newest first", async () => {
+    const d = await paidDeps("en");
+    const section = paidSection(await (await handleDashboard(get("/", await sessionCookie(d)), d, "")).text());
+    for (const head of ["Paid at", "Marked by", "Amount source"]) expect(section).toContain(`<th>${head}</th>`);
+    expect(section).toContain("<td>Telegram</td>");
+    expect(section).not.toContain("1000000");
+    expect(section).toContain("<td>Dashboard (adult-one)</td>");
+    expect(section).toContain("<td>Auto (activenow)</td>");
+    expect(section).toContain("<td>Organizer page</td>");
+    expect(section).toContain("<td>Fee config</td>");
+    expect(section).toContain("<td>2026-03-29 03:30</td>");
+    expect(section.indexOf("2026-03-29 03:30")).toBeLessThan(section.indexOf("2026-03-29 01:30"));
+    expect(section.indexOf("2026-03-29 01:30")).toBeLessThan(section.indexOf("2026-01-10 11:00"));
+  });
+
+  it("shows the three columns and the values in Polish", async () => {
+    const d = await paidDeps("pl");
+    const section = paidSection(await (await handleDashboard(get("/", await sessionCookie(d)), d, "")).text());
+    for (const head of ["Zapłacono", "Oznaczone przez", "Źródło kwoty"]) expect(section).toContain(`<th>${head}</th>`);
+    expect(section).toContain("<td>Panel (adult-one)</td>");
+    expect(section).toContain("<td>Automatycznie (activenow)</td>");
+    expect(section).toContain("<td>Strona organizatora</td>");
+    expect(section).toContain("<td>Konfiguracja opłaty</td>");
+  });
+
+  it("gives a request without a session only the login page", async () => {
+    const body = await (await handleDashboard(get("/"), await paidDeps("en"), "")).text();
+    expect(body).toContain('action="/login"');
+    expect(body).not.toContain("Marked by");
+    expect(body).not.toContain("activenow");
+  });
+
+  it("shows a dash when nobody is known", async () => {
+    const d = await paidDeps("en");
+    const pending = await d.storage.upsertPayment({ familyId: FAMILY, feeId: fee.id, month: "2026-04", amount: 100, amountSource: "config" });
+    await d.storage.setPaymentStatus(pending.id, "paid", "");
+    const body = await (await handleDashboard(get("/", await sessionCookie(d)), d, "")).text();
+    expect(body).toContain("<td>—</td>");
+  });
+
+  it("escapes the user name", async () => {
+    const d = await paidDeps("en");
+    const pending = await d.storage.upsertPayment({ familyId: FAMILY, feeId: fee.id, month: "2026-04", amount: 100, amountSource: "config" });
+    await d.storage.setPaymentStatus(pending.id, "paid", "<b>x</b>");
+    const body = await (await handleDashboard(get("/", await sessionCookie(d)), d, "")).text();
+    expect(body).toContain("Dashboard (&lt;b&gt;x&lt;/b&gt;)");
+    expect(body).not.toContain("<b>x</b>");
+  });
+});
