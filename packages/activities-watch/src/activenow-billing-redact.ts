@@ -163,14 +163,11 @@ function walkNode(node: AnyNode, parts: string[], size: number): number {
   return walkTag(el, parts, size);
 }
 
-function walkOther(node: AnyNode, parts: string[], size: number): number {
-  return node.type === "text" ? walkText(node, parts, size) : size;
-}
-
 function walk(node: AnyNode, parts: string[], size: number): number {
   if (node.type === "comment" || node.type === "cdata") return size;
   if (node.type === "script" || node.type === "tag") return walkNode(node, parts, size);
-  return walkOther(node, parts, size);
+  if (node.type === "text") return walkText(node, parts, size);
+  return size;
 }
 
 function buildSkeleton(children: readonly AnyNode[]): string {

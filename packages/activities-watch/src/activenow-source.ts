@@ -21,18 +21,21 @@ const loginRejected = (html: string): boolean => html.includes('name="user[passw
 
 export const blockPage = (text: string): boolean => /Dostęp zablokowany|tymczasowo zablokowany/.test(text);
 
+export const ACTIVE_NOW_BLOCK =
+  "ActiveNow: HTTP 403, access temporarily blocked by ActiveNow (from the Kody network; clears within about 1 hour)";
+
+export function isActiveNowBlock(error: unknown): boolean {
+  return error instanceof Error && error.message === ACTIVE_NOW_BLOCK;
+}
+
 /**
  * Sends one request and checks its status. A 403 block page means ActiveNow blocks the network for about an
  * hour. The error ends the read of the Account, so no request is repeated: a retry makes the block longer.
  */
-async function checked(http: Http, url: string, init?: RequestOptions): Promise<HttpResult> {
+export async function checked(http: Http, url: string, init?: RequestOptions): Promise<HttpResult> {
   const result = await http.request(url, init);
   if (result.status >= 200 && result.status < 400) return result;
-  if (result.status === 403 && blockPage(result.text)) {
-    throw new Error(
-      "ActiveNow: HTTP 403, access temporarily blocked by ActiveNow (from the Kody network; clears within about 1 hour)",
-    );
-  }
+  if (result.status === 403 && blockPage(result.text)) throw new Error(ACTIVE_NOW_BLOCK);
   throw new Error(`ActiveNow: HTTP ${result.status} from ${new URL(url).pathname}`);
 }
 
@@ -73,13 +76,6 @@ export async function openActiveNowPanel(
   profile: string | null,
 ): Promise<string> {
   return chooseProfile(http, origin, await login(http, origin, secrets), profile);
-}
-
-export const ACTIVE_NOW_BLOCK =
-  "ActiveNow: HTTP 403, access temporarily blocked by ActiveNow (from the Kody network; clears within about 1 hour)";
-
-export function isActiveNowBlock(error: unknown): boolean {
-  return error instanceof Error && error.message === ACTIVE_NOW_BLOCK;
 }
 
 async function allLessons(http: Http, target: ActivityTarget, secrets: Login): Promise<string> {

@@ -1,10 +1,10 @@
 import * as cheerio from "cheerio";
 import type { FetchCount, FetchCounter, Runtime } from "@automations/shared";
 import { formatFetchCount } from "@automations/shared";
-import { ACTIVE_NOW_BLOCK, blockPage, isActiveNowBlock, openActiveNowPanel } from "./activenow-source.ts";
+import { checked, isActiveNowBlock, openActiveNowPanel } from "./activenow-source.ts";
 import { bodySkeleton, redactUrl } from "./activenow-billing-redact.ts";
 import { checkKeys, inputObject } from "./exports.ts";
-import { createHttp, type Http, type HttpResult } from "./http.ts";
+import { createHttp, type Http } from "./http.ts";
 import { activityTargets, type ActivityTarget } from "./targets.ts";
 import type { StorageAdapter } from "@automations/librus-data";
 
@@ -19,7 +19,6 @@ export interface BillingShapeAccount {
   account: string;
   status?: string;
   billingLink: string | null;
-  billingPath?: string;
   billingStatus?: number;
   skeleton: string;
 }
@@ -40,10 +39,6 @@ function billingHref(html: string, origin: string): string | null {
   return new URL(href, origin).toString();
 }
 
-async function readBilling(http: Http, url: string): Promise<HttpResult> {
-  return http.request(url);
-}
-
 async function probeAccount(http: Http, target: ActivityTarget, runtime: Runtime): Promise<BillingShapeAccount> {
   const { origin, group, login_secret, password_secret } = target.account;
   const secrets = { login: await runtime.secret(login_secret), password: await runtime.secret(password_secret) };
@@ -52,12 +47,10 @@ async function probeAccount(http: Http, target: ActivityTarget, runtime: Runtime
   if (billing === null) {
     return { account: "", billingLink: null, skeleton: bodySkeleton(panel) };
   }
-  const page = await readBilling(http, billing);
-  if (page.status === 403 && blockPage(page.text)) throw new Error(ACTIVE_NOW_BLOCK);
+  const page = await checked(http, billing);
   return {
     account: "",
     billingLink: redactUrl(billing),
-    billingPath: redactUrl(billing),
     billingStatus: page.status,
     skeleton: bodySkeleton(page.text),
   };
@@ -85,11 +78,8 @@ export async function activenowBillingShapeExport(deps: BillingShapeDeps, input:
       accounts.push({ ...row, account: label });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (isActiveNowBlock(error)) {
-        accounts.push({ account: label, status: message, billingLink: null, skeleton: "" });
-        break;
-      }
       accounts.push({ account: label, status: message, billingLink: null, skeleton: "" });
+      if (isActiveNowBlock(error)) break;
     }
   }
   return withFetches(deps, { accounts });
