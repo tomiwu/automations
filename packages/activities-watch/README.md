@@ -4,6 +4,7 @@ The ActiveNow, Edusky and Mondo Watchers, the `sessions` export, the after-schoo
 
 ## How it works
 
+- The package entry also exports `openActiveNowPanel`, `checked`, `isActiveNowBlock`, `createHttp` and their types. `@tomiwu/payments-watch` uses them to read the ActiveNow Rozliczenia page on an existing login session.
 - `runActivitiesWatch` loads the config with `loadConfig`. It validates it with `validateConfig`.
 - It runs each enabled `activenow`, `edusky` and `mondo` Account. A bad Account gives one error. The other Accounts still run.
 - Secret values come from `Runtime.secret(account.login_secret)` and `Runtime.secret(account.password_secret)`.

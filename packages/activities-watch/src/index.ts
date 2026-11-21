@@ -1,4 +1,6 @@
 export { runActivitiesWatch, scopeOf } from "./run.ts";
+export { openActiveNowPanel, checked, isActiveNowBlock, ACTIVE_NOW_BLOCK } from "./activenow-source.ts";
+export { createHttp, formBody, REQUEST_TIMEOUT_MS, type Http, type HttpResult, type RequestOptions } from "./http.ts";
 export type { RunDeps } from "./run.ts";
 export { collectSessions } from "./collect-sessions.ts";
 export type { CollectDeps, SessionsResult } from "./collect-sessions.ts";

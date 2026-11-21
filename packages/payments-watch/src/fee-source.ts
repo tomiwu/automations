@@ -24,6 +24,8 @@ export interface FeeSource {
   amountFor(fee: Fee, month: string): Promise<FeeAmount | undefined>;
   /** The observation of the last `amountFor` call for the Fee and the month. It makes no fetch. */
   observationFor?(fee: Fee, month: string): PageObservation | undefined;
+  /** When every matched charge of the month is covered on a checked ledger. */
+  settledFor?(fee: Fee, month: string): Promise<boolean>;
 }
 
 export function createConfigFeeSource(): FeeSource {

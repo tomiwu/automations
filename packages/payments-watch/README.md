@@ -19,8 +19,9 @@ Builds ZBP payment QR codes for the Fees of the Organizers. The bot never pays (
 
 - `parseOrganizerAmount(html, month)` reads the amount in grosze from the fee table of an Organizer page (`table.fees`, one `tr[data-month="YYYY-MM"]` with a `.amount` cell). It gives `undefined` for a month with no amount. It throws when the page has no fee table.
 - `createWebFeeSource` is the page source. A Fee with a `sourceUrl` gets one GET of that page with `Runtime.fetch`. The page amount wins (`source: "page"`). When the config has a different amount, it stays in `configAmount`.
-- `parseFeePage(type, html, month)` has one parser for each Organizer type: `activenow` (`.an-fees`), `edusky` (`table.edusky-charges`), `mondo` (`.mondo-fees`) and `plain` (`table.fees`, the same as `parseOrganizerAmount`). Each gives grosze, or `undefined` for a month with no amount. Each throws when its fee list is not in the page.
-- `organizerTypeOf(url)` picks the type from the host name of the `sourceUrl` (`activenow`, `edusky` or `mondo` in the name). Other hosts are `plain`. An Organizer with no fees on its page has no `sourceUrl` and uses the config only.
+- `parseFeePage(type, html, month)` has one parser for each Organizer type: `edusky` (`table.edusky-charges`), `mondo` (`.mondo-fees`) and `plain` (`table.fees`, the same as `parseOrganizerAmount`). Each gives grosze, or `undefined` for a month with no amount. Each throws when its fee list is not in the page.
+- `organizerTypeOf(url)` picks the type from the host name of the `sourceUrl` (`edusky` or `mondo` in the name). Other hosts are `plain`. An Organizer with no fees on its page has no `sourceUrl` and uses the config only.
+- ActiveNow Fees use `accountId` (an Account with `service = activenow`), not the old `.an-fees` page parser. `./scheduled` uses `createPaymentFeeSource`, which logs in through `@tomiwu/activities-watch`, reads the Rozliczenia settlements table, and marks covered months `paid` with `decidedBy: organizer:activenow` without a Telegram Payment message.
 - A Fee without a `sourceUrl`, a page without the month, or a failed page gives the config amount. A failed page also queues one failure Notification a day for each Recipient of the Child (`failure:<fee id>:<day>:<chat id>`).
 - `./scheduled` uses the page source.
 

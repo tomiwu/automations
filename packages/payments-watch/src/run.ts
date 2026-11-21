@@ -5,6 +5,7 @@ import { editCancelledMessages } from "./cancel-edit.ts";
 import type { Notifier, TelegramClient } from "./notifier.ts";
 import { deliverPaymentPhotos, withoutPaymentEntries } from "./payment-delivery.ts";
 import { recordSent } from "./sent-journal.ts";
+import { logActivenowPass } from "./activenow-fee-source.ts";
 import { runPayments } from "./engine.ts";
 import type { FeeSource } from "./fee-source.ts";
 import type { CounterStore } from "./organizer-cancel.ts";
@@ -72,6 +73,7 @@ export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
   const failures: string[] = [];
   try {
     await runPayments({ familyId, storage, source: deps.source, now: runtime.now(), counters: deps.counters });
+    logActivenowPass(runtime, deps.source);
   } catch (error) {
     failures.push(`payments: ${messageOf(error)}`);
   }
