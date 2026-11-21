@@ -10,7 +10,7 @@ import { parseMondoEvents, type MondoEvent } from "./mondo-parse.ts";
 import { inWindow, makeSession, type Session } from "./sessions.ts";
 import { firstActivity, type ActivityTarget, type SessionSource } from "./targets.ts";
 
-interface Login {
+export interface Login {
   login: string;
   password: string;
 }
@@ -18,7 +18,7 @@ interface Login {
 const loginRejected = (html: string): boolean => html.includes('name="login[password]"');
 
 /** Logs in with the form. Returns the page that the login opens: the parent panel with the child picker. */
-async function loginPage(http: Http, origin: string, secrets: Login): Promise<string> {
+export async function loginPage(http: Http, origin: string, secrets: Login): Promise<string> {
   const response = await http.request(`${origin}/login`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", referer: `${origin}/login` },
