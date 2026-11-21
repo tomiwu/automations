@@ -64,9 +64,13 @@ function fromDay(today: string, monthsBack: number): string {
   return `${y}-${String(m).padStart(2, "0")}-01`;
 }
 
+function inMonthsBackRange(n: number): boolean {
+  return Number.isInteger(n) && n >= 1 && n <= 6;
+}
+
 function resolveMonthsBack(value: unknown): number {
   if (value === undefined) return 3;
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 6) {
+  if (typeof value !== "number" || !inMonthsBackRange(value)) {
     throw new Error("monthsBack must be an integer 1..6.");
   }
   return value;
