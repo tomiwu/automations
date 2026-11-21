@@ -26,7 +26,6 @@ function checkStream(stream: unknown): string {
   return stream;
 }
 
-/** Read-only export: the Journal events of one stream, oldest first, and the state they give. It reads Supabase only (1 fetch). */
 export async function streamHistoryExport(deps: ExportDeps, input: unknown = {}): Promise<StreamHistoryExport & { fetches?: FetchCount }> {
   const object = inputObject(input);
   checkKeys(object, ["stream"]);

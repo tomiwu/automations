@@ -1,7 +1,6 @@
 import { t, type Language, type MessageKey } from "@automations/shared";
 import { timeRange, type Session, type SessionStatus } from "./sessions.ts";
 
-/** What a mail of an organizer says about one class. The agent reads the mail. This module never does. */
 export interface MailFact {
   childId: string;
   activity: string;
@@ -20,7 +19,6 @@ export interface MailDifference {
   session: Session;
   fields: Field[];
   key: string;
-  /** Renders the Notification in the language of one Recipient. */
   text(language: Language): string;
 }
 

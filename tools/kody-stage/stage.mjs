@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Builds a self-contained Kody package tree from one workspace package.
 // Kody resolves npm dependencies from the public registry, so the private
 // workspace packages (@automations/*) are copied into `vendor/` and their
 // imports are rewritten to relative paths. Test files are left out.
@@ -39,7 +38,6 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** Collects the @automations/* packages that `pkgDir` needs, transitively. */
 function collectDeps(pkgDir, all, seen = new Map()) {
   const deps = readJson(join(pkgDir, "package.json")).dependencies ?? {};
   for (const name of Object.keys(deps)) {
@@ -62,7 +60,6 @@ function rewriteImports(file, outDir, specifiers, srcOf, workspaceNames) {
     if (!rel.startsWith(".")) rel = "./" + rel;
     return `${pre}${q}${rel}${q}`;
   });
-  // Triple-slash references point into other workspace packages; point them at the vendored copy.
   src = src.replace(/(\/\/\/\s*<reference\s+path=)(["'])([^"']+)\2/g, (m, pre, q, ref) => {
     const original = resolve(dirname(srcOf.get(file)), ref);
     for (const [fromDir, toDir] of srcOf.dirs) {
@@ -145,7 +142,6 @@ function stage(pkgArg, outArg) {
   delete manifest.devDependencies;
   writeFileSync(join(outDir, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
 
-  // Leftover workspace imports would fail on Kody; stop here instead.
   for (const f of walk(outDir)) {
     const text = f.endsWith(".ts") ? readFileSync(f, "utf8") : "";
     if ([...all.keys()].some((n) => text.includes(`"${n}"`) || text.includes(`"${n}/`))) {

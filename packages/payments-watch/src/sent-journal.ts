@@ -3,7 +3,6 @@ import type { NewJournalEvent, PaymentSent, StorageAdapter } from "@automations/
 
 export const PAYMENT_KEY = /^payment:([^:]+):[^:]+(:reminder)?$/;
 
-/** Which Payments got a first Notification or a reminder, from the Outbox keys that were delivered. */
 export function sentOfKeys(keys: readonly string[]): Map<string, PaymentSent[]> {
   const sent = new Map<string, Set<PaymentSent>>();
   for (const [, id, reminder] of keys.map((key) => PAYMENT_KEY.exec(key) ?? [])) {
@@ -31,7 +30,6 @@ async function markProjection(storage: StorageAdapter, planned: readonly { id: s
   for (const { id, which } of planned) for (const kind of which) await storage.markPaymentSent(id, kind, at);
 }
 
-/** Appends the events. A failed append (for example a `seq` conflict) gives false and changes nothing. */
 async function appended(storage: StorageAdapter, events: NewJournalEvent[]): Promise<boolean> {
   try {
     await storage.appendEvents(events);
@@ -41,11 +39,6 @@ async function appended(storage: StorageAdapter, events: NewJournalEvent[]): Pro
   }
 }
 
-/**
- * After a delivery: appends one `PaymentChanged` for each pending Payment that got its first Notification or its
- * reminder, with `notifiedAt` or `remindedAt` set, then sets the same times in the projection. The journal holds no
- * QR text and no bank data. A failed append (for example a `seq` conflict) changes nothing. Returns the event count.
- */
 export async function recordSent(storage: StorageAdapter, familyId: string, keys: readonly string[], at: Date): Promise<number> {
   const sent = sentOfKeys(keys);
   const planned = sent.size === 0 ? [] : await sentEvents(storage, familyId, sent, at);

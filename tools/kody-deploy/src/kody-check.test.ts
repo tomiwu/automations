@@ -28,7 +28,6 @@ const running = ok({ status: "running", result: null, last_error: null });
 const complete = (result: unknown) => ok({ status: "complete", result, last_error: null });
 const ended = (status: string, last_error: string | null = null) => ok({ status, result: null, last_error });
 
-/** A fake Kody API. Each list gives the answers in order; the last answer repeats. */
 async function fakeKody(plan: Plan) {
   const seen: string[] = [];
   const bodies: Record<string, unknown> = {};

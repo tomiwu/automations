@@ -1,7 +1,4 @@
 #!/usr/bin/env -S node --experimental-strip-types
-// Read-only: after the days-off deploy and the next librus-watch run, check that the Journal has the day-off Items
-// and that `./stored-lessons` cancels the Lessons of those days. Do not run it before the deploy.
-//
 // Usage: node --experimental-strip-types tools/admin/src/check-days-off.ts --from 2026-11-12 --to 2026-11-13 \
 //          [--expect 10] [--child-id <uuid>] [--input saved.json]
 // It runs `kody execute --invoke kody:@tomiwu/librus-watch/stored-lessons` one time and `./stream-history` one time

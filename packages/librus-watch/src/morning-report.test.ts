@@ -1,6 +1,7 @@
 import { createMemoryStorage, type ItemKind, type NewItemDetail } from "@automations/librus-data";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { formatMorningReport, isMorningReportRun, newItemsSince, runMorningReport, type MorningReportDeps } from "./morning-report.ts";
+import { MORNING_REPORT_UTC_HOUR, formatMorningReport, isMorningReportRun, newItemsSince, runMorningReport, type MorningReportDeps } from "./morning-report.ts";
 import { CHILD1, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
 import { upcoming } from "./upcoming.ts";
 
@@ -201,5 +202,15 @@ describe("the New section", () => {
   it("is in Polish for a Polish Recipient", async () => {
     const text = await reportText([detailRow("trip")], "pl");
     expect(text).toContain("Nowe:\n• Wycieczka, 2026-01-05: Title of trip");
+  });
+});
+
+describe("Morning report schedule", () => {
+  it("runs at an hour that the package cron expression schedules", () => {
+    const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+      kody: { jobs: { "scheduled-check": { schedule: { expression: string } } } };
+    };
+    const hours = manifest.kody.jobs["scheduled-check"].schedule.expression.split(" ")[1]?.split(",").map(Number);
+    expect(hours).toContain(MORNING_REPORT_UTC_HOUR);
   });
 });

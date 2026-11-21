@@ -11,7 +11,6 @@ export interface DecisionInput {
   at: Date;
 }
 
-/** The head to decide on, and the `PaymentDue` to append before it when the Payment has no head (made before the Journal). */
 async function headOf(input: DecisionInput): Promise<{ head?: JournalEvent; due: NewJournalEvent | null }> {
   const { storage, familyId, payment, fee, at } = input;
   const stream = paymentStream(fee.childId, fee.id, payment.month);
@@ -36,11 +35,6 @@ async function append(storage: StorageAdapter, events: NewJournalEvent[]): Promi
   }
 }
 
-/**
- * The steps of a Paid or Skip press, for the Telegram callback and the Dashboard. It appends the decision event
- * (with `PaymentDue` before it, in the same call, when the Payment has no head), then sets the projection.
- * Returns false when nothing changed: the Payment is decided already, or the append failed (for example a `seq` conflict).
- */
 export async function decidePayment(input: DecisionInput): Promise<boolean> {
   const { storage, payment, decision, decidedBy } = input;
   const events = payment.status === "pending" ? await planEvents(input) : [];

@@ -28,7 +28,6 @@ const NAMES: Record<string, unknown> = {
 
 const logins: string[] = [];
 
-/** A fake Librus with the login flow, the timetable of one week and one test. */
 function fakeLibrus(input: string, init?: RequestInit): Response {
   const url = new URL(input);
   if (url.host === "portal.librus.pl") return new Response('<iframe src="https://api.librus.pl/loguj/form"></iframe>');
@@ -88,7 +87,6 @@ describe("fetch budget", () => {
     const result = await calendarExport(await deps(parts.counter, parts), {});
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0]).toMatchObject({ category: "Test", subject: "Math", teacher: "Teacher One" });
-    // Login: portal, form, POST, landing = 4. Timetable: 3 weeks. Homework: 1 list + 3 names. Supabase: 2.
     expect(logins).toHaveLength(1);
     expect(result.fetches).toEqual({
       total: 13,

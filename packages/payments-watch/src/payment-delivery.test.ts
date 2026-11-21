@@ -41,7 +41,6 @@ const fee: Fee = {
   enabled: true,
 };
 
-/** The page amount wins over the config amount (page-over-config rule). */
 const pageSource: FeeSource = {
   amountFor: async (f, month) => ({ feeId: f.id, month, amount: 16000, source: "page", configAmount: 15050 }),
 };
@@ -53,7 +52,6 @@ interface Sent {
   qr: string;
 }
 
-/** A fake Telegram HTTP API. It reads the form of each sendPhoto and decodes the QR of the photo. */
 function fakeTelegram(failChat?: string) {
   const photos: Sent[] = [];
   const urls: string[] = [];

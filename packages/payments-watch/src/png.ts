@@ -40,7 +40,6 @@ async function deflate(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-/** Encodes an 8-bit grayscale image. `pixels` has one byte per pixel, row by row. */
 export async function encodeGrayPng(width: number, height: number, pixels: Uint8Array): Promise<Uint8Array> {
   const raw = new Uint8Array((width + 1) * height);
   for (let y = 0; y < height; y++) {

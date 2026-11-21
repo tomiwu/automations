@@ -10,10 +10,6 @@ export interface ImportCliDeps {
   print: (line: string) => void;
 }
 
-/**
- * Imports an export file of the Kody job into Supabase and checks the counts.
- * The environment has SUPABASE_URL, SUPABASE_KEY and FAMILY_ID.
- */
 export async function runImport(args: readonly string[], deps: ImportCliDeps): Promise<void> {
   const [path] = args;
   if (path === undefined) throw new Error("Usage: import-export <export-file>");

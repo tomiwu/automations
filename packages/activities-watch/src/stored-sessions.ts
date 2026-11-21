@@ -12,7 +12,6 @@ export interface StoredSessionsDeps {
   runtime: Pick<Runtime, "now" | "log">;
   storage: StorageAdapter;
   familyId: string;
-  /** Counts the fetches of the run. With it the export logs the count and returns it as `fetches`. */
   counter?: FetchCounter;
 }
 
@@ -88,10 +87,6 @@ function withFetches<T extends object>(deps: StoredSessionsDeps, result: T): T &
   return { ...result, fetches };
 }
 
-/**
- * Read-only export: the Sessions of the Children as the Journal stores them. It reads Supabase only: no app
- * login. Vanished Sessions stay in the result with `vanished: true`.
- */
 export async function storedSessionsExport(deps: StoredSessionsDeps, input: unknown = {}): Promise<StoredSessionsExport & { fetches?: FetchCount }> {
   const object = inputObject(input);
   checkKeys(object, ["childId", "from", "to"]);

@@ -2,7 +2,6 @@ import * as cheerio from "cheerio";
 
 const AMOUNT = /(\d[\d\s ]*)(?:[,.](\d{1,2}))?/;
 
-/** Reads "1 250,50 zł" as 125050 grosze. Returns undefined when the text has no number. */
 export function grosze(text: string): number | undefined {
   const match = AMOUNT.exec(text);
   if (!match) return undefined;

@@ -4,7 +4,6 @@ export type Service = (typeof SERVICES)[number];
 export const LANGUAGES = ["pl", "en"] as const;
 export type Language = (typeof LANGUAGES)[number];
 
-/** One group of Children and Recipients. One deployment serves one Family. */
 export interface Family {
   id: string;
   name: string;
@@ -63,7 +62,6 @@ export interface Config {
   recipients: Recipient[];
 }
 
-/** The shape of a row before validation. Every field can be wrong or missing. */
 export type Raw<T> = { [K in keyof T]?: unknown };
 
 export interface RawConfig {
@@ -81,7 +79,6 @@ export type ConfigErrorCode =
   | "bad_origin"
   | "unknown_child";
 
-/** One clear error for one Account or one Recipient. */
 export interface ConfigError {
   subject: "account" | "recipient";
   id: string;
@@ -140,7 +137,6 @@ function linkError(account: Raw<Account>, childIds: ReadonlySet<string>): Config
   return undefined;
 }
 
-/** Returns the first problem of one Account, or undefined if the Account is valid. */
 export function validateAccount(account: Raw<Account>, childIds: ReadonlySet<string>): ConfigError | undefined {
   if (!isService(account.service)) {
     return accountError(account, "unknown_service", `unknown service "${String(account.service)}"`);
@@ -150,7 +146,6 @@ export function validateAccount(account: Raw<Account>, childIds: ReadonlySet<str
   return linkError(account, childIds);
 }
 
-/** Returns the problem of one Recipient, or undefined if the Recipient is valid. */
 export function validateRecipient(recipient: Raw<Recipient>): ConfigError | undefined {
   if (isLanguage(recipient.language)) return undefined;
   const id = String(recipient.id ?? "");

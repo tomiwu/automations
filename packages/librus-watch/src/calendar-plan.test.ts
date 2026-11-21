@@ -9,7 +9,6 @@ import {
   type PlanSession,
 } from "./calendar-plan.ts";
 
-// Invented data only (issue #202).
 const lesson = (extra: Partial<PlanLesson> = {}): PlanLesson => ({
   calendarId: "cal-one",
   prefix: "Child One",
@@ -36,7 +35,6 @@ const session = (extra: Partial<PlanSession> = {}): PlanSession => ({
   ...extra,
 });
 
-/** A fake Google calendar: it applies a plan and gives each new event an id. */
 function fakeCalendar(initial: ExistingEvent[] = []) {
   let events = [...initial];
   let next = 1;

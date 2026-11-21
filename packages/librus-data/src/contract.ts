@@ -3,14 +3,10 @@ import { CHILD_ID, exampleConfig, exampleFee, FAMILY_ID, OTHER_FAMILY_ID } from 
 import type { Fee, NewItemDetail, NewJournalEvent, NewPayment, StorageAdapter } from "./storage.ts";
 import type { Config } from "@automations/shared";
 
-/** What the contract suite needs from one adapter under test. */
 export interface ContractHarness {
   storage: StorageAdapter;
-  /** Makes the config of its Family readable with `loadConfig`. */
   seedConfig(config: Config): Promise<void>;
-  /** Makes a Fee readable with `listFees`. Fees are read-only for the Watcher. */
   seedFee(fee: Fee): Promise<void>;
-  /** Moves the time forward, so delivered entries become older. */
   advanceDays(days: number): Promise<void>;
 }
 
@@ -61,7 +57,6 @@ const detail = (overrides: Partial<NewItemDetail> = {}): NewItemDetail => ({
   ...overrides,
 });
 
-/** The real database needs the Family of each row. */
 async function detailHarness(create: () => Promise<ContractHarness>): Promise<ContractHarness> {
   const harness = await create();
   await harness.seedConfig(exampleConfig());
@@ -291,7 +286,6 @@ const newPayment = (overrides: Partial<NewPayment> = {}): NewPayment => ({
 
 const OTHER_FEE_ID = "00000000-0000-4000-8000-0000000000f2";
 
-/** Seeds the Family, its Child and one Fee, and the same for the other Family. */
 async function seedFees(harness: ContractHarness): Promise<void> {
   const own = exampleConfig();
   const other = exampleConfig(OTHER_FAMILY_ID);
@@ -437,7 +431,6 @@ function paymentTests(create: () => Promise<ContractHarness>): void {
   });
 }
 
-/** The contract tests. Each StorageAdapter must pass them. */
 export function runStorageContract(name: string, create: () => Promise<ContractHarness>): void {
   describe(`StorageAdapter contract: ${name}`, () => {
     itemTests(create);

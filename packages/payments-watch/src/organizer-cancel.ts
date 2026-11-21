@@ -12,10 +12,8 @@ export interface CounterStore {
 
 type Reason = "organizer_void" | "organizer_withdrawn";
 
-/** The count of successful passes in a row that showed one candidate cancel, for each Payment stream. */
 export type Counters = Record<string, { reason: Reason; count: number }>;
 
-/** One good page reading of a Fee and the current month, with the Payment that existed at the start of the pass. */
 export interface Watched {
   fee: Fee;
   payment: Payment;
@@ -30,9 +28,7 @@ export interface CancelDue {
 
 export interface CounterStep {
   counters: Counters;
-  /** The pending and paid Payments that reached the count. */
   due: CancelDue[];
-  /** The cancelled Payments whose charge is listed again. */
   listed: Watched[];
 }
 
@@ -62,7 +58,6 @@ function countCandidate(item: Watched, candidate: Candidate, previous: Counters[
   else step.counters[streamOf(item)] = { reason: candidate.reason, count };
 }
 
-/** A pending Payment can be cancelled. A paid Payment with no flag yet can get the refund-check flag. */
 const isCounted = ({ status, refundCheckAt }: Payment): boolean => status === "pending" || (status === "paid" && refundCheckAt === null);
 
 function advanceOne(item: Watched, previous: Counters[string] | undefined, step: CounterStep): void {
@@ -74,11 +69,6 @@ function advanceOne(item: Watched, previous: Counters[string] | undefined, step:
   if (isCounted(payment)) countCandidate(item, observation, previous, step);
 }
 
-/**
- * Moves the counters by the good readings of one successful pass. A candidate adds 1 (a new reason starts at 1).
- * A listed charge resets the counter. A Payment that is not pending, and not paid without a refund-check flag, has no counter. A Fee with no good reading
- * keeps its counter. A counter of another month is dropped.
- */
 export function advanceCounters(stored: Counters, watched: readonly Watched[], month: string): CounterStep {
   const counters: Counters = Object.fromEntries(Object.entries(stored).filter(([stream]) => stream.endsWith(`:${month}`)));
   const step: CounterStep = { counters, due: [], listed: [] };

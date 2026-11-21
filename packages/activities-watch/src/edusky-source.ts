@@ -1,18 +1,9 @@
-/**
- * The only code that knows how Edusky is read. Each organizer runs its own copy of the app at its
- * own address (`Account.origin`). A parent logs in with the OAuth2 password grant, finds the user ID,
- * then reads the calendar of everything the login can see. The secret values come from `Runtime.secret`.
- */
 import { addDays, localDate, type Runtime } from "@automations/shared";
 import { inGroup, toSession, type EduskyItem } from "./edusky-sessions.ts";
 import { createHttp, formBody, type Http } from "./http.ts";
 import { inWindow, WINDOW_DAYS, type Session } from "./sessions.ts";
 import { firstActivity, type ActivityTarget, type SessionSource } from "./targets.ts";
 
-/**
- * The name of the secret with the client secret of the Edusky web app. The web app sends the same
- * value for every organizer. It is not a credential of the Family, but the repository does not hold it.
- */
 export const CLIENT_SECRET_NAME = "EDUSKY_CLIENT_SECRET";
 
 interface Login {
@@ -48,7 +39,6 @@ function tokenOf(text: string): string | undefined {
   }
 }
 
-/** The OAuth2 error code of a failed grant (for example `invalid_grant` or `invalid_client`). It is never a secret. */
 export function grantError(text: string): string | undefined {
   try {
     const code = (JSON.parse(text) as { error?: unknown }).error;
@@ -63,7 +53,6 @@ const GRANT_HINTS: Record<string, string> = {
   invalid_client: "wrong EDUSKY_CLIENT_SECRET",
 };
 
-/** The error text of a failed login. It names the cause and never holds a secret. */
 function loginFailure(host: string, grant: { status: number; text: string }): string {
   if (grant.status === 403 && /Just a moment/.test(grant.text)) {
     return `Edusky: login blocked by the Cloudflare challenge at ${host} (HTTP 403)`;
@@ -91,7 +80,6 @@ async function login(http: Http, origin: string, secrets: Login): Promise<string
   return accessToken;
 }
 
-/** Reads the calendar of everything that the parent login can see, from `today` to the end of the window. */
 async function calendar(http: Http, origin: string, secrets: Login, today: string): Promise<EduskyItem[]> {
   const accessToken = await login(http, origin, secrets);
   const api = `${origin}/core/web/api/`;
@@ -100,10 +88,6 @@ async function calendar(http: Http, origin: string, secrets: Login, today: strin
   return getJson<EduskyItem[]>(http, `${api}ext/calendaritemslist?idParent=${user.id_userdata}&${range}`, accessToken, "calendar");
 }
 
-/**
- * Reads the Sessions of one Edusky Account for the next 14 days. The `group` of the Account is the text
- * of the group name in the app. A login that serves several Children lists the groups of all of them.
- */
 export function createEduskySource(runtime: Runtime, target: ActivityTarget, timezone: string): SessionSource {
   return {
     async sessions(): Promise<Session[]> {

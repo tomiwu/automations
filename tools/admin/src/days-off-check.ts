@@ -1,10 +1,3 @@
-/**
- * Read-only check after a days-off deploy: the Journal has the day-off Items of a date range and `./stored-lessons`
- * marks the Lessons of those days `cancelled` with `cancelReason.reason = "day_off"`. It uses the same read paths as
- * the calendar sync (`librus-watch ./stored-lessons` and `./stream-history`, Supabase only). It prints no name, no
- * title and no full Child ID.
- */
-
 export interface CheckLesson {
   date: string;
   period: number | string;
@@ -28,7 +21,6 @@ export interface DaysOffInput {
 export interface DaysOffOptions {
   from: string;
   to: string;
-  /** The number of Lessons that must be cancelled as day off in the range. */
   expectLessons: number;
 }
 
@@ -37,17 +29,14 @@ export interface DaysOffResult {
   lines: string[];
 }
 
-/** The day-off Item streams of the producer (`item:<watcher>:<childId>:<id>`, contract 8a D6; `manualDaysOff` is D7). */
 export const DAY_OFF_STREAM = /^item:(schoolFreeDays|classFreeDays|manualDaysOff):[^:]+:[^:]+$/;
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
-/** Hides the full Child ID: only its first 8 characters stay. */
 export const mask = (text: string): string => text.replace(UUID, (id) => `${id.slice(0, 8)}…`);
 
 const inRange = (date: string, options: DaysOffOptions): boolean => options.from <= date && date <= options.to;
 
-/** The distinct day-off source streams of the Lessons, in first-seen order. */
 export function sourceStreams(lessons: readonly CheckLesson[]): string[] {
   return [...new Set(lessons.flatMap((lesson) => (lesson.cancelReason?.reason === "day_off" ? [lesson.cancelReason.sourceStream] : [])))];
 }
@@ -75,7 +64,6 @@ function journalLines(input: DaysOffInput): { ok: boolean; lines: string[] } {
   return { ok: streams.every((s) => s.ok), lines: streams.map((s) => s.line) };
 }
 
-/** Checks the data that the two exports returned. */
 export function evaluateDaysOff(input: DaysOffInput, options: DaysOffOptions): DaysOffResult {
   const saved = input.lastSavedAt !== null;
   const lessons = lessonLines(input, options);
@@ -86,7 +74,6 @@ export function evaluateDaysOff(input: DaysOffInput, options: DaysOffOptions): D
 
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object";
 
-/** Finds the first object in a CLI answer that has the given key (the CLI may wrap the export result). */
 export function unwrap<T>(value: unknown, key: string): T | undefined {
   if (!isObject(value)) return undefined;
   if (key in value) return value as T;

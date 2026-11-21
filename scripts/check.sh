@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# npm run check: the checks of CI on this computer, in order (typecheck, test, crap, privacy, gitleaks). It stops at the first failure and names it.
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 

@@ -14,7 +14,6 @@ const SPA_LOGIN_URL = "https://synergia.librus.pl/loguj/portalRodzina?layout_ver
 
 type Handler = (url: URL, init?: RequestInit) => Response | undefined;
 
-/** A fake Librus: the login flow with redirects and cookies, then the handlers of the test. */
 function librus(handlers: Handler[] = [], options: { reject?: boolean } = {}) {
   const runtime = fakeRuntime({
     secrets,

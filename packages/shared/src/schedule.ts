@@ -8,7 +8,6 @@ export function parseTime(value: string): number {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
-/** Returns true if the Activity runs on this weekday (1 to 7). */
 export function runsOn(activity: Pick<Activity, "weekday" | "enabled">, weekday: number): boolean {
   return activity.enabled && activity.weekday === weekday;
 }

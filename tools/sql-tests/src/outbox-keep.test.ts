@@ -32,7 +32,6 @@ describe.skipIf(!url)("0010_outbox_keep.sql", () => {
     expect(psql(db, seed).ok).toBe(true);
   });
 
-  // Other SQL tests count the delivered Outbox rows. Remove the rows of this test.
   afterAll(() => {
     expect(psql(db, `delete from outbox where family_id = '${family}'; delete from families where id = '${family}'`).ok).toBe(true);
   });

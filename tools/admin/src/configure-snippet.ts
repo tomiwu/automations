@@ -7,13 +7,10 @@ export interface SnippetInput {
   familyId: string;
   credentialKey: string;
   withPayments: boolean;
-  /** Dashboard user of payments-watch. Needed with `withPayments`. */
   paymentsUser?: string;
-  /** Dashboard login token of payments-watch. Only its SHA-256 goes into the snippet. */
   paymentsToken?: string;
 }
 
-/** The `./configure` argument of payments-watch: the Dashboard allowlist with the token digest, never the token. */
 function paymentsArg(input: SnippetInput): string {
   if (!input.paymentsUser) throw new Error("PAYMENTS_DASHBOARD_USER is empty");
   if (!input.paymentsToken) throw new Error("PAYMENTS_DASHBOARD_TOKEN is empty");
@@ -21,11 +18,6 @@ function paymentsArg(input: SnippetInput): string {
   return `{ ...base, allowlist: ${JSON.stringify([{ user: input.paymentsUser, tokenDigest }])} }`;
 }
 
-/**
- * Builds the Kody `execute` code that calls `./configure` of each package with the same key. The result has the
- * key in it: write it only to a private temp file, never print it. The code returns `ok` or `failed: <reason>`
- * per package.
- */
 export function configureSnippet(input: SnippetInput): string {
   const j = JSON.stringify;
   const packages = [
@@ -50,7 +42,6 @@ export function configureSnippet(input: SnippetInput): string {
   ].join("\n");
 }
 
-/** Reads the snippet input from the environment of `rekey.sh`. */
 export function snippetFromEnv(e: Record<string, string | undefined>): string {
   const v = (name: string, fallback = ""): string => e[name] ?? fallback;
   return configureSnippet({

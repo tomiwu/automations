@@ -1,7 +1,6 @@
 import { addDays } from "@automations/shared";
 import type { HomeworkItem, Lesson, LibrusSource } from "./types.ts";
 
-/** One upcoming Terminarz entry. It sits on its Lesson when the timetable has one. */
 export interface UpcomingEntry {
   childId: string;
   child: string;
@@ -27,16 +26,13 @@ export interface Upcoming {
   lessons: Lesson[];
 }
 
-/** The Child that an upcoming list is for. */
 export interface ChildRef {
   id: string;
   name: string;
 }
 
-/** Normalizes a subject for comparison: lower case, one space between words. */
 export const norm = (subject: string): string => subject.toLocaleLowerCase("pl").replace(/\s+/g, " ").trim();
 
-/** Returns the first Lesson of the subject on that day that was not cancelled. */
 export function matchLesson(homework: HomeworkItem, lessons: readonly Lesson[]): Lesson | undefined {
   if (homework.subject === "") return undefined;
   return lessons

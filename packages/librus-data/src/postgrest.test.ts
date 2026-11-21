@@ -15,7 +15,6 @@ function sql(statement: string): void {
 
 const quote = (value: unknown): string => `'${JSON.stringify(value).replaceAll("'", "''")}'`;
 
-/** The contract tests against a real PostgREST server on a Postgres database. They never use a real Supabase project. */
 describe.skipIf(!enabled)("PostgREST server", () => {
   runStorageContract("supabase (PostgREST and Postgres)", async () => {
     sql("truncate item_details, payments, fees, outbox, items, recipients, activities, accounts, children, families cascade");

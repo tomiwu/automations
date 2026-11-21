@@ -37,7 +37,6 @@ function checkText(value: unknown, pattern: RegExp, message: string): string {
   return value;
 }
 
-/** Checks the input of the `after-school` export: a Child, a day and an optional language. */
 export function parseAfterSchoolInput(input: unknown): AfterSchoolInput {
   const object = inputObject(input);
   checkKeys(object, ["childId", "day", "language"]);

@@ -5,16 +5,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-// Tests of scripts/ci-local-record.sh (the recorder) and scripts/ci-local-merge-gate.sh (the gate).
-// Each test uses a throwaway repository. Its scripts/ci-local.sh is a stub: the real suite does not run.
-// A fake `gh` is first in the PATH. It writes a line into a file when a script calls it. Nothing uses the network.
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const RECORDER = join(root, "scripts", "ci-local-record.sh");
 const GATE = join(root, "scripts", "ci-local-merge-gate.sh");
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
-// The stub records the commit and the number of changed files of its checkout. Its exit code comes from a file.
 const STUB = `#!/usr/bin/env bash
 echo "$(git rev-parse HEAD) $(git status --porcelain | wc -l)" >> "$STUB_CALLS"
 echo "stub ci-local report, result: $([ "$(cat "$STUB_RESULT")" = 0 ] && echo GREEN || echo RED)"
@@ -34,7 +30,6 @@ interface Fixture {
   repo: string;
   git: (...args: string[]) => string;
   head: () => string;
-  /** Writes the file, commits it and returns the new commit. */
   commit: (file: string, text: string) => string;
   record: (...args: string[]) => Run;
   gate: (...args: string[]) => Run;
@@ -50,7 +45,6 @@ function write(file: string, text: string, mode = 0o644): void {
   chmodSync(file, mode);
 }
 
-/** A repository with a stub ci-local in its first commit. */
 function fixture(): Fixture {
   const dir = mkdtempSync(join(tmpdir(), "merge-gate-"));
   dirs.push(dir);

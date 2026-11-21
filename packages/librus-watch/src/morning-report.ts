@@ -12,17 +12,13 @@ import type { ItemDetail, NewNotification, StorageAdapter } from "@automations/l
 import { upcoming, type ChildRef, type Upcoming, type UpcomingEntry } from "./upcoming.ts";
 import type { LibrusSource } from "./types.ts";
 
-/** UTC hour of the scheduled run (cron `30 4,12 * * *`) that also sends the Morning report, Monday to Friday. */
 export const MORNING_REPORT_UTC_HOUR = 4;
-/** Days after today that the report lists. */
 const WEEK_DAYS = 8;
 const CONTENT_LIMIT = 200;
 const TITLE_LIMIT = 80;
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** On Monday the last report ran on Friday, 72 hours before. */
 const MONDAY_WINDOW_DAYS = 3;
 
-/** Returns the text of the after-school section of a Child for a day, in the language of a Recipient. */
 export type AfterSchool = (child: ChildRef, day: string, language: Language) => Promise<string>;
 
 const dayLabel = (language: Language, date: string): string =>
@@ -117,7 +113,6 @@ export function formatMorningReport(
   return parts.join("\n\n");
 }
 
-/** Returns true when the UTC hour is the hour of the report and the local day is a weekday. */
 export function isMorningReportRun(date: Date, timezone: string): boolean {
   const { weekday } = zonedParts(date, timezone);
   return weekday <= 5 && date.getUTCHours() === MORNING_REPORT_UTC_HOUR;
@@ -145,7 +140,6 @@ async function afterSchoolSection(deps: MorningReportDeps, day: string, language
   }
 }
 
-/** Returns the start of the "New" window: 24 hours before the run, or 72 hours on Monday. */
 export function newItemsSince(now: Date, timezone: string): Date {
   const days = zonedParts(now, timezone).weekday === 1 ? MONDAY_WINDOW_DAYS : 1;
   return new Date(now.getTime() - days * DAY_MS);

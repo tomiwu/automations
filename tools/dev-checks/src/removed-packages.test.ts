@@ -4,8 +4,6 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// kradziejka is suspended and removed from the current code (#254). The history keeps it (F2: no rewrite).
-// Only the live database part stays: the append-only migration, its SQL test and the database docs.
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const KEPT = [
   ".gitignore",

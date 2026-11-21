@@ -5,12 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { SKIP_NOTICE, skipNotice } from "./skip-notice.js";
 
-// Tests of scripts/test-sql-local.sh (issue #192). They use a stub engine, so no container starts.
 const script = new URL("../../../scripts/test-sql-local.sh", import.meta.url).pathname;
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
-/** A directory with a stub `podman` that logs its arguments. `port` prints a port; `exec` (pg_isready) succeeds. */
 function stubEngine(runExit = 0) {
   const dir = mkdtempSync(join(tmpdir(), "sql-local-"));
   dirs.push(dir);

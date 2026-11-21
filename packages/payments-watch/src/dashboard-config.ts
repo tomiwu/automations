@@ -1,6 +1,5 @@
 import type { KodyStorage } from "@automations/shared/kody";
 
-/** One user that may open the Dashboard. `tokenDigest` is the SHA-256 of the login token, in hex. */
 export interface DashboardUser {
   user: string;
   tokenDigest: string;
@@ -24,20 +23,17 @@ function userOf(entry: unknown): DashboardUser {
   return { user: userName(fields.user), tokenDigest: digestOf(fields.tokenDigest) };
 }
 
-/** Validates the allowlist. An empty list lets no one in. */
 export function parseDashboardAllowlist(raw: unknown): DashboardUser[] {
   if (!Array.isArray(raw)) throw new Error("allowlist must be a list of { user, tokenDigest }.");
   return raw.map(userOf);
 }
 
-/** Reads the allowlist from the package storage. It is empty when not set. */
 export async function loadDashboardAllowlist(storage: Pick<KodyStorage, "get">): Promise<DashboardUser[]> {
   const stored = await storage.get(DASHBOARD_ALLOWLIST_KEY);
   if (stored == null || stored === "") return [];
   return parseDashboardAllowlist(typeof stored === "string" ? JSON.parse(stored) : stored);
 }
 
-/** Validates and saves the allowlist. */
 export async function saveDashboardAllowlist(storage: KodyStorage, raw: unknown): Promise<DashboardUser[]> {
   const allowlist = parseDashboardAllowlist(raw);
   await storage.set(DASHBOARD_ALLOWLIST_KEY, JSON.stringify(allowlist));

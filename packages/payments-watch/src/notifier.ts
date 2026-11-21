@@ -3,7 +3,6 @@ import { t, type Child, type FetchFn, type Recipient } from "@automations/shared
 import { formatAmount } from "./engine.ts";
 import type { ZbpQr } from "./zbp.ts";
 
-/** What the Notifier needs to describe one Payment. */
 export interface PaymentNotice {
   child: Child;
   fee: Fee;
@@ -24,7 +23,6 @@ export interface TelegramClient {
   call(method: string, params: TelegramParams): Promise<unknown>;
 }
 
-/** Reads `message_id` from a Telegram result, or from the `{ ok, result }` envelope of the bot API. */
 export function messageIdOf(response: unknown): number | undefined {
   const record = (response ?? {}) as Record<string, unknown>;
   const id = record.message_id ?? record.messageId;
