@@ -1,5 +1,5 @@
 import { createTelegramNotifier } from "../notifier.ts";
-import { createWebFeeSource } from "../page-source.ts";
+import { createPaymentFeeSource } from "../activenow-fee-source.ts";
 import { runPaymentsWatch } from "../run.ts";
 import { entryDeps, telegramClient, telegramMessenger } from "./common.ts";
 
@@ -14,7 +14,7 @@ export default async function scheduled(input: unknown = {}): Promise<{ ok: true
     throw new Error("This export takes no input.");
   }
   const deps = await entryDeps();
-  const source = createWebFeeSource(deps);
+  const source = createPaymentFeeSource({ ...deps, ledgerStore: deps.counters! });
   const notifier = deps.paymentPhotos ? createTelegramNotifier(telegramClient) : undefined;
   const failures = await runPaymentsWatch({ ...deps, messenger: telegramMessenger, source, notifier, client: deps.paymentPhotos ? telegramClient : undefined });
   if (failures.length > 0) throw new Error(failures.join("; "));

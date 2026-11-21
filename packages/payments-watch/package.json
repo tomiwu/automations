@@ -29,6 +29,7 @@
   "dependencies": {
     "@automations/librus-data": "*",
     "@automations/shared": "*",
+    "@tomiwu/activities-watch": "*",
     "@tomiwu/librus-watch": "*",
     "cheerio": "1.0.0",
     "qrcode": "^1.5.4"

@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import { grosze } from "./page-parse.ts";
 
 /** The kinds of Organizer page that have a parser. `plain` is a simple page with a fee table. */
-export type OrganizerType = "activenow" | "edusky" | "mondo" | "plain";
+export type OrganizerType = "edusky" | "mondo" | "plain";
 
 type Row = ReturnType<cheerio.CheerioAPI>;
 
@@ -16,13 +16,6 @@ interface PageSpec {
 }
 
 const MISSING = "Organizer page: fee list not found (site changed?)";
-
-const activenow: PageSpec = {
-  list: ".an-fees",
-  rows: ".an-fee",
-  month: (row) => row.attr("data-period") ?? "",
-  amount: ".an-fee__price",
-};
 
 /** Edusky has the month in a cell, so the row is found by the text of that cell. */
 const edusky: PageSpec = {
@@ -50,7 +43,7 @@ const plain: PageSpec = {
   amount: ".amount",
 };
 
-const SPECS: Record<OrganizerType, PageSpec> = { activenow, edusky, mondo, plain };
+const SPECS: Record<OrganizerType, PageSpec> = { edusky, mondo, plain };
 
 /**
  * What a page shows about one charge. `listed`: the charge is there. `cancelled`: the charge is marked cancelled.
@@ -111,5 +104,5 @@ export function organizerTypeOf(url: string): OrganizerType {
   } catch {
     return "plain";
   }
-  return (["activenow", "edusky", "mondo"] as const).find((type) => host.includes(type)) ?? "plain";
+  return (["edusky", "mondo"] as const).find((type) => host.includes(type)) ?? "plain";
 }

@@ -35,8 +35,16 @@ storage.setFee({
 const photoCalls: string[] = [];
 let paymentPhotos = false;
 
+const ledgerStore = { data: new Map<string, string>(), async get(key: string) { return this.data.get(key); }, async set(key: string, value: string) { this.data.set(key, value); } };
+
 vi.mock("./common.ts", () => ({
-  entryDeps: async () => ({ runtime: fakeRuntime({ now: new Date("2026-01-12T08:00:00Z") }), storage, familyId: FAMILY_ID, paymentPhotos }),
+  entryDeps: async () => ({
+    runtime: fakeRuntime({ now: new Date("2026-01-12T08:00:00Z") }),
+    storage,
+    familyId: FAMILY_ID,
+    paymentPhotos,
+    counters: ledgerStore,
+  }),
   telegramMessenger: { send: async (chatId: string, text: string) => void sent.push(`${chatId}|${text}`) },
   telegramClient: { call: async (method: string, params: { chat_id: string }) => void photoCalls.push(`${method}|${params.chat_id}`) },
 }));

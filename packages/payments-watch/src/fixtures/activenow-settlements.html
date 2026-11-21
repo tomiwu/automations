@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Rozliczenia</h1>
+  <div data-controller="client-panel-page-settlements">
+    <div class="group flex items-center rounded-xl">
+      <span class="svg-icon bg-green"></span>
+      <div>
+        <h3 class="font-semibold">Brak zaległości</h3>
+        <div>Saldo jest aktualne</div>
+      </div>
+    </div>
+    <div data-client-panel-page-settlements-target="table">
+      <div class="flex flex-col">
+        <div class="hidden desktop:flex w-full pb-2 label">
+          <div>Data</div><div>Tytuł</div><div>Kwota</div>
+        </div>
+        <div class="hidden desktop:flex items-start">
+          <div class="w-24 flex-none">1 kwietnia 2026</div>
+          <div class="flex-1">Monthly tuition April</div>
+          <div class="group w-fit rounded-full px-3 py-1 red"><p>-150 zł</p></div>
+        </div>
+        <div class="desktop:hidden border rounded-xl p-3">
+          <div>Monthly tuition April</div>
+          <div class="whitespace-nowrap font-semibold text-red-dark">-150 zł</div>
+          <div>1 kwietnia 2026</div>
+        </div>
+        <div class="hidden desktop:flex items-start">
+          <div class="w-24 flex-none">10 kwietnia 2026</div>
+          <div class="flex-1">Bank transfer April</div>
+          <div class="group w-fit rounded-full px-3 py-1 green"><p>150 zł</p></div>
+        </div>
+        <div class="desktop:hidden border rounded-xl p-3">
+          <div>Bank transfer April</div>
+          <div class="whitespace-nowrap font-semibold text-green-dark">150 zł</div>
+          <div>10 kwietnia 2026</div>
+        </div>
+        <div class="hidden desktop:flex items-start">
+          <div class="w-24 flex-none">1 maja 2026</div>
+          <div class="flex-1">Monthly tuition May</div>
+          <div class="group w-fit rounded-full px-3 py-1 red"><p>-200 zł</p></div>
+        </div>
+        <div class="desktop:hidden border rounded-xl p-3">
+          <div>Monthly tuition May</div>
+          <div class="whitespace-nowrap font-semibold text-red-dark">-200 zł</div>
+          <div>1 maja 2026</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

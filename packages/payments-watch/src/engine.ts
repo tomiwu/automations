@@ -11,6 +11,7 @@ import {
   type StorageAdapter,
 } from "@automations/librus-data";
 import { localDate, t, type Child, type Config, type MessageKey, type Recipient } from "@automations/shared";
+import { decidePayment } from "./decision.ts";
 import type { FeeAmount, FeeSource } from "./fee-source.ts";
 import { advanceCounters, loadCounters, saveCounters, type CancelDue, type CounterStep, type CounterStore, type Watched } from "./organizer-cancel.ts";
 
@@ -37,6 +38,8 @@ interface RunContext {
   payments: readonly Payment[];
   /** The good page readings of this pass, for the Organizer cancel. */
   watched: Watched[];
+  /** Fees of the current month that the Organizer already settled (ActiveNow ledger). */
+  settled: Fee[];
   now: Date;
 }
 
@@ -207,12 +210,17 @@ async function applyOrganizer(context: RunContext, store: CounterStore | undefin
   return JSON.stringify(step.counters) === JSON.stringify(stored) ? nothing : async () => void (await saveCounters(store, step.counters));
 }
 
-async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Promise<void> {
-  if (!fee.enabled) return cancelDisabled(context, fee);
-  if (!isDue(context, fee)) return;
-  const found = await source.amountFor(fee, context.month);
-  watch(context, source, fee);
-  if (!found || found.amount <= 0) return;
+async function prepareDueFee(context: RunContext, fee: Fee): Promise<boolean> {
+  if (!fee.enabled) {
+    await cancelDisabled(context, fee);
+    return false;
+  }
+  return isDue(context, fee);
+}
+
+async function applyDuePayment(context: RunContext, fee: Fee, found: FeeAmount, settled: boolean): Promise<void> {
+  const existing = context.payments.find((item) => item.feeId === fee.id && item.month === context.month);
+  if (existing && existing.status !== "pending") return;
   const stored = await context.storage.upsertPayment({
     familyId: fee.familyId,
     feeId: fee.id,
@@ -220,7 +228,17 @@ async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Prom
     amount: found.amount,
     amountSource: found.source,
   });
-  await notifyPayment(context, fee, await journalPayment(context, fee, stored, found));
+  const payment = await journalPayment(context, fee, stored, found);
+  if (settled) context.settled.push(fee);
+  else await notifyPayment(context, fee, payment);
+}
+
+async function handleFee(context: RunContext, source: FeeSource, fee: Fee): Promise<void> {
+  if (!(await prepareDueFee(context, fee))) return;
+  const found = await source.amountFor(fee, context.month);
+  watch(context, source, fee);
+  if (!found || found.amount <= 0) return;
+  await applyDuePayment(context, fee, found, (await source.settledFor?.(fee, context.month)) ?? false);
 }
 
 const checkStream = (childId: string): string => `check:payments-watch:${childId}`;
@@ -237,6 +255,24 @@ async function checkEvents(run: PaymentRun, fees: readonly Fee[]): Promise<NewJo
   );
 }
 
+async function markSettled(context: RunContext, run: PaymentRun): Promise<void> {
+  if (context.settled.length === 0) return;
+  const payments = await run.storage.listPayments(run.familyId);
+  for (const fee of context.settled) {
+    const payment = payments.find((item) => item.feeId === fee.id && item.month === context.month);
+    if (!payment || payment.status !== "pending") continue;
+    await decidePayment({
+      storage: run.storage,
+      familyId: run.familyId,
+      payment,
+      fee,
+      decision: "paid",
+      decidedBy: "organizer:activenow",
+      at: context.now,
+    });
+  }
+}
+
 async function handleFees(context: RunContext, run: PaymentRun, fees: readonly Fee[]): Promise<void> {
   let failed = true;
   let persist = nothing;
@@ -249,6 +285,7 @@ async function handleFees(context: RunContext, run: PaymentRun, fees: readonly F
     const events = [...context.events, ...checks];
     if (events.length > 0) await run.storage.appendEvents(events);
   }
+  if (!failed) await markSettled(context, run);
   await persist();
 }
 
@@ -278,6 +315,7 @@ export async function runPayments(run: PaymentRun): Promise<void> {
     events: [],
     payments: fees.some((fee) => !fee.enabled || (run.counters && fee.sourceUrl)) ? await run.storage.listPayments(run.familyId) : [],
     watched: [],
+    settled: [],
     now: run.now,
   };
   await handleFees(context, run, fees);

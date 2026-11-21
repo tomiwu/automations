@@ -5,7 +5,6 @@ import { organizerTypeOf, parseFeePage, readFeePage } from "./organizer-parsers.
 const load = (name: string): string => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
 
 const cases = [
-  { type: "activenow", file: "activenow-fees.html", jan: 18000, feb: 120050, empty: "<p>Login</p>" },
   { type: "edusky", file: "edusky-fees.html", jan: 21000, feb: 110000, empty: "<p>Login</p>" },
   { type: "mondo", file: "mondo-fees.html", jan: 9550, feb: 100000, empty: "<p>Login</p>" },
   { type: "plain", file: "organizer-fees.html", jan: 15000, feb: 125050, empty: "<p>Login</p>" },
@@ -63,7 +62,7 @@ describe.each(cases)("readFeePage $type", ({ type, file, jan }) => {
   });
 
   it("reads a fee list with no charge as empty, not as absent", () => {
-    const list = { activenow: '<section class="an-fees"></section>', edusky: '<table class="edusky-charges"></table>', mondo: '<ul class="mondo-fees"></ul>', plain: '<table class="fees"></table>' };
+    const list = { edusky: '<table class="edusky-charges"></table>', mondo: '<ul class="mondo-fees"></ul>', plain: '<table class="fees"></table>' };
     expect(readFeePage(type, list[type], "2025-01")).toEqual({ state: "empty" });
   });
 
@@ -74,7 +73,7 @@ describe.each(cases)("readFeePage $type", ({ type, file, jan }) => {
 
 describe("organizerTypeOf", () => {
   it.each([
-    ["https://school.activenow.example.com/fees", "activenow"],
+    ["https://school.activenow.example.com/fees", "plain"],
     ["https://school.edusky.example.com/fees", "edusky"],
     ["https://school.mondo.example.com/fees", "mondo"],
     ["https://organizer.example.com/fees", "plain"],
