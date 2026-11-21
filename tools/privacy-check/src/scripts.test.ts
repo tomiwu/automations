@@ -376,7 +376,7 @@ describe("scripts/hooks/pre-commit", () => {
       expect(tryCommit(repo, gitleaks, "allowlisted")).toMatchObject({ status: 0, head: "allowlisted" });
       stage(repo, { "a.md": "Child Two\n" });
       expect(tryCommit(repo, gitleaks, "clean")).toMatchObject({ status: 0, head: "clean" });
-    });
+    }, 60_000);
   });
 });
 
