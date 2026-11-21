@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { bodySkeleton, LABEL_ALLOWLIST, maskIds, redactPaths, redactUrl } from "./activenow-billing-redact.ts";
+import {
+  bodySkeleton,
+  headSummary,
+  LABEL_ALLOWLIST,
+  maskIds,
+  redactPaths,
+  redactUrl,
+  responseSkeleton,
+} from "./activenow-billing-redact.ts";
 
 const fixture = readFileSync(new URL("./fixtures/activenow-billing-synthetic.html", import.meta.url), "utf8");
 
@@ -83,6 +91,74 @@ describe("bodySkeleton", () => {
     expect(true).toBe(true);
   });
 });
+describe("Stimulus code names and PII redaction", () => {
+  it("keeps data-controller, data-action and -target values with digit masks", () => {
+    const html =
+      '<body><div data-controller="client-panel-page-settlements" data-action="click->client-panel-page-settlements#toggleUpcoming" data-client-panel-page-settlements-target="switch"><input data-client-panel-page-settlements-target="panel42"></div></body>';
+    const skeleton = bodySkeleton(html);
+    expect(skeleton).toContain('data-controller="client-panel-page-settlements"');
+    expect(skeleton).toContain("click->client-panel-page-settlements#toggleUpcoming");
+    expect(skeleton).toContain('data-client-panel-page-settlements-target="switch"');
+    expect(skeleton).toContain('data-client-panel-page-settlements-target="panel<n>"');
+    expect(skeleton).not.toContain("panel42");
+  });
+
+  it("redacts mailto, tel, e-mail in text and image file names", () => {
+    const html =
+      '<body><a href="mailto:fake@example.org">mail</a><a href="tel:+00-000-000-000">call</a><p>Contact fake@example.org</p><img src="/uploads/logo-abc.png" /></body>';
+    const skeleton = bodySkeleton(html);
+    expect(skeleton).toContain('href="mailto:<email>"');
+    expect(skeleton).toContain('href="tel:<n>"');
+    expect(skeleton).toContain("<email>");
+    expect(skeleton).toMatch(/src="\/uploads\/<file>\.png"/);
+    expect(skeleton).not.toContain("fake@example.org");
+    expect(skeleton).not.toContain("logo-abc");
+    expect(skeleton).not.toContain("000-000");
+    const iconPage = '<body><link rel="shortcut icon" href="/uploads/facility-55.ico" /></body>';
+    expect(bodySkeleton(iconPage)).toMatch(/href="\/uploads\/<file>\.ico"/);
+    const srcset = '<body><img srcset="/uploads/a.png 1x, /uploads/b.png 2x" src="/uploads/c.png" /></body>';
+    const srcsetSk = bodySkeleton(srcset);
+    expect(srcsetSk).toContain("srcset=");
+    expect(srcsetSk).not.toContain("a.png");
+  });
+
+  it("redacts path-like Stimulus -value attributes with redactUrl", () => {
+    const html =
+      '<body><div data-client-panel-page-settlements-upcoming-url-value="/client_panel/settlements/upcoming?x=1&child=9"></div></body>';
+    const skeleton = bodySkeleton(html);
+    expect(skeleton).toContain('data-client-panel-page-settlements-upcoming-url-value="/client_panel/settlements/upcoming?x&child"');
+    expect(skeleton).not.toContain("child=9");
+  });
+});
+
+describe("responseSkeleton", () => {
+  it("marks JSON and HTML responses", () => {
+    expect(responseSkeleton('{"paid":true}', "application/json")).toContain("<bool>");
+    expect(responseSkeleton("<body><p>x</p></body>", "text/html")).toContain("<text>");
+    expect(responseSkeleton("plain", "text/plain")).toBe("<text>");
+  });
+});
+
+describe("headSummary", () => {
+  it("lists scripts, modulepreload, preload and importmap keys with redacted paths", () => {
+    const html = `<html><head>
+      <script src="/assets/app-7f3e9a2b1c4d5e6f.js"></script>
+      <link rel="modulepreload" href="/assets/chunk-settlements_controller.js">
+      <link rel="preload" as="script" href="/assets/vendor-77.js">
+      <script type="importmap">{"imports":{"controllers/client_panel/page/settlements_controller":"/assets/settlements-99.js","other":"/x.js"}}</script>
+    </head><body></body></html>`;
+    const head = headSummary(html);
+    expect(head.scripts[0]).toMatch(/^\/assets\/app/);
+    expect(head.scripts[0]).not.toContain("7f3e9a2b");
+    expect(head.modulepreload).toEqual(["/assets/chunk-settlements_controller.js"]);
+    expect(head.preloadScripts).toEqual(["/assets/vendor-<n>.js"]);
+    expect(head.importmap?.keys).toContain("controllers/client_panel/page/settlements_controller");
+    expect(head.importmap?.paths["controllers/client_panel/page/settlements_controller"]).toBe("/assets/settlements-<n>.js");
+    expect(JSON.stringify(head)).not.toContain("7f3e9a2b");
+    expect(JSON.stringify(head)).not.toContain("77");
+  });
+});
+
 describe("record ids in attribute values and messages", () => {
   it("masks digits and long tokens in id, class, name and for values", () => {
     const html =

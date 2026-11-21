@@ -39,7 +39,7 @@ Only `src/entry/*` imports the Kody runtime and the Kody `telegram` package.
 | `./sessions` | No input. `{ sessions, errors }`: every Session of every Child for the next 14 days, ordered by start. |
 | `./stored-sessions` | `{ childId?, from?, to? }`. `{ timezone, from, to, accounts, sessions, fetches }`: the Sessions as the Journal stores them, ordered by start, with `lastSavedAt` of each Account (null before the first save). Each Session and Account has `childId` (the Journal `child_id`). `from` defaults to today, `to` to `from` + 13 (at most 60 days). Vanished Sessions stay with `vanished: true`. It reads Supabase only (3 fetches at most): no app login. |
 | `./after-school` | `{ childId, day, language? }`. `{ text }`: the after-school section of one Child. |
-| `./activenow-billing-shape` | No input. `{ accounts, fetches? }`: redacted skeleton of the ActiveNow billing page per Account (read-only probe), with the redacted final path after redirects. Record ids in `id`, `class`, `name` and `for` values and in error paths are masked (`<n>`, `<id>`). |
+| `./activenow-billing-shape` | No input. `{ accounts, fetches? }`: redacted skeleton of the ActiveNow billing page per Account (read-only probe), with redacted `head` (scripts, preloads, import map keys), optional `upcoming` (source, path, skeleton), and the redacted final path after redirects. Stimulus code names stay; `mailto`, `tel`, e-mail and image file names are masked. Record ids in `id`, `class`, `name` and `for` values and in error paths are masked (`<n>`, `<id>`). |
 
 Each Session has `childId` and the name of the Child (`child`).
 The Supabase URL and the Family ID are plain config set with `./configure` (`{ supabaseUrl, familyId }`). The secret `SUPABASE_KEY` gives access to the storage.
