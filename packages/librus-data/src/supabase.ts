@@ -1,6 +1,6 @@
 import type { Config, FetchFn, Runtime } from "@automations/shared";
 import { appendItemEvents, DETAIL_BATCH_SIZE, detailsFromJournal, uniqueDetails } from "./details.ts";
-import type { Fee, JournalEvent, JournalFilter, NewJournalEvent, NewItemDetail, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
+import type { Fee, JournalEvent, JournalFilter, NewJournalEvent, NewItemDetail, NewNotification, NewPayment, OutboxEntry, OutboxKind, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -36,19 +36,23 @@ function toItem(row: Row): StoredItem {
   };
 }
 
+const outboxKind = (value: unknown): OutboxKind => (value === "document" ? "document" : "text");
+const optionalString = (value: unknown): string | undefined => (value === null || value === undefined ? undefined : String(value));
+const nullableDate = (value: unknown): Date | null => (value === null ? null : new Date(String(value)));
+const nullableNumber = (value: unknown): number | null => (value === null || value === undefined ? null : Number(value));
+
 function toEntry(row: Row): OutboxEntry {
-  const kind = row.kind === "document" ? "document" : "text";
   return {
     key: String(row.key),
     familyId: String(row.family_id),
     chatId: String(row.chat_id),
-    kind,
+    kind: outboxKind(row.kind),
     text: String(row.text),
-    storagePath: row.storage_path === null || row.storage_path === undefined ? undefined : String(row.storage_path),
-    fileName: row.file_name === null || row.file_name === undefined ? undefined : String(row.file_name),
+    storagePath: optionalString(row.storage_path),
+    fileName: optionalString(row.file_name),
     queuedAt: new Date(String(row.queued_at)),
-    deliveredAt: row.delivered_at === null ? null : new Date(String(row.delivered_at)),
-    messageId: row.message_id === null || row.message_id === undefined ? null : Number(row.message_id),
+    deliveredAt: nullableDate(row.delivered_at),
+    messageId: nullableNumber(row.message_id),
   };
 }
 

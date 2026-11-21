@@ -143,6 +143,46 @@ async function journalStep(
   }
 }
 
+function sourceForTarget(deps: RunDeps, target: LibrusTarget, timezone: string): LibrusSource {
+  return (
+    deps.createSource?.(target.account, timezone) ??
+    createLibrusSource(deps.runtime, target.account, {
+      timezone,
+      names: nameOptionsFor(deps.nameStore, target.account.id),
+    })
+  );
+}
+
+async function chargeFetchForRun(deps: RunDeps): Promise<(() => boolean) | undefined> {
+  if (!deps.budget || !deps.counter) return undefined;
+  const startTotal = deps.counter.count().total;
+  return createChargeFetch(await deps.budget.remaining(), () => deps.counter!.count().total, startTotal);
+}
+
+async function morningReportStep(
+  deps: RunDeps,
+  target: LibrusTarget,
+  source: LibrusSource,
+  timezone: string,
+  log: (message: string) => void,
+): Promise<void> {
+  try {
+    await runMorningReport({
+      storage: deps.storage,
+      familyId: deps.familyId,
+      child: target.child,
+      recipients: target.recipients,
+      source,
+      timezone,
+      now: deps.runtime.now(),
+      afterSchool: deps.afterSchool,
+      log,
+    });
+  } catch (error) {
+    deps.runtime.log("warn", `morning report failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function runTarget(
   deps: RunDeps,
   config: Config,
@@ -151,36 +191,14 @@ async function runTarget(
 ): Promise<string[]> {
   const { runtime, storage, familyId } = deps;
   const timezone = config.family.timezone;
-  const source = deps.createSource?.(target.account, timezone) ??
-    createLibrusSource(runtime, target.account, {
-      timezone,
-      names: nameOptionsFor(deps.nameStore, target.account.id),
-    });
+  const source = sourceForTarget(deps, target, timezone);
   const log = (message: string) => runtime.log("info", `account ${target.account.id}: ${message}`);
-  let chargeFetch: (() => boolean) | undefined;
-  if (deps.budget && deps.counter) {
-    const startTotal = deps.counter.count().total;
-    chargeFetch = createChargeFetch(await deps.budget.remaining(), () => deps.counter!.count().total, startTotal);
-  }
+  const chargeFetch = await chargeFetchForRun(deps);
   const check: ChildCheck = { familyId, child: target.child, recipients: target.recipients, storage, source, log, chargeFetch };
   const { failures, homework } = await checkChild(check, watchers);
   failures.push(...(await journalStep(deps, config, target, source, homework, log)));
   if (failures.length > 0) await notifyFailure(deps, target, failures, localDate(runtime.now(), timezone));
-  try {
-    await runMorningReport({
-      storage,
-      familyId,
-      child: target.child,
-      recipients: target.recipients,
-      source,
-      timezone,
-      now: runtime.now(),
-      afterSchool: deps.afterSchool,
-      log,
-    });
-  } catch (error) {
-    runtime.log("warn", `morning report failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  await morningReportStep(deps, target, source, timezone, log);
   return failures.map((failure) => `${target.child.name}: ${failure}`);
 }
 
