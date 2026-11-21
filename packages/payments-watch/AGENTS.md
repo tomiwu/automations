@@ -16,6 +16,7 @@ import configure from "kody:@tomiwu/payments-watch/configure";
 | `./telegram-update` | Webhook envelope or a Telegram update | `{ ok }` | Records Paid or Skip, edits the Telegram message |
 | `./configure` | Deployment config | Config without secrets | Writes package storage |
 | `./stored-payments` | `{ childId?, month? }` | `{ timezone, month, lastSavedAt, payments, fetches }`. Each Payment has `childId` (the Journal `child_id`) | None. Reads Supabase only |
+| `./activenow-ledger` | `{ monthsBack? }` | `{ today, from, accounts, fees, fetches? }`. Settlements rows per enabled ActiveNow Account plus every Fee row | None. Read-only |
 | `./app` | HTTP request | HTML dashboard | Reads and writes Payments |
 
 Do not call `./scheduled` or `./telegram-update` as a live test. They can message a real chat.
