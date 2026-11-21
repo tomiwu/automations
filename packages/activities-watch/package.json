@@ -11,6 +11,7 @@
     "./sessions": "./src/entry/sessions.ts",
     "./stored-sessions": "./src/entry/stored-sessions.ts",
     "./after-school": "./src/entry/after-school.ts",
+    "./activenow-billing-shape": "./src/entry/activenow-billing-shape.ts",
     "./configure": "./src/entry/configure.ts"
   },
   "dependencies": {

@@ -19,7 +19,7 @@ interface Login {
 
 const loginRejected = (html: string): boolean => html.includes('name="user[password]"');
 
-const blockPage = (text: string): boolean => /Dostęp zablokowany|tymczasowo zablokowany/.test(text);
+export const blockPage = (text: string): boolean => /Dostęp zablokowany|tymczasowo zablokowany/.test(text);
 
 /**
  * Sends one request and checks its status. A 403 block page means ActiveNow blocks the network for about an
@@ -50,18 +50,36 @@ async function login(http: Http, origin: string, secrets: Login): Promise<string
 }
 
 /** Opens the profile of the Child when the login shows a picker. A login with one Child goes straight to the panel. */
-async function chooseProfile(http: Http, origin: string, html: string, profile: string | null): Promise<void> {
+async function chooseProfile(http: Http, origin: string, html: string, profile: string | null): Promise<string> {
   const $ = cheerio.load(html);
   const links = $('a[href*="change_role"]').toArray();
-  if (links.length === 0) return;
+  if (links.length === 0) return html;
   const link = links.find((a) => profile !== null && $(a).text().includes(profile));
   if (!link) throw new Error("ActiveNow: profile of the Child not found (name changed?)");
   const token = $("meta[name=csrf-token]").attr("content") ?? "";
-  await checked(http, new URL($(link).attr("href") ?? "", origin).toString(), {
+  const page = await checked(http, new URL($(link).attr("href") ?? "", origin).toString(), {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", "x-csrf-token": token },
     body: formBody({ authenticity_token: token }),
   });
+  return page.text;
+}
+
+/** Logs in and opens the client panel of the profile. It is the page after the profile choice, or after login when there is one Child. */
+export async function openActiveNowPanel(
+  http: Http,
+  origin: string,
+  secrets: Login,
+  profile: string | null,
+): Promise<string> {
+  return chooseProfile(http, origin, await login(http, origin, secrets), profile);
+}
+
+export const ACTIVE_NOW_BLOCK =
+  "ActiveNow: HTTP 403, access temporarily blocked by ActiveNow (from the Kody network; clears within about 1 hour)";
+
+export function isActiveNowBlock(error: unknown): boolean {
+  return error instanceof Error && error.message === ACTIVE_NOW_BLOCK;
 }
 
 async function allLessons(http: Http, target: ActivityTarget, secrets: Login): Promise<string> {

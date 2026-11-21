@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="csrf-token" content="csrf-fake-token-abc123" />
+  <script type="application/json" id="boot">{"child":"Test Child","balance":-200.5,"ok":true}</script>
+  <script src="/assets/app-7f3e9a2b1c4d5e6f.js"></script>
+  <style>.secret { color: red; }</style>
+</head>
+<body>
+  <nav class="panel-menu">
+    <a href="/client_panel/billing?account_id=998877665544" class="nav-link">Rozliczenia</a>
+    <a href="/client_panel/events" class="nav-link">Zajęcia</a>
+  </nav>
+  <div class="billing-header" data-summary='{"due":"-200 zł","name":"Test Child"}'>
+    <p class="child-name">Test Child</p>
+    <p class="overdue">-200 zł</p>
+    <p class="due-date">1 maja 2026</p>
+  </div>
+  <a href="/client_panel/billing?show_upcoming=1" class="toggle-upcoming">Pokaż nadchodzące</a>
+  <table class="billing-table">
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Tytuł</th>
+        <th>Kwota</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>2026-05-01</td>
+        <td>Czesne za maj Test Child</td>
+        <td>-200 zł</td>
+        <td>Nieopłacone</td>
+      </tr>
+      <tr>
+        <td>01.05.2026</td>
+        <td>Wpłata online</td>
+        <td>1 200,00 PLN</td>
+        <td>Opłacono</td>
+      </tr>
+    </tbody>
+  </table>
+  <script type="application/json">{"paid":true,"count":3}</script>
+  <script src="/assets/track-7f3e9a2b1c4d5e6f8a9b0c1d2e3f4a5b.js"></script>
+  <script>window.boot = "secret";</script>
+  <!-- comment with Test Child -->
+  <svg><text>hidden</text></svg>
+</body>
+</html>
