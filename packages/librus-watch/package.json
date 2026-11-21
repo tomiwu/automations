@@ -43,6 +43,9 @@
     "credentials": {
       "SUPABASE_KEY": {
         "description": "Key of the restricted Supabase role automations_watcher (sent as {{secret:SUPABASE_KEY}} to the Supabase project host)."
+      },
+      "TELEGRAM_BOT_TOKEN": {
+        "description": "Telegram bot token. Only the document upload (telegram-document.ts) sends it, as {{secret:TELEGRAM_BOT_TOKEN}} in the URL path to api.telegram.org. Text messages go through @tomiwu/telegram."
       }
     }
   }
