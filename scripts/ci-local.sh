@@ -43,6 +43,7 @@ ci.yml|Check for personal strings (deny-list from the DENYLIST secret)|deny
 ci.yml|Run the privacy check (hashed private words and heuristics)|privacy
 migrate.yml|Install psql|migrate
 migrate.yml|Apply the migrations|migrate
+migrate.yml|Verify the attachments bucket (read only)|migrate
 deploy-kody.yml|Decide the mode|skip: GitHub vars only
 deploy-kody.yml|Stage the package|kody-stage
 deploy-kody.yml|Check that the token is set|skip: needs the Kody secret

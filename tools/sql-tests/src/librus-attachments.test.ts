@@ -1,10 +1,17 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { asWatcher, psql } from "./psql.js";
 
 const read = (name: string) => readFileSync(new URL(`../../../supabase/migrations/${name}`, import.meta.url), "utf8");
 const sql = read("0017_librus_attachments_bucket.sql");
 const url = process.env.TEST_DATABASE_URL;
+const verifyScript = fileURLToPath(new URL("../../migrate/verify-storage.sh", import.meta.url));
+const verify = (db: string) => {
+  const run = spawnSync("bash", [verifyScript], { encoding: "utf8", env: { ...process.env, SUPABASE_DB_URL: db } });
+  return { status: run.status, output: `${run.stdout}${run.stderr}`.trim() };
+};
 
 // Test-only stand-ins for the Supabase platform schema `storage` and the role `anon`. The migration never creates them.
 const STORAGE_STAND_IN = `
@@ -40,6 +47,7 @@ describe.skipIf(!url)("0017_librus_attachments_bucket.sql", () => {
   it("does nothing without a storage schema (plain Postgres)", () => {
     expect(psql(db, sql).ok).toBe(true);
     expect(psql(db, "select count(*) from pg_namespace where nspname = 'storage'").output).toBe("0");
+    expect(verify(db)).toEqual({ status: 0, output: "storage schema: missing (0017 did nothing)" });
   });
 
   describe("with the storage stand-in", () => {
@@ -73,6 +81,27 @@ describe.skipIf(!url)("0017_librus_attachments_bucket.sql", () => {
     it("gives anon no access", () => {
       expect(asAnon("select count(*) from storage.objects").ok).toBe(false);
       expect(asAnon("insert into storage.objects (bucket_id, name) values ('librus-attachments', 'x')").ok).toBe(false);
+    });
+
+    it("verify-storage.sh prints only the bucket, its flag and the policies, and fails on a public bucket", () => {
+      expect(verify(db)).toEqual({
+        status: 0,
+        output: [
+          "bucket: librus-attachments public=false",
+          "policies:",
+          "watcher_attachment_insert INSERT automations_watcher",
+          "watcher_attachment_read SELECT automations_watcher",
+          "result: OK (private bucket, watcher select and insert only)",
+        ].join("\n"),
+      });
+      expect(psql(db, "update storage.buckets set public = true where id = 'librus-attachments'").ok).toBe(true);
+      try {
+        const publicBucket = verify(db);
+        expect(publicBucket.status).toBe(1);
+        expect(publicBucket.output).toContain("result: NOT OK");
+      } finally {
+        expect(psql(db, "update storage.buckets set public = false where id = 'librus-attachments'").ok).toBe(true);
+      }
     });
   });
 });

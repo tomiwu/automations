@@ -5,6 +5,12 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "apply: apply the migrations. verify-storage: only read the attachments bucket and its policies (read only)."
+        type: choice
+        options: [apply, verify-storage]
+        default: apply
 permissions:
   contents: read
 concurrency:
@@ -22,6 +28,12 @@ jobs:
       - name: Install psql
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
       - name: Apply the migrations
+        if: github.event.inputs.mode != 'verify-storage'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: bash tools/migrate/apply.sh supabase/migrations
+      - name: Verify the attachments bucket (read only)
+        if: github.event.inputs.mode == 'verify-storage'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash tools/migrate/verify-storage.sh
