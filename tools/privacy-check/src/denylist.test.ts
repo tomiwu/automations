@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildDenylist, denylistHit, hashPhrase, parseDenylist } from "./denylist.ts";
 
+// Invented private words. They are not real names.
 const plain = "# comment\nZorka\n\nBorzym Żółty Dom\n";
 
 describe("buildDenylist", () => {

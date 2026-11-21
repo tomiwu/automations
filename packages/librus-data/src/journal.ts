@@ -15,6 +15,7 @@ function sortKeys(value: unknown): unknown {
 
 const stableJson = (value: unknown): string => JSON.stringify(sortKeys(value)) ?? "null";
 
+/** One entity that a job saw in a download. */
 export interface Observed<S> {
   stream: string;
   childId: string;
@@ -23,6 +24,7 @@ export interface Observed<S> {
   state: S;
 }
 
+/** Gives the event types for one kind of stream. */
 export interface Classifier<S> {
   added(state: S): string;
   changed(previous: S, next: S): string;
@@ -34,10 +36,12 @@ export interface PlanInput<S> {
   source: string;
   heads: readonly JournalEvent[];
   observed: readonly Observed<S>[];
+  /** True if a head that is not observed must get a vanished event. */
   inVanishScope: (head: JournalEvent) => boolean;
   classify: Classifier<S>;
 }
 
+/** The events to append so that the heads show the observed states. */
 export async function planEvents<S>(input: PlanInput<S>): Promise<NewJournalEvent[]> {
   const heads = new Map(input.heads.map((head) => [head.stream, head]));
   const seen = new Map(input.observed.map((item) => [item.stream, item]));
@@ -57,6 +61,7 @@ async function planObserved<S>(input: PlanInput<S>, item: Observed<S>, head?: Jo
   return eventType === null ? null : observedEvent(input, item, { seq: (head?.seq ?? 0) + 1, eventType, hash });
 }
 
+/** The event type for the observed state, or null if the head shows this state already. */
 function typeOf<S>(input: PlanInput<S>, state: S, hash: string, head?: JournalEvent): string | null {
   if (!head || head.eventType === input.classify.vanished) return input.classify.added(state);
   return head.contentHash === hash ? null : input.classify.changed(head.payload as S, state);
@@ -106,6 +111,7 @@ export interface CheckInput {
   payload: Record<string, unknown>;
 }
 
+/** The `CheckCompleted` event for one successful pass of a job. */
 export async function checkEvent(input: CheckInput): Promise<NewJournalEvent> {
   return {
     familyId: input.familyId,
@@ -121,8 +127,10 @@ export async function checkEvent(input: CheckInput): Promise<NewJournalEvent> {
   };
 }
 
+/** The current state of one stream. */
 export interface StreamState {
   stream: string;
+  /** The Journal `child_id` of the stream. */
   childId: string;
   state: Record<string, unknown>;
   vanished: boolean;
@@ -148,12 +156,14 @@ export function projectStream(events: readonly JournalEvent[]): StreamState {
   return stateOf(last);
 }
 
+/** The state of each stream from the heads only. */
 export const projectHeads = (heads: readonly JournalEvent[]): StreamState[] => heads.map(stateOf);
 
 const afterFrom = (day: string, from?: string): boolean => from === undefined || day >= from;
 const beforeTo = (day: string, to?: string): boolean => to === undefined || day <= to;
 const beforeEnd = (day: string, before?: string): boolean => before === undefined || day < before;
 
+/** True if the day is inside the optional bounds. An event with no day is outside any bound. */
 function inRange(day: string | null, filter: JournalFilter): boolean {
   if ([filter.from, filter.to, filter.before].every((bound) => bound === undefined)) return true;
   return day !== null && afterFrom(day, filter.from) && beforeTo(day, filter.to) && beforeEnd(day, filter.before);
@@ -184,6 +194,7 @@ const isListed = (event: JournalEvent, filter: JournalFilter): boolean =>
   inList(filter.kinds, event.kind) &&
   inList(filter.streams, event.stream);
 
+/** True if the event passes the filter. */
 export function matchesJournalFilter(event: JournalEvent, filter: JournalFilter): boolean {
   return isListed(event, filter) && isSince(event, filter.since) && inRange(event.day, filter);
 }

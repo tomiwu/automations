@@ -8,8 +8,10 @@ const PORTAL_REFERER = "https://portal.librus.pl/rodzina";
 const API_ORIGIN = "https://api.librus.pl";
 const MAX_REDIRECTS = 12;
 
+/** Default time limit of one Librus request, in milliseconds. */
 export const LIBRUS_TIMEOUT_MS = 25_000;
 
+/** A Librus request that got no answer in time. */
 export class LibrusTimeoutError extends Error {
   override name = "LibrusTimeoutError";
 }
@@ -49,6 +51,7 @@ function parseSetCookie(header: string, host: string): Cookie {
   return { key: `${domain}|${attributes.path ?? "/"}|${pair.slice(0, index).trim()}`, value, expired };
 }
 
+/** A cookie jar keyed by domain, path and name. Librus sets one cookie name twice with different paths. */
 class CookieJar {
   private cookies = new Map<string, string>();
 
@@ -72,11 +75,13 @@ class CookieJar {
   }
 }
 
+/** The anti-bot header of the login form: each character of a random number and the time, shifted by 20. */
 function banner(random: number, now: number): string {
   const shift = (text: string) => [...text].map((c) => String.fromCharCode(c.charCodeAt(0) + 20)).join("");
   return `${shift(random.toString())}_${shift(now.toString())}`;
 }
 
+/** A logged-in HTTP session with Librus. The secrets come from the Runtime and are never logged. */
 export class LibrusSession {
   private readonly jar = new CookieJar();
   private readonly fetchFn: FetchFn;
@@ -116,6 +121,7 @@ export class LibrusSession {
     return response;
   }
 
+  /** Sends a request and follows redirects by hand, so each hop stores its cookies. */
   private async request(url: string, options: RequestOptions = {}): Promise<{ response: Response; url: string }> {
     let current = url;
     let next = options;
@@ -164,6 +170,7 @@ export class LibrusSession {
     await this.request(landing, { headers: { referer: formUrl } });
   }
 
+  /** Returns the HTML of a Synergia page. It throws when the session is not logged in. */
   async page(path: string): Promise<string> {
     const { response } = await this.request(new URL(path, this.account.origin).toString());
     const html = await response.text();
@@ -171,6 +178,7 @@ export class LibrusSession {
     return html;
   }
 
+  /** Returns the text of a Librus JSON API answer on the same login session. */
   async json(path: string): Promise<string> {
     const url = new URL(`/gateway/api/2.0/${path}`, this.account.origin).toString();
     const { response } = await this.request(url, { headers: { accept: "application/json" } });
@@ -181,6 +189,7 @@ export class LibrusSession {
   }
 }
 
+/** Finds the login iframe of the portal page: the old one has an id, the newer one is told by its src. */
 export function loginIframeSource(html: string): string | undefined {
   for (const [tag] of html.matchAll(/<iframe\b[^>]*>/g)) {
     const src = tag.match(/\ssrc="([^"]+)"/)?.[1];
@@ -195,6 +204,7 @@ function portalConfigLoginUrl(html: string): string | undefined {
   return url && /^https:\/\/[a-z0-9.-]+\.librus\.pl\/loguj\//.test(url) ? url : undefined;
 }
 
+/** Reads the answer of the login form. It returns the landing URL, or throws. */
 export function landingUrl(text: string, status: number, formUrl: string): string {
   let reply: { status?: string; goTo?: string };
   try {

@@ -4,6 +4,7 @@ export interface RestClient {
   insert(table: string, rows: readonly Row[]): Promise<Row[]>;
   select(table: string, query?: string): Promise<Row[]>;
   update(table: string, query: string, patch: Row): Promise<Row[]>;
+  /** Inserts or replaces rows on the primary key. */
   upsert(table: string, rows: readonly Row[]): Promise<Row[]>;
 }
 
@@ -13,6 +14,7 @@ export interface RestOptions {
   fetch: typeof fetch;
 }
 
+/** A small PostgREST client. It uses the service role key of the owner. */
 export function createRestClient(options: RestOptions): RestClient {
   const base = `${options.url.replace(/\/+$/, "")}/rest/v1`;
   const headers = {

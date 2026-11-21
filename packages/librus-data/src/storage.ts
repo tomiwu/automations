@@ -1,5 +1,6 @@
 import type { Config } from "@automations/shared";
 
+/** One fact that a Watcher saw. */
 export interface StoredItem {
   familyId: string;
   watcher: string;
@@ -22,6 +23,7 @@ export interface NewItemDetail {
   startTime: string | null;
   endTime: string | null;
   title: string;
+  /** The whole text. */
   text: string;
   sender: string | null;
   subject: string | null;
@@ -59,6 +61,7 @@ export interface NewJournalEvent {
   eventType: string;
   payload: Record<string, unknown>;
   contentHash: string;
+  /** `librus-watch`, `activities-watch` or `backfill-0008`. */
   source: string;
 }
 
@@ -96,6 +99,7 @@ export interface OutboxEntry extends NewNotification {
   messageId: number | null;
 }
 
+/** One recurring charge of one Organizer for one Child. The Watcher reads it and never changes it. */
 export interface Fee {
   id: string;
   familyId: string;
@@ -119,6 +123,7 @@ export interface Fee {
 export type PaymentStatus = "pending" | "paid" | "skipped" | "cancelled";
 export type AmountSource = "page" | "config";
 
+/** The data to make one Payment. The status is `pending`. */
 export interface NewPayment {
   familyId: string;
   feeId: string;
@@ -128,6 +133,7 @@ export interface NewPayment {
   amountSource: AmountSource;
 }
 
+/** One Fee for one month. */
 export interface Payment extends NewPayment {
   id: string;
   status: PaymentStatus;
@@ -140,6 +146,7 @@ export interface Payment extends NewPayment {
   createdAt: Date;
 }
 
+/** Items, the Outbox, Fees, Payments and config reads. */
 export interface StorageAdapter {
   knownItemIds(familyId: string, watcher: string): Promise<Set<string>>;
   listItems(familyId: string, watcher: string): Promise<StoredItem[]>;
@@ -157,6 +164,7 @@ export interface StorageAdapter {
    * Returns the number of events. There is no method that changes or removes an event.
    */
   appendEvents(events: readonly NewJournalEvent[]): Promise<number>;
+  /** The last event of each stream. */
   listHeads(familyId: string, filter?: JournalFilter): Promise<JournalEvent[]>;
   /** Events ordered by stream and `seq`. */
   listEvents(familyId: string, filter?: JournalFilter): Promise<JournalEvent[]>;
@@ -166,9 +174,11 @@ export interface StorageAdapter {
   enqueueNotifications(entries: readonly NewNotification[]): Promise<number>;
   pendingNotifications(familyId: string): Promise<OutboxEntry[]>;
   markDelivered(key: string): Promise<void>;
+  /** Stores the Telegram message ID of the message that was sent for the entry. It is a delivery field, not Journal data. */
   recordMessageId(key: string, messageId: number): Promise<void>;
   /** The entries of the Family that have a stored Telegram message ID, oldest first. */
   sentMessages(familyId: string): Promise<OutboxEntry[]>;
+  /** Like `markDelivered` for many keys in one request. */
   markDeliveredMany(keys: readonly string[]): Promise<void>;
   loadConfig(familyId: string): Promise<Config>;
   listFees(familyId: string): Promise<Fee[]>;

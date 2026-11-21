@@ -10,6 +10,7 @@ export interface NodeRuntimeOptions {
 
 /** Runtime for local runs. Secrets come from the environment. A scheduled task runs once at once. */
 export function nodeRuntime(options: NodeRuntimeOptions = {}): Runtime {
+  // No Node types here: the same source is type-checked on Kody, which has no `process`.
   const env = options.env ?? (globalThis as { process?: { env: Env } }).process?.env ?? {};
   const sink = options.sink ?? ((line: string) => console.error(line));
   return {

@@ -1,5 +1,6 @@
 import type { StorageAdapter } from "./storage.ts";
 
+/** Minimal string key/value storage. Kody package storage has this shape. */
 export interface KodyStorage {
   get(key: string): Promise<unknown>;
 }
@@ -17,6 +18,7 @@ export interface ExportedEntry {
   deliveredAt: string | null;
 }
 
+/** The file that the one-time Kody export job writes. */
 export interface MigrationExport {
   version: 1;
   items: Record<string, ExportedItem[]>;
@@ -34,6 +36,7 @@ export interface ImportReport {
   pending: number;
 }
 
+/** The import fails when a count differs. */
 export class CountCheckError extends Error {
   readonly differences: CountDifference[];
 
@@ -88,6 +91,10 @@ function toEntry(value: unknown): ExportedEntry {
   };
 }
 
+/**
+ * Reads the Items of each Watcher and the Outbox from Kody storage.
+ * Old Outbox entries without a chat ID are not exported.
+ */
 export async function exportKodyData(storage: KodyStorage, watchers: readonly string[]): Promise<MigrationExport> {
   const items: Record<string, ExportedItem[]> = {};
   for (const watcher of watchers) {
@@ -131,6 +138,10 @@ async function compare(storage: StorageAdapter, familyId: string, data: Migratio
   return differences;
 }
 
+/**
+ * Writes the exported Items and Outbox entries to the storage. Then it compares
+ * the counts per Watcher and for pending Outbox entries. It throws on a difference.
+ */
 export async function importKodyData(
   storage: StorageAdapter,
   familyId: string,
@@ -142,6 +153,7 @@ export async function importKodyData(
   return expectedCounts(data);
 }
 
+/** Checks the shape of a parsed export file. */
 export function parseMigrationExport(text: string): MigrationExport {
   const data = parseJson(text, "export file") as Partial<MigrationExport> | null;
   if (data?.version !== 1 || !isRecord(data.items) || !Array.isArray(data.outbox)) throw wrongFormat();

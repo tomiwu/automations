@@ -3,7 +3,7 @@ import { handleDashboard } from "../dashboard.ts";
 import { dashboardDeps } from "./common.ts";
 
 /**
- * Serves the Dashboard (read view). Sign in with a user from the allowlist.
+ * Serves the Dashboard (read view). Open it in a browser after `./configure`. Sign in with a user from the allowlist.
  *
  * @param request - The HTTP request for the hosted app. The mount prefix is already removed.
  * @returns An HTML page, a redirect, or a plain-text error.

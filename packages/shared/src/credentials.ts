@@ -1,3 +1,10 @@
+/**
+ * Encryption of the service credentials (logins and passwords of Librus and the Activity apps) that live in
+ * Supabase. AES-256-GCM with a random 96-bit IV. The additional data binds a ciphertext to its Family and name,
+ * so a ciphertext copied to another row does not decrypt.
+ *
+ * Format: `v1.<base64 iv>.<base64 ciphertext and tag>`. The key is 32 random bytes in base64.
+ */
 const VERSION = "v1";
 const encoder = new TextEncoder();
 
@@ -16,6 +23,7 @@ export async function importCredentialKey(keyBase64: string): Promise<CryptoKey>
   return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
+/** Makes a new random credential key (base64). */
 export function newCredentialKey(): string {
   return toBase64(crypto.getRandomValues(new Uint8Array(32)));
 }

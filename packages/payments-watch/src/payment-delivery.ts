@@ -1,3 +1,9 @@
+/**
+ * Delivers the Payment Notifications of the Outbox (keys `payment:<id>:<chat>` and `payment:<id>:<chat>:reminder`)
+ * through the Notifier: a QR photo with a caption and the buttons Paid and Skip. The reminder uses the same path,
+ * and its caption starts with the reminder marker. The QR is built at send time from the Fee and the current
+ * amount of the Payment. It is never read from the Journal or from `./stored-payments`.
+ */
 import type { Fee, OutboxEntry, Payment, StorageAdapter } from "@automations/librus-data";
 import type { Child, Config, Recipient } from "@automations/shared";
 import type { Notifier } from "./notifier.ts";
@@ -11,6 +17,7 @@ export interface PaymentDeliveryDeps {
   log?: (message: string) => void;
 }
 
+/** True for an Outbox key of a Payment Notification. */
 export const isPaymentKey = (key: string): boolean => PAYMENT_KEY.test(key);
 
 interface Target {
@@ -37,6 +44,7 @@ function targetOf(entry: OutboxEntry, lookup: Lookup): Target {
   return { entry, reminder: Boolean(reminder), payment, fee, child, recipient };
 }
 
+/** Why an entry is not sent: no data, a decided Payment, or a Notification that went out already. */
 function isComplete(target: Target): target is Required<Target> {
   return Boolean(target.payment && target.fee && target.child && target.recipient);
 }
@@ -60,6 +68,7 @@ async function send(deps: PaymentDeliveryDeps, target: Required<Target>): Promis
   if (typeof messageId === "number") await storeMessageId(deps, target.entry.key, messageId);
 }
 
+/** Keeps the message ID for the later edit of a cancel. A failed write is logged: the message is sent already. */
 async function storeMessageId(deps: PaymentDeliveryDeps, key: string, messageId: number): Promise<void> {
   try {
     await deps.storage.recordMessageId(key, messageId);
@@ -100,6 +109,11 @@ async function lookupOf(deps: PaymentDeliveryDeps): Promise<Lookup> {
   return { config, payments: new Map(payments.map((p) => [p.id, p])), fees: new Map(fees.map((f) => [f.id, f])) };
 }
 
+/**
+ * Sends each queued Payment Notification as a QR photo. A decided Payment, or a Notification whose time is set
+ * already, is not sent: its entry is marked delivered. A failed send holds back its chat and keeps the entry.
+ * Returns the keys that were sent (for `recordSent`) and the first failure, after all chats are tried.
+ */
 export async function deliverPaymentPhotos(deps: PaymentDeliveryDeps): Promise<{ sent: string[]; failure?: unknown }> {
   const queue = (await deps.storage.pendingNotifications(deps.familyId)).filter((entry) => isPaymentKey(entry.key));
   if (queue.length === 0) return { sent: [] };
@@ -116,6 +130,7 @@ export async function deliverPaymentPhotos(deps: PaymentDeliveryDeps): Promise<{
   return run.failures.length > 0 ? { sent: run.sent, failure: run.failures[0] } : { sent: run.sent };
 }
 
+/** The storage for the text delivery: it does not see the Payment entries, so they are never sent as text. */
 export function withoutPaymentEntries(storage: StorageAdapter): StorageAdapter {
   return {
     ...storage,

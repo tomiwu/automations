@@ -1,5 +1,12 @@
 #!/usr/bin/env node
+// Publishes one Kody package and waits until the publish is done.
 //   node tools/kody-deploy/kody-publish.mjs <@owner/name>
+// It calls the same Open API operations as `kody package publish`: packageList (GET /v1/packages) and
+// packagePublishExternalPush (POST /v1/packages/{package_id}/external-push).
+// The publish is always durable: Kody answers "dispatched" with a workflow_id. The real answer (published,
+// already_published or a refusal) is in the result of packageRunResult (GET /v1/packages/runs/{workflow_id}),
+// which needs only the token scope package:read. A refused publish ends the run "errored" with the reason in
+// last_error. An active publish is deduped by Kody, so a second POST joins the same run.
 // Exit codes: 0 published or already_published, 1 refused, failed or not done in time.
 // Environment: KODY_API_TOKEN (required, never printed), KODY_API_URL (default https://api.kody.codes),
 // KODY_PUBLISH_POLL_MS (default 10000), KODY_PUBLISH_WAIT_MS (default 300000).
@@ -18,6 +25,7 @@ async function pause() {
   await sleep(pollMs);
 }
 
+/** Calls until Kody gives a usable answer. It waits and tries again on 5xx, 429 and network errors. */
 async function until(what, method, path, payload) {
   for (;;) {
     const r = await call(method, path, payload, 120000);
@@ -37,11 +45,13 @@ async function packageId() {
 
 const show = (body) => log(JSON.stringify(Object.fromEntries(SHOWN.map((key) => [key, body[key] ?? null]))));
 
+/** Returns a published or already_published answer; any other status is a refusal and throws. */
 function judge(body) {
   if (DONE.has(body.status)) return body;
   throw new Error(`publish refused: status=${body.status}${body.message ? ` (${body.message})` : ""}`);
 }
 
+/** Logs last_error; a run that ended without a result throws. */
 function stopIfEnded(run, workflowId) {
   if (run.last_error) log(`last_error: ${run.last_error}`);
   if (FINAL.has(run.status) || run.status === null) {
@@ -59,6 +69,7 @@ async function waitForRun(workflowId) {
   }
 }
 
+/** The final answer: the first reply, or the result of the dispatched run. */
 async function answer(start) {
   if (start.status !== "dispatched") return judge(start);
   if (!start.workflow_id) throw new Error("publish dispatched without workflow_id");

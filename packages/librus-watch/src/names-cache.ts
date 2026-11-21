@@ -1,5 +1,12 @@
+/**
+ * The cache of the Librus names behind IDs (teachers, subjects, homework categories). A name changes rarely, so
+ * one lookup is good for 7 days. The cache lives in the package storage, one entry for each Account.
+ */
+
+/** Time a cached name stays valid. */
 export const NAME_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** The key-value storage of the package. `KodyStorage` of `@automations/shared/kody` fits it. */
 export interface NameStore {
   get(key: string): Promise<unknown>;
   set(key: string, value: string): Promise<unknown>;
@@ -7,18 +14,24 @@ export interface NameStore {
 
 export interface NameCacheOptions {
   store: NameStore;
+  /** The storage key of this Account. */
   key: string;
   ttlMs?: number;
 }
 
+/** A cache for the names of one Account. A broken storage never fails a run: it only costs fetches. */
 export interface NameCache {
+  /** The name for a key such as `Users/12`, or undefined when it is missing or too old. */
   find(name: string): Promise<string | undefined>;
   save(name: string, value: string): Promise<void>;
+  /** Writes the new names to the storage in one call. It does nothing when nothing is new. */
   flush(): Promise<void>;
 }
 
+/** The storage key of the cache of one Account. */
 export const nameCacheKey = (accountId: string): string => `librus-names:${accountId}`;
 
+/** The cache options of one Account, or undefined when the run has no storage for names. */
 export const nameOptionsFor = (store: NameStore | undefined, accountId: string): NameCacheOptions | undefined =>
   store && { store, key: nameCacheKey(accountId) };
 

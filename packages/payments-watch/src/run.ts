@@ -15,13 +15,20 @@ export interface RunDeps {
   messenger: Messenger;
   familyId: string;
   source: FeeSource;
+  /** The package storage for the counters of the Organizer cancel. Without it, an Organizer page cancels nothing. */
   counters?: CounterStore;
+  /**
+   * With a Notifier, the Payment Notifications and reminders go out as QR photos with Paid and Skip, and the text
+   * delivery does not see them. Without it, they go out as text (the old path).
+   */
   notifier?: Notifier;
+  /** With a client, the sent QR messages of a cancelled Payment are edited (payments contract v0.2 section 3b, PC4). */
   client?: TelegramClient;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+/** Sends the Payment photos. Returns the sent keys; a failure goes to `failures`. */
 async function deliverPhotos(deps: RunDeps, storage: StorageAdapter, failures: string[]): Promise<string[]> {
   if (!deps.notifier) return [];
   try {
@@ -34,6 +41,7 @@ async function deliverPhotos(deps: RunDeps, storage: StorageAdapter, failures: s
   }
 }
 
+/** Edits the QR messages of the cancelled Payments. A failure goes to `failures`. */
 async function editCancelled(deps: RunDeps, failures: string[]): Promise<void> {
   if (!deps.client) return;
   try {
@@ -43,6 +51,10 @@ async function editCancelled(deps: RunDeps, failures: string[]): Promise<void> {
   }
 }
 
+/**
+ * Logs each failure. A failure on the Kody fetch limit is a warning, not a failure of the pass: the next pass
+ * does the work again. Returns the other failures.
+ */
 function reportFailures(runtime: Runtime, failures: readonly string[]): string[] {
   for (const failure of failures) {
     runtime.log(isFetchCapError(failure) ? "warn" : "error", isFetchCapError(failure) ? `fetch cap: ${failure}` : failure);
@@ -50,6 +62,11 @@ function reportFailures(runtime: Runtime, failures: readonly string[]): string[]
   return failures.filter((failure) => !isFetchCapError(failure));
 }
 
+/**
+ * Runs one scheduled pass: the Payment engine, then the delivery of the Outbox to the Recipients.
+ * Returns the failure texts. The caller rejects when the list is not empty. A failure on the Kody fetch
+ * limit is logged but not returned, so the job does not fail on the weekly cap.
+ */
 export async function runPaymentsWatch(deps: RunDeps): Promise<string[]> {
   const { runtime, storage, familyId } = deps;
   const failures: string[] = [];

@@ -1,6 +1,7 @@
 import { localDate } from "@automations/shared";
 import { detailHash, type ItemDetail, type ItemKind } from "@automations/librus-data";
 
+/** Days before now that the default `since` goes back. */
 export const DEFAULT_SINCE_DAYS = 7;
 
 export interface EventsInput {
@@ -31,6 +32,7 @@ const RANGE = /^(\d{4}-\d{2}-\d{2}) - (\d{4}-\d{2}-\d{2})$/m;
 const RANGE_KINDS: readonly ItemKind[] = ["trip", "dayOff"];
 const DATELESS_KINDS: readonly ItemKind[] = ["announcement", "message"];
 
+/** Checks a `YYYY-MM-DD` input value. */
 export function checkDay(name: string, value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "string" || !DAY.test(value) || Number.isNaN(Date.parse(value))) {
@@ -39,6 +41,7 @@ export function checkDay(name: string, value: unknown): string | undefined {
   return value;
 }
 
+/** Checks the ISO time input `since`. Without it the time is 7 days before `now`. */
 export function checkSince(value: unknown, now: Date): Date {
   if (value === undefined) return new Date(now.getTime() - DEFAULT_SINCE_DAYS * 86_400_000);
   const since = typeof value === "string" ? new Date(value) : new Date(Number.NaN);
@@ -46,18 +49,22 @@ export function checkSince(value: unknown, now: Date): Date {
   return since;
 }
 
+/** The last day in the date range line of a text, or null. */
 export const rangeEnd = (text: string): string | null => RANGE.exec(text)?.[2] ?? null;
 
+/** The last day of a trip or a day off, read from the date range line of its text. Else null. */
 function endDateOf(detail: ItemDetail): string | null {
   if (!RANGE_KINDS.includes(detail.kind)) return null;
   return rangeEnd(detail.text);
 }
 
+/** The event date. An announcement or a message without a date gets the local day of `firstSeen`. */
 function dateOf(detail: ItemDetail, timezone: string): string | null {
   if (detail.date !== null || !DATELESS_KINDS.includes(detail.kind)) return detail.date;
   return localDate(detail.firstSeen, timezone);
 }
 
+/** Makes one event from a stored detail. The `id` has the kind, the source ID and the content hash. */
 export async function toEvent(detail: ItemDetail, timezone: string): Promise<CalendarEvent> {
   return {
     id: `${detail.kind}:${detail.sourceId}@${await detailHash(detail)}`,
@@ -78,6 +85,7 @@ export async function toEvent(detail: ItemDetail, timezone: string): Promise<Cal
 
 const byDate = (a: CalendarEvent, b: CalendarEvent): number => (a.date ?? "").localeCompare(b.date ?? "");
 
+/** Sorts by `firstSeen`, then by `date`. */
 export function sortEvents(events: CalendarEvent[]): CalendarEvent[] {
   return events.sort((a, b) => a.firstSeen.localeCompare(b.firstSeen) || byDate(a, b));
 }

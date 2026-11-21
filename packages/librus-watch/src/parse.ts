@@ -15,6 +15,7 @@ export const day = (value: unknown): string => (typeof value === "string" ? valu
 export const time = (value: unknown): string => (typeof value === "string" ? value.slice(0, 5) : "");
 const text = (value: unknown): string => clean(String(value ?? ""));
 
+/** Returns the ID in a reference such as `{ Id: 5 }`, or an empty string. */
 export const idOf = (ref: unknown): string =>
   ref === undefined || ref === null ? "" : String((ref as { Id?: unknown }).Id ?? "");
 
@@ -24,6 +25,7 @@ function arrayAt(json: string, field: string): Json[] {
   return data as Json[];
 }
 
+/** Reads the `Label: value` lines of the `title` attribute of a grade link. Lines are split by `<br>`. */
 function gradeTitleFields(title: string | undefined): Record<string, string> {
   const fields: Record<string, string> = {};
   for (const line of (title ?? "").split(/<br\s*\/?>/i)) {
@@ -70,6 +72,7 @@ export function parseMessages(html: string): MessageItem[] {
   return items;
 }
 
+/** Returns the text of an opened message. Line breaks stay. Blank lines are limited to one. */
 export function parseMessageBody(html: string): string {
   const $ = cheerio.load(html);
   const element = $(".container-message-content").first();
@@ -97,6 +100,7 @@ function announcementFields($: cheerio.CheerioAPI, table: Parameters<cheerio.Che
   return fields;
 }
 
+/** Librus gives no announcement ID, so the ID is the publication time and the title. */
 export function parseAnnouncements(html: string): AnnouncementItem[] {
   const $ = cheerio.load(html);
   const items: AnnouncementItem[] = [];
@@ -116,6 +120,7 @@ export function parseAnnouncements(html: string): AnnouncementItem[] {
   return items;
 }
 
+/** Trips from a `SchoolTrips` answer: a `Data` array with lowercase keys. */
 export function parseTrips(json: string): TripItem[] {
   return arrayAt(json, "Data").map((trip) => ({
     id: String(trip.id),
@@ -128,6 +133,7 @@ export function parseTrips(json: string): TripItem[] {
   }));
 }
 
+/** A HomeWorks entry as Librus sends it: category, subject and teacher are still IDs. */
 export interface RawHomework {
   id: string;
   content: string;
@@ -148,6 +154,7 @@ export function parseHomeworks(json: string): RawHomework[] {
   }));
 }
 
+/** A teacher absence as Librus sends it: the teacher is still an ID. */
 export interface RawAbsence {
   id: string;
   teacherId: string;
@@ -171,10 +178,12 @@ function absenceOf(entry: Json): RawAbsence {
   };
 }
 
+/** Absences from a `TeacherFreeDays` answer. One entry covers the whole range of an absence. */
 export function parseAbsences(json: string): RawAbsence[] {
   return arrayAt(json, "TeacherFreeDays").map(absenceOf);
 }
 
+/** A substitution as Librus sends it: subjects and teachers are still IDs. */
 export interface RawSubstitution {
   id: string;
   date: string;
@@ -211,6 +220,7 @@ function lessonStatus(lesson: Json): Lesson["status"] {
   return lesson.IsSubstitutionClass === true ? "substitution" : "normal";
 }
 
+/** For a substitution `Teacher` is the substitute and `OrgTeacher` is the planned teacher. */
 function lessonTeachers(lesson: Json): Pick<Lesson, "teacher" | "substituteTeacher"> {
   const current = personName(lesson.Teacher);
   if (lesson.IsSubstitutionClass !== true) return { teacher: current, substituteTeacher: "" };
@@ -232,6 +242,7 @@ function lessonOf(date: string, lesson: Json): Lesson {
   };
 }
 
+/** Lessons from a `Timetables` answer. `Timetable` maps each date to its periods. A free period is an empty list. */
 export function parseTimetable(json: string): Lesson[] {
   const days: unknown = (JSON.parse(json) as Json).Timetable;
   if (typeof days !== "object" || days === null) {
@@ -242,6 +253,7 @@ export function parseTimetable(json: string): Lesson[] {
   );
 }
 
+/** A parent-teacher meeting as Librus sends it: the teacher is still an ID. */
 export interface RawMeeting {
   id: string;
   date: string;
@@ -252,6 +264,7 @@ export interface RawMeeting {
   teacherId: string;
 }
 
+/** Meetings from a `ParentTeacherConferences` answer. Missing fields become empty text. */
 export function parseParentTeacherConferences(json: string): RawMeeting[] {
   return arrayAt(json, "ParentTeacherConferences").map((entry) => ({
     id: String(entry.Id),
@@ -264,6 +277,7 @@ export function parseParentTeacherConferences(json: string): RawMeeting[] {
   }));
 }
 
+/** A day off as Librus sends it. The name can be missing. */
 export interface RawDayOff {
   id: string;
   from: string;
@@ -276,6 +290,8 @@ function dayOffOf(entry: Json): RawDayOff {
   return { id: String(entry.Id), from, to: day(entry.DateTo) || from, name: text(entry.Name) };
 }
 
+/** Days off of the whole school from a `SchoolFreeDays` answer. */
 export const parseSchoolFreeDays = (json: string): RawDayOff[] => arrayAt(json, "SchoolFreeDays").map(dayOffOf);
 
+/** Days off of the class from a `ClassFreeDays` answer. */
 export const parseClassFreeDays = (json: string): RawDayOff[] => arrayAt(json, "ClassFreeDays").map(dayOffOf);

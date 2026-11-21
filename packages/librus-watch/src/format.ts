@@ -12,8 +12,10 @@ import type {
   TripItem,
 } from "./types.ts";
 
+/** What a Notification is about: an Item seen the first time, or a seen Item that changed. */
 export type ItemChange = "new" | "updated";
 
+/** Everything a formatter needs: the language of the Recipient and the name of the Child. */
 export interface FormatContext {
   language: Language;
   child: string;
@@ -61,6 +63,7 @@ export function formatHomework({ language, child }: FormatContext, homework: Hom
   return withBody(head, truncated(homework.content));
 }
 
+/** Returns the teacher, the range and any time span of an absence, as one line. */
 function absenceDetails(absence: AbsenceItem): string {
   const span = absence.timeFrom === "" && absence.timeTo === "" ? "" : `${absence.timeFrom}-${absence.timeTo}`;
   return [absence.teacher, rangeText(absence.from, absence.to), span].filter((part) => part !== "").join(", ");
@@ -72,6 +75,7 @@ export function formatAbsence({ language, child }: FormatContext, absence: Absen
   return absence.addedAt === "" ? head : `${head}\n${t(language, "absence.added", { date: absence.addedAt })}`;
 }
 
+/** Returns "was -> now", or one of them when the other is empty or the same. */
 function replaced(was: string, now: string): string {
   if (now === "" || now === was) return was;
   return was === "" ? now : `${was} -> ${now}`;
@@ -89,6 +93,7 @@ function substitutionLine(language: Language, item: SubstitutionItem): string {
 
 const byLesson = (a: SubstitutionItem, b: SubstitutionItem): number => Number(a.lessonNo) - Number(b.lessonNo);
 
+/** One text for all new substitutions of one day. The lessons are in order. */
 export function formatSubstitutions({ language, child }: FormatContext, date: string, items: SubstitutionItem[]): string {
   const lines = [...items].sort(byLesson).map((item) => substitutionLine(language, item));
   return [t(language, "substitutions.heading", { child, date }), ...lines].join("\n");
@@ -119,6 +124,7 @@ export function formatLoginError({ language, child }: FormatContext): string {
   return t(language, "error.login", { child });
 }
 
+/** One short line for a parent-teacher meeting, for the morning report. */
 export function formatMeetingLine(language: Language, meeting: MeetingItem): string {
   const span = meeting.end === "" ? meeting.start : `${meeting.start}-${meeting.end}`;
   const when = [meeting.date, span].filter((part) => part !== "").join(" ");
@@ -126,6 +132,7 @@ export function formatMeetingLine(language: Language, meeting: MeetingItem): str
   return t(language, "meeting.line", { when, topic: meeting.topic, details: inBrackets(details) });
 }
 
+/** One short line for a day off of the school or the class, for the morning report. */
 export function formatDayOffLine(language: Language, dayOff: DayOffItem): string {
   return t(language, "dayoff.line", { dates: rangeText(dayOff.from, dayOff.to), name: dayOff.name });
 }

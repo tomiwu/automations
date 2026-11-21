@@ -1,5 +1,6 @@
 import type { FetchFn } from "./runtime.ts";
 
+/** How many outbound fetches a run made, in total and for each host. */
 export interface FetchCount {
   total: number;
   hosts: Record<string, number>;
@@ -19,6 +20,7 @@ function hostOf(input: string): string {
   }
 }
 
+/** Wraps a fetch and counts the calls for each host. One counter is for one run. */
 export function countFetches(wrapped: FetchFn): FetchCounter {
   const hosts: Record<string, number> = {};
   let total = 0;

@@ -1,3 +1,4 @@
+/** Form-encodes text the way `URLSearchParams` does (a space becomes `+`). */
 const plain = (text: string): string => new URLSearchParams({ x: text }).toString().slice(2);
 
 const PLACEHOLDER = /\{\{\s*secret[^}]*\}\}/g;

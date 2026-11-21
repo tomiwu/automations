@@ -34,6 +34,7 @@ function nextInit(init: RequestInit | undefined, status: number): RequestInit | 
   return { ...init, method: "GET", body: undefined };
 }
 
+/** Creates a session on top of a fetch function. It sends and stores cookies for each host. */
 export function createHttpSession(baseFetch: FetchFn): HttpSession {
   const jar = new Map<string, Map<string, string>>();
 

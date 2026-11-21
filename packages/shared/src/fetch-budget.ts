@@ -1,13 +1,24 @@
+/**
+ * The Kody free plan allows 2500 outbound fetches in a UTC week and 1000 in a UTC day, for all jobs together.
+ * Kody does not give the used count to package code. So each package keeps a ledger in its package storage:
+ * the fetches it made in the current UTC week, and the UTC day when a fetch failed on the plan limit.
+ * The ledger is an estimate. It does not see the fetches of other packages or of agent calls.
+ */
+
+/** The default number of fetches that a watcher keeps free for the time-critical jobs. */
 export const DEFAULT_FETCH_RESERVE = 150;
+/** The weekly fetch limit of the Kody free plan. */
 export const WEEKLY_FETCH_LIMIT = 2500;
 
 const CAP_ERROR = /EntitlementLimitError|plan limit reached/i;
 
+/** True when the error (or its text) is the Kody plan-limit error of a fetch. */
 export function isFetchCapError(error: unknown): boolean {
   const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   return CAP_ERROR.test(text);
 }
 
+/** The key-value storage of the package. `KodyStorage` of `@automations/shared/kody` fits it. */
 export interface LedgerStore {
   get(key: string): Promise<unknown>;
   set(key: string, value: string): Promise<unknown>;
@@ -17,6 +28,7 @@ export interface FetchLedger {
   /** The Monday (`YYYY-MM-DD`, UTC) of the week of the count. */
   week: string;
   used: number;
+  /** The UTC day (`YYYY-MM-DD`) when a fetch failed on the plan limit. */
   capHitDay?: string;
 }
 
@@ -24,6 +36,7 @@ export const LEDGER_KEY = "fetch-ledger";
 
 const DAY_MS = 86_400_000;
 
+/** The UTC day `YYYY-MM-DD` of a time. */
 export const utcDay = (date: Date): string => date.toISOString().slice(0, 10);
 
 /** The Monday (`YYYY-MM-DD`, UTC) of the UTC week of a time. */
@@ -49,6 +62,7 @@ export async function loadLedger(store: LedgerStore, now: Date): Promise<FetchLe
   return typeof stored.capHitDay === "string" ? { week, used: stored.used, capHitDay: stored.capHitDay } : { week, used: stored.used };
 }
 
+/** The fetch budget of one package. */
 export interface FetchBudget {
   /** The fetches that stay in the week. It is 0 on a UTC day when a fetch failed on the plan limit. */
   remaining(): Promise<number>;
@@ -62,6 +76,7 @@ export interface FetchBudgetOptions {
   limit?: number;
 }
 
+/** Makes the fetch budget that reads and writes the ledger in the package storage. */
 export function createFetchBudget({ store, now, limit = WEEKLY_FETCH_LIMIT }: FetchBudgetOptions): FetchBudget {
   return {
     async remaining() {
@@ -84,4 +99,5 @@ export async function belowReserve(budget: FetchBudget | undefined, reserve = DE
   return (await budget.remaining()) < reserve;
 }
 
+/** The log line of the skipped optional parts. */
 export const formatReserveSkip = (parts: readonly string[]): string => `budget reserve: skipped ${parts.join(", ")}`;

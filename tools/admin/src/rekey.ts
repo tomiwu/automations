@@ -1,6 +1,7 @@
 import { decryptCredential, encryptCredential, importCredentialKey } from "@automations/shared";
 import type { RestClient, Row } from "./rest.ts";
 
+/** The default origin of a Librus account. `setup-credentials` left it empty on old rows. */
 export const LIBRUS_ORIGIN = "https://synergia.librus.pl";
 
 export interface RekeyDeps {
@@ -13,11 +14,16 @@ export interface RekeyDeps {
 
 export type CredentialStatus = "ok" | "does not decrypt" | "missing";
 
+/**
+ * Cleans a value from `.env` or from the terminal. It removes a trailing CR or LF (a `.env` with Windows line
+ * ends gives every value a trailing CR). A login (`*_EMAIL`, `*_USER`, `*_LOGIN`) has no spaces, so it is trimmed.
+ */
 export function cleanValue(name: string, raw: string | undefined): string {
   const value = (raw ?? "").replace(/[\r\n]+$/, "");
   return /_(EMAIL|USER|LOGIN)$/.test(name) ? value.trim() : value;
 }
 
+/** All credential names of the Family: the secret names of its accounts and the names already stored. */
 export function credentialNames(accounts: readonly Row[], stored: readonly Row[]): string[] {
   const fromAccounts = accounts.flatMap((account) => [account.login_secret, account.password_secret]);
   const isName = (value: unknown): value is string => typeof value === "string" && value !== "";
@@ -34,6 +40,7 @@ async function decryptOrEmpty(key: CryptoKey | undefined, familyId: string, name
   }
 }
 
+/** Value order: the environment, then the old stored value (if the old key opens it), then the terminal. */
 async function valueOf(deps: RekeyDeps, oldKey: CryptoKey | undefined, familyId: string, name: string, sealed: unknown): Promise<string> {
   const fromEnv = cleanValue(name, deps.env[name]);
   if (fromEnv !== "") return fromEnv;
@@ -51,6 +58,7 @@ async function optionalKey(value: string | undefined): Promise<CryptoKey | undef
   }
 }
 
+/** Checks each name with the new key. Prints only the name and its status. */
 export async function verifyAll(deps: RekeyDeps, key: CryptoKey, familyId: string, names: readonly string[]): Promise<number> {
   const rows = await deps.rest.select("credentials", `select=name,ciphertext&family_id=eq.${encodeURIComponent(familyId)}`);
   const sealed = new Map(rows.map((row) => [String(row.name), row.ciphertext]));
@@ -67,6 +75,10 @@ export async function verifyAll(deps: RekeyDeps, key: CryptoKey, familyId: strin
   return bad;
 }
 
+/**
+ * Encrypts every credential of the Family again with NEW_CREDENTIAL_KEY in one upsert, sets the Librus origin
+ * where it is empty, and verifies. It never prints a value. Returns the number of names that are not "ok".
+ */
 export async function rekey(deps: RekeyDeps, familyId: string): Promise<number> {
   const newKey = await importCredentialKey(cleanValue("KEY", deps.env.NEW_CREDENTIAL_KEY).trim());
   const oldKey = await optionalKey(deps.env.CREDENTIAL_KEY);

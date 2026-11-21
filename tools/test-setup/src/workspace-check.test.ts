@@ -7,6 +7,7 @@ import { checkWorkspaceResolution, findUp, isInside, OUTSIDE_MESSAGE } from "./w
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
+/** A fake checkout: a root package.json with workspaces, packages/shared and packages/watch. */
 function checkout(): string {
   const root = mkdtempSync(join(tmpdir(), "ws-check-"));
   dirs.push(root);

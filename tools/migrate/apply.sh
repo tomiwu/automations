@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Apply the SQL files of supabase/migrations in name order.
 # Usage: tools/migrate/apply.sh [migrations-dir]
 # The connection string comes from SUPABASE_DB_URL. The script never prints it.
 set -euo pipefail

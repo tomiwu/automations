@@ -8,6 +8,7 @@ import { runPayments } from "./engine.ts";
 import type { FeeSource } from "./fee-source.ts";
 import type { TelegramClient, TelegramParams } from "./notifier.ts";
 
+// Issue #199: PaymentCancelled (payments contract v0.2). Invented data only.
 const FAMILY_ID = "00000000-0000-4000-8000-000000000001";
 const CHILD1 = "00000000-0000-4000-8000-0000000000c1";
 const CHILD2 = "00000000-0000-4000-8000-0000000000c2";

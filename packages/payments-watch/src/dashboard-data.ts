@@ -6,8 +6,10 @@ export interface DashboardRow {
   organizer: string;
   month: string;
   dueDate: string;
+  /** Grosze. */
   amount: number;
   status: Payment["status"];
+  /** The Organizer no longer lists this paid charge (payments contract v0.2, PC2). */
   refundCheck: boolean;
 }
 
@@ -26,6 +28,7 @@ export interface SchoolYearSpend {
 export interface Dashboard {
   paid: DashboardRow[];
   unpaid: DashboardRow[];
+  /** History only: not in "next due" and not in spend (payments contract v0.2, PC3). */
   cancelled: DashboardRow[];
   nextDue: DashboardRow[];
   spendByMonth: MonthSpend[];
@@ -36,11 +39,13 @@ export interface DashboardInput {
   children: readonly { id: string; name: string }[];
   fees: readonly Fee[];
   payments: readonly Payment[];
+  /** The date in the Family time zone, `YYYY-MM-DD`. */
   today: string;
 }
 
 const pad = (value: number): string => String(value).padStart(2, "0");
 
+/** The school year of a month `YYYY-MM` (September to June), for example "2025/2026". July and August give null. */
 export function schoolYearOf(month: string): string | null {
   const year = Number(month.slice(0, 4));
   const number = Number(month.slice(5, 7));
@@ -85,6 +90,10 @@ function sumBy<K extends { child: string }>(rows: readonly DashboardRow[], keyOf
   return [...sums.values()].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }
 
+/**
+ * Builds the read view of the Dashboard. Spend counts `paid` Payments only. A Payment of a Fee or Child that is
+ * not known is left out.
+ */
 export function buildDashboard(input: DashboardInput): Dashboard {
   const rows = rowsOf(input);
   const paid = rows.filter((row) => row.status === "paid");

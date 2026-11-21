@@ -17,6 +17,7 @@ export interface CancelReason {
 
 export interface StoredLesson extends Lesson {
   id: string;
+  /** The Journal `child_id`. */
   childId: string;
   stream: string;
   cancelled: boolean;
@@ -30,6 +31,7 @@ export interface StoredLesson extends Lesson {
 
 export interface StoredHomework {
   id: string;
+  /** The Journal `child_id`. */
   childId: string;
   stream: string;
   category: string;
@@ -122,6 +124,7 @@ function dayOffOf(head: StreamState): DayOff | null {
   return { ...dayOffRange(date, text), reason: { reason: "day_off", sourceStream: head.stream, sourceId: String(sourceId) } };
 }
 
+/** A Lesson inside a day off (from Librus, or confirmed with `admin add-day-off`) is cancelled. A day off wins over the timetable. The Lesson stays in the list. */
 function withDaysOff(lessons: StoredLesson[], daysOff: DayOff[]): StoredLesson[] {
   return lessons.map((lesson) => {
     const dayOff = daysOff.find((d) => d.from <= lesson.date && lesson.date <= d.to);
@@ -140,6 +143,10 @@ function checkOf(heads: JournalEvent[]): Pick<StoredLessonsExport, "lastSavedAt"
   };
 }
 
+/**
+ * Read-only export: the Lessons and homework of one Child as the Journal stores them. It reads Supabase only:
+ * no Librus login. Vanished entries stay in the result with `vanished: true`.
+ */
 export async function storedLessonsExport(deps: ExportDeps, input: unknown = {}): Promise<StoredLessonsExport & { fetches?: FetchCount }> {
   const object = inputObject(input);
   checkKeys(object, ["childId", "from", "to"]);

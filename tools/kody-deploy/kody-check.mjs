@@ -1,6 +1,11 @@
 #!/usr/bin/env node
+// Runs the Kody publish checks (durable flow, saves nothing) with retries.
 //   node tools/kody-deploy/kody-check.mjs <check.json> <result.json>
 // <check.json> is { "files": { path: utf8 }, "binary_contents"?: { path: base64 } }, paths relative to the package root.
+// Flow (the same as `kody package check` in @kodycodes/cli >= 3.46.0):
+//   1. POST /v1/packages/check-uploads  { files, binary_contents }  -> { upload_id }
+//   2. POST /v1/packages/check          { upload_id }               -> { status: "dispatched", workflow_id }
+//   3. GET  /v1/packages/runs/{workflow_id} until result is an object or the run has a final status.
 // The final result ({ ok, package_name, checks, notices }) is written to <result.json>.
 // Exit codes: 0 checks ok, 1 checks failed or the request was refused (4xx), 3 Kody did not answer
 // (5xx, 429, network error or timeout after all attempts, a run that ended without a result, or the wait limit).
@@ -20,6 +25,7 @@ const waitMs = Number(process.env.KODY_CHECK_WAIT_MS ?? 540000);
 const deadline = performance.now() + waitMs;
 const left = () => deadline - performance.now();
 
+/** A fatal outcome with its exit code. */
 class Stop extends Error {
   constructor(code, message) {
     super(message);
@@ -27,6 +33,7 @@ class Stop extends Error {
   }
 }
 
+/** One request; it never waits past the wait limit. */
 const request = (method, path, payload) => call(method, path, payload, Math.min(timeoutMs, left()));
 const describe = (r) => (r.status === 0 ? `no answer (${redact(r.text)})` : `HTTP ${r.status}`);
 
@@ -35,6 +42,7 @@ async function pause(ms) {
   await sleep(ms);
 }
 
+/** Calls one operation. It retries on 5xx, 429 and network errors; a 4xx stops with exit 1. */
 async function step(label, method, path, payload) {
   for (let i = 0; i <= delays.length; i++) {
     const r = await request(method, path, payload);
@@ -56,6 +64,7 @@ function miss(why) {
   return null;
 }
 
+/** Reads the run once. Returns the run, or null when it is not known yet or Kody gave no answer. */
 async function readRun(workflowId) {
   const r = await request("GET", runPath(workflowId));
   if (usable(r)) return r.json.status == null ? miss("not known yet") : r.json;
@@ -63,6 +72,7 @@ async function readRun(workflowId) {
   throw new Stop(1, refusal("Kody check run", r));
 }
 
+/** The result of the run, or null while it runs. A run that ended without a result stops with exit 3. */
 function resultOf(run, workflowId) {
   if (!run) return null;
   if (hasResult(run)) return run.result;

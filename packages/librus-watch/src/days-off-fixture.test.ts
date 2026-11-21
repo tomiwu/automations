@@ -7,6 +7,7 @@ import { createLibrusSource } from "./source.ts";
 import { storedLessonsExport } from "./stored-lessons.ts";
 import { CHILD1, FAMILY_ID, testConfig } from "./test-fixtures.ts";
 
+// Issue #201: Librus-shaped fixture data → producer → memory storage → ./stored-lessons. No network.
 const NOW = new Date("2026-11-09T05:00:00Z");
 
 function setup(data: FixtureData) {

@@ -7,6 +7,7 @@ import type { FeeSource } from "./fee-source.ts";
 import type { TelegramClient } from "./notifier.ts";
 import { runPaymentsWatch } from "./run.ts";
 
+// Invented data only. One full December cycle with the memory storage (issue #200).
 const FAMILY_ID = "00000000-0000-4000-8000-000000000001";
 const CHILD1 = "00000000-0000-4000-8000-0000000000c1";
 

@@ -35,7 +35,9 @@ import type {
   WatcherName,
 } from "./types.ts";
 
+/** Days the timetable looks ahead, today included. */
 export const TIMETABLE_DAYS = 14;
+/** Days the Terminarz Watchers look back from today. */
 export const WINDOW_DAYS = 7;
 
 type NameKind = "Users" | "Subjects" | "Categories";
@@ -67,6 +69,10 @@ async function fetchName(session: LibrusSession, kind: NameKind, id: string, sav
   return cleaned;
 }
 
+/**
+ * Resolves the name behind an ID. Each ID is fetched once in a run. A failed lookup is not cached. With a
+ * `saved` cache, a name that is less than 7 days old costs no fetch.
+ */
 function createNameLookup(session: LibrusSession, saved?: NameCache): NameLookup {
   const cache = new Map<string, Promise<string>>();
   return (kind, id) => {
@@ -81,6 +87,7 @@ function createNameLookup(session: LibrusSession, saved?: NameCache): NameLookup
   };
 }
 
+/** A short fingerprint (FNV-1a as hex). It is not for security. */
 export function fingerprint(text: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
@@ -156,6 +163,7 @@ const FETCHERS: { [W in FetchedWatcher]: Fetcher<W> } = {
     parseClassFreeDays(await session.json("ClassFreeDays")).filter((d) => d.to >= since).map(dayOffItem),
 };
 
+/** Returns the Monday of each week that has a day between `from` and `to`. */
 export function timetableWeeks(from: string, to: string): string[] {
   const weeks: string[] = [];
   for (let week = addDays(from, 1 - weekdayOf(from)); week <= to; week = addDays(week, 7)) weeks.push(week);
@@ -168,6 +176,7 @@ async function readTimetable(session: LibrusSession, from: string, to: string): 
   return answers.flatMap(parseTimetable).filter((lesson) => lesson.date >= from && lesson.date <= to);
 }
 
+/** A Lesson as an Item. A cancel or a substitution changes the hash, so it is an updated Item. */
 export function lessonItem(lesson: Lesson): LessonItem {
   return { ...lesson, id: `${lesson.date}:${lesson.period}`, hash: `${lesson.status}|${lesson.substituteTeacher}` };
 }
@@ -175,6 +184,7 @@ export function lessonItem(lesson: Lesson): LessonItem {
 export interface LibrusSourceOptions extends SessionOptions {
   /** IANA time zone of the Family. Dates count in this zone. */
   timezone: string;
+  /** Where the names of Users, Subjects and Categories are kept between runs. Without it each run fetches them. */
   names?: NameCacheOptions;
 }
 
@@ -218,6 +228,7 @@ export function createLibrusSource(
   };
 
   const timetables = new Map<string, Promise<TimetableResult>>();
+  /** One read for each range in the life of the source. A second call with the same range makes no fetch. */
   const timetable = (from: string, to: string): Promise<TimetableResult> => {
     const key = `${from}|${to}`;
     const known = timetables.get(key) ?? readOnce(from, to);

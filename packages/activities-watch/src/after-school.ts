@@ -2,6 +2,7 @@ import { t, type Child, type Language } from "@automations/shared";
 import { collectSessions, type CollectDeps } from "./collect-sessions.ts";
 import { timeRange, type Session } from "./sessions.ts";
 
+/** Returns the text of the after-school section of a Child for a day, in the language of a Recipient. */
 export type AfterSchool = (child: Pick<Child, "id" | "name">, day: string, language: Language) => Promise<string>;
 
 function line(language: Language, session: Session): string {
@@ -26,6 +27,7 @@ export function formatAfterSchool(language: Language, childId: string, day: stri
   return [`${t(language, "afterschool.title")}:`, ...body, ...warning].join("\n");
 }
 
+/** Makes the `afterSchool` port of the Morning report of `librus-watch`. It reads only the Accounts of the Child. */
 export function createAfterSchool(deps: CollectDeps): AfterSchool {
   return async (child, day, language) => {
     const { sessions, errors } = await collectSessions(deps, child.id);

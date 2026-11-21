@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { pepperFromDotenv, resolvePepper } from "./pepper.ts";
 import { run } from "./run.ts";
 
+// Throwaway git repositories with invented words and synthetic peppers only.
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 

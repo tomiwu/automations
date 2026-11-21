@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Pre-commit hook: fast checks on the staged changes only. A finding stops the commit.
+#   gitleaks   the staged changes, with the flags and the .gitleaksignore of scripts/ci-local.sh (--redact: no secret value)
+#   privacy    tools/privacy-check on the staged lines. It prints places and categories, never a value.
+#   typecheck  `npm run typecheck` only in the workspaces with a staged file (tools/dev-checks)
+# It does not run the tests and it uses no network. Install it with: scripts/install-hooks.sh
+# Do not use `git commit --no-verify` for this hook.
 #   GITLEAKS  gitleaks binary (default: gitleaks in PATH, else the cache of scripts/install-hooks.sh)
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

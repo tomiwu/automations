@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Tests for .claude/hooks/stop-gate.sh (the Claude Code Stop hook of the loop). No network, no cargo.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$ROOT/.claude/hooks/stop-gate.sh"
@@ -8,7 +9,7 @@ git init -q . && git config user.email t@example.invalid && git config user.name
 echo a > a.txt && git add a.txt && git commit -qm base
 base=$(git rev-parse HEAD)
 fails=0
-expect() {
+expect() { # name want env... -- stdin
   local name="$1" want="$2"; shift 2
   local rc=0
   env CLAUDE_PROJECT_DIR="$tmp" "$@" "$HOOK" <<<"${STDIN:-{\"stop_hook_active\":false\}}" >/dev/null 2>"$errf" || rc=$?

@@ -12,7 +12,9 @@ export interface AdminDeps {
   readFile: (path: string) => Promise<string>;
   now: () => number;
   print: (line: string) => void;
+  /** Reads one value from the terminal without echo. */
   readSecret: (prompt: string) => Promise<string>;
+  /** Reads all of standard input (for `set-credential --stdin`). */
   readStdin: () => Promise<string>;
 }
 
@@ -101,6 +103,7 @@ function intInRange(value: string, min: number, max: number, name: string): numb
   return number;
 }
 
+/** Reads `YYYY-MM=grosze,...`. Each amount is a positive whole number of grosze. */
 export function parseAmounts(value: string): Record<string, number> {
   const amounts: Record<string, number> = {};
   for (const pair of value.split(",").filter((item) => item !== "")) {
@@ -234,6 +237,10 @@ const setCredential: Command = async (flags, _positional, deps) => {
   deps.print(`Saved credential ${name} (encrypted)`);
 };
 
+/**
+ * Compares a value from standard input with the stored credential. It prints only "match" or "no match"
+ * (or why it cannot compare). It never prints the value or the stored plaintext.
+ */
 const verifyCredential: Command = async (flags, _positional, deps) => {
   const familyId = required(flags, "family");
   const name = secretName(required(flags, "name"), "name");
@@ -275,10 +282,12 @@ const rotateKey: Command = async (flags, _positional, deps) => {
   deps.print(`Re-encrypted ${updated.length} credentials. Now call ./configure with the new key in each package.`);
 };
 
+/** Encrypts all credentials again with NEW_CREDENTIAL_KEY and verifies them (see rekey.ts). */
 const rekeyCommand: Command = async (flags, _positional, deps) => {
   const bad = await rekey({ ...deps, rest: deps.rest() }, required(flags, "family"));
   if (bad > 0) throw new Error(`${bad} credential(s) are not ok`);
 };
+
 
 const isoText = (value: unknown): string | null => (value === null || value === undefined ? null : new Date(String(value)).toISOString());
 
@@ -296,6 +305,10 @@ function rowOf(row: Row, childOf: Map<string, string>): ProjectionRow[] {
   }];
 }
 
+/**
+ * Read only. Compares the Journal heads of the `payment:` streams with the `payments` table and prints
+ * each difference (stream, Payment id, field). It prints no amounts and no Fee details.
+ */
 const paymentsConsistency: Command = async (flags, _positional, deps) => {
   const family = `family_id=eq.${encodeURIComponent(required(flags, "family"))}`;
   const rest = deps.rest();
@@ -325,6 +338,10 @@ async function appendOrReport(deps: AdminDeps, event: JournalRow | null, flags: 
   deps.print(`${done}: ${event.stream} (seq ${event.seq})`);
 }
 
+/**
+ * Confirms a day off that a school announced only in a message. It appends one `dayOff` Item event to
+ * `item:manualDaysOff:<child>:<from>`. It never changes or deletes an event.
+ */
 const addDayOff: Command = async (flags, _positional, deps) => {
   const childId = required(flags, "child");
   const from = isoDate(required(flags, "from"), "from");
@@ -340,6 +357,7 @@ const addDayOff: Command = async (flags, _positional, deps) => {
   await appendOrReport(deps, event, flags, "Added day off");
 };
 
+/** Withdraws a manual day off: one `ItemChanged` event with `withdrawn: true`. */
 const removeDayOff: Command = async (flags, _positional, deps) => {
   const childId = required(flags, "child");
   const from = isoDate(required(flags, "from"), "from");

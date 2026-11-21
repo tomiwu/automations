@@ -6,9 +6,11 @@ export type OrganizerType = "activenow" | "edusky" | "mondo" | "plain";
 
 type Row = ReturnType<cheerio.CheerioAPI>;
 
+/** Where a parser finds the list, the charges, the month and the amount of an Organizer page. */
 interface PageSpec {
   list: string;
   rows: string;
+  /** The month `YYYY-MM` of a charge row, or an empty text when the row is not a charge. */
   month(row: Row): string;
   amount: string;
 }
@@ -22,6 +24,7 @@ const activenow: PageSpec = {
   amount: ".an-fee__price",
 };
 
+/** Edusky has the month in a cell, so the row is found by the text of that cell. */
 const edusky: PageSpec = {
   list: "table.edusky-charges",
   rows: "table.edusky-charges tr",
@@ -29,6 +32,7 @@ const edusky: PageSpec = {
   amount: ".sum",
 };
 
+/** Mondo shows the month as "MM.YYYY". */
 const mondo: PageSpec = {
   list: ".mondo-fees",
   rows: ".mondo-fee",

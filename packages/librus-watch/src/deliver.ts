@@ -5,10 +5,14 @@ export interface Messenger {
   send(chatId: string, text: string): Promise<void>;
 }
 
+/** Default time limit of one send, in milliseconds. */
 export const SEND_TIMEOUT_MS = 20_000;
+/** Default time limit of one delivery run, in milliseconds. */
 export const DELIVERY_BUDGET_MS = 60_000;
+/** Telegram accepts at most 4096 characters in one message. */
 const TELEGRAM_CHUNK = 4000;
 
+/** Rejects when the promise does not settle in time. The work itself is not cancelled. */
 export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -38,6 +42,7 @@ export function splitForTelegram(text: string, limit = TELEGRAM_CHUNK): string[]
   return [...chunks, current ?? ""];
 }
 
+/** Removes secret placeholders such as `{{secret:NAME}}` from a text that goes to Telegram. */
 export function redactSecretPlaceholders(text: string): string {
   return text.replace(/\{\{\s*secret[^}]*\}\}/gi, "[secret]");
 }
@@ -49,6 +54,7 @@ export interface DeliveryOptions {
   /** Telegram chat IDs of the Recipients. Entries for other chats stay in the Outbox. */
   chatIds: readonly string[];
   log?: (message: string) => void;
+  /** Returns the time in ms. The tests replace it. */
   clock?: () => number;
   budgetMs?: number;
   sendTimeoutMs?: number;
@@ -60,8 +66,10 @@ async function sendEntry(options: DeliveryOptions, entry: OutboxEntry): Promise<
 }
 
 interface DeliveryRun {
+  /** Keys of the sent entries. They are marked delivered in one write at the end. */
   sentKeys: string[];
   failures: unknown[];
+  /** Chats that had a failed send. Their later entries stay queued, so the order is kept. */
   blocked: Set<string>;
 }
 

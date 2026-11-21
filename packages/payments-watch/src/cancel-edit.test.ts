@@ -5,6 +5,7 @@ import { createConfigFeeSource } from "./fee-source.ts";
 import type { Notifier, TelegramClient, TelegramParams } from "./notifier.ts";
 import { runPaymentsWatch } from "./run.ts";
 
+// Issue #221: edit the sent QR message when a Payment is cancelled (payments contract v0.2 section 3b, PC4).
 const FAMILY_ID = "00000000-0000-4000-8000-000000000001";
 const CHILD1 = "00000000-0000-4000-8000-0000000000c1";
 

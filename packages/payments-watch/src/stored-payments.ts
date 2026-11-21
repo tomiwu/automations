@@ -27,6 +27,7 @@ export interface StoredPayment {
 export interface StoredPaymentsExport {
   timezone: string;
   month: string;
+  /** The time of the last `CheckCompleted` of each Child, or null before the first check. */
   lastSavedAt: Record<string, string | null>;
   payments: StoredPayment[];
 }
@@ -64,6 +65,10 @@ function savedAt(childIds: readonly string[], checks: readonly JournalEvent[]): 
   );
 }
 
+/**
+ * Read-only export: the Payments of one month as the Journal stores them, and the time of the last check of each
+ * Child. It reads Supabase only (3 fetches at most). It never returns an account, NIP, title or source URL.
+ */
 export async function storedPaymentsExport(deps: ExportDeps, input: unknown = {}): Promise<StoredPaymentsExport & { fetches?: FetchCount }> {
   const object = inputObject(input);
   checkKeys(object, ["childId", "month"]);

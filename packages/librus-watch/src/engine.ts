@@ -15,10 +15,13 @@ import {
 import { detailOf } from "./details.ts";
 import type { HomeworkItem, ItemsByWatcher, LibrusSource, SubstitutionItem, WatcherName } from "./types.ts";
 
+/** The first record of each Watcher scope. It marks the scope as baselined, even when Librus gave no Item. */
 export const BASELINE_ID = "__baseline__";
 
+/** Separates the base ID from the content hash in a recorded ID. Librus IDs never contain it. */
 const HASH_SEPARATOR = "@";
 
+/** The Watchers in the order of a Check. */
 export const WATCHERS_IN_ORDER: readonly WatcherName[] = [
   "grades",
   "messages",
@@ -43,13 +46,16 @@ interface Changed<I> {
   change: ItemChange;
 }
 
+/** One Notification for all Recipients. `text` renders it in the language of one Recipient. */
 interface Announcement {
   key: string;
   text: (context: FormatContext) => string;
+  /** The ID of the Item, and the message body when the announcer read it. */
   itemId?: string;
   body?: string;
 }
 
+/** The text renderer of one Item. A message also gives its body, so the engine can store it. */
 interface Rendered {
   text: Announcement["text"];
   body?: string;
@@ -57,17 +63,21 @@ interface Rendered {
 
 type Announce<I> = (changes: Changed<I>[], source: LibrusSource) => Promise<Announcement[]>;
 
+/** What a Check of one Child needs. */
 export interface ChildCheck {
   familyId: string;
   child: Child;
+  /** The Recipients that get Notifications for this Child. */
   recipients: readonly Recipient[];
   storage: StorageAdapter;
   source: LibrusSource;
+  /** Receives one line for each Watcher. It never gets Item contents. */
   log?: (message: string) => void;
 }
 
 const storedId = ({ id, hash }: HashedItem): string => (hash === undefined ? id : `${id}${HASH_SEPARATOR}${hash}`);
 
+/** Returns the scope of the Items of one Child at one Watcher. */
 export const scopeOf = (watcher: WatcherName, child: Child): string => `${watcher}:${child.id}`;
 
 function changeOf(item: HashedItem, known: Set<string>, bases: Set<string>): ItemChange | undefined {
@@ -83,6 +93,7 @@ function changesOf<I extends HashedItem>(current: I[], known: Set<string>): Chan
   });
 }
 
+/** Announces each change on its own. The key is the recorded ID. */
 const perItem =
   <I extends HashedItem>(render: (item: I, change: ItemChange, source: LibrusSource) => Promise<Rendered>): Announce<I> =>
   async (changes, source) => {
@@ -100,6 +111,7 @@ const sync =
     text: (context) => render(context, item, change),
   });
 
+/** All new substitutions of one date become one Notification. The key has the date and the Item IDs. */
 const substitutionsPerDay: Announce<SubstitutionItem> = async (changes) => {
   const days = new Map<string, SubstitutionItem[]>();
   for (const { item } of changes) days.set(item.date, [...(days.get(item.date) ?? []), item]);
@@ -111,16 +123,19 @@ const substitutionsPerDay: Announce<SubstitutionItem> = async (changes) => {
     }));
 };
 
+/** Only an updated Lesson that is now cancelled or substituted is news. */
 const lessonChanges = (changes: Changed<ItemsByWatcher["lessons"][number]>[]) =>
   changes.filter(({ item, change }) => change === "updated" && item.status !== "normal");
 
 type AnyAnnounce = Announce<never>;
 const asAny = <I,>(announce: Announce<I>): AnyAnnounce => announce as unknown as AnyAnnounce;
 
+/** Stored, never announced: the morning report shows these Items. */
 const silent: AnyAnnounce = async () => [];
 
 const ANNOUNCERS: Record<WatcherName, AnyAnnounce> = {
   grades: asAny(perItem(sync(formatGrade))),
+  // Opening a message marks it read in Librus. Only a new message is opened.
   messages: asAny(
     perItem<ItemsByWatcher["messages"][number]>(async (message, _change, source) => {
       const body = await source.messageBody(message.id);
@@ -140,6 +155,7 @@ const ANNOUNCERS: Record<WatcherName, AnyAnnounce> = {
   classFreeDays: silent,
 };
 
+/** Makes the Notification for each Recipient. The key has the chat ID, so each queue is idempotent. */
 function notificationsFor(check: ChildCheck, scope: string, announcement: Announcement): NewNotification[] {
   return check.recipients.map((recipient) => {
     const context: FormatContext = { language: recipient.language as Language, child: check.child.name };
@@ -152,6 +168,7 @@ function notificationsFor(check: ChildCheck, scope: string, announcement: Announ
   });
 }
 
+/** The content rows of the changed Items. A message row needs the body that its announcer read. */
 function detailsOf(
   check: ChildCheck,
   watcher: WatcherName,
@@ -167,8 +184,20 @@ function detailsOf(
   });
 }
 
+/**
+ * The Watchers whose Items cancel Lessons (days off). Their content is stored on each run, also on the
+ * Baseline, so a day off that was in Librus before the first run still cancels its Lessons. The storage
+ * skips content that did not change, so a run with the same days off adds no Journal event.
+ */
 const ALWAYS_STORED: readonly WatcherName[] = ["schoolFreeDays", "classFreeDays"];
 
+/**
+ * Runs one Watcher for one Child. The first run of a scope is a silent Baseline: it records the Items,
+ * queues nothing and stores no content. Later runs store the content of each new or updated Item, queue
+ * one Notification for each Item and each Recipient, then record the Items. The Notification is queued
+ * first and its key is the recorded ID, so a crash between the two steps neither loses nor repeats it.
+ * The days-off Watchers (`ALWAYS_STORED`) store their content on every run.
+ */
 export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promise<HashedItem[]> {
   const scope = scopeOf(watcher, check.child);
   const current = (await check.source.currentItems(watcher)) as HashedItem[];
@@ -188,11 +217,16 @@ export async function runWatcher(check: ChildCheck, watcher: WatcherName): Promi
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+/** The failure texts of a Check, and the homework Items when the `homework` Watcher ran without a failure. */
 export interface ChildCheckResult {
   failures: string[];
   homework?: HomeworkItem[];
 }
 
+/**
+ * Runs each Watcher of one Child. A Watcher that fails does not stop the others.
+ * Returns one failure text for each failed Watcher, and the homework Items that the run read.
+ */
 export async function checkChild(check: ChildCheck, watchers: readonly WatcherName[] = WATCHERS_IN_ORDER): Promise<ChildCheckResult> {
   const result: ChildCheckResult = { failures: [] };
   for (const watcher of watchers) {
@@ -208,6 +242,7 @@ export async function checkChild(check: ChildCheck, watchers: readonly WatcherNa
   return result;
 }
 
+/** Like `checkChild`, but returns only the failure texts. */
 export async function runChildCheck(check: ChildCheck, watchers: readonly WatcherName[] = WATCHERS_IN_ORDER): Promise<string[]> {
   return (await checkChild(check, watchers)).failures;
 }

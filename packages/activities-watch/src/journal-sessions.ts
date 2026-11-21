@@ -6,6 +6,7 @@ import type { ActivityTarget } from "./targets.ts";
 
 const SOURCE = "activities-watch";
 
+/** The Sessions that the run read for one Account that did not fail. */
 export interface AccountSessions {
   target: ActivityTarget;
   sessions: readonly Session[];
@@ -88,6 +89,11 @@ async function checkEvents(deps: SessionsJournalDeps, today: string, heads: Read
   );
 }
 
+/**
+ * Appends the Session Journal events of all Accounts that did not fail, in one call. It uses only the
+ * Sessions that the run read already. A failed Account is not in the list: it gives no event and no
+ * vanished event. Returns the number of appended events.
+ */
 export async function appendSessionsJournal(deps: SessionsJournalDeps): Promise<number> {
   if (deps.accounts.length === 0) return 0;
   const today = localDate(deps.now, deps.timezone);

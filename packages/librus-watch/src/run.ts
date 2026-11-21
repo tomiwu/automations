@@ -31,22 +31,33 @@ export interface RunDeps {
   storage: StorageAdapter;
   messenger: Messenger;
   familyId: string;
+  /** Makes the source of one Account. The default reads Librus. The tests replace it. */
   createSource?: (account: Account, timezone: string) => LibrusSource;
   afterSchool?: AfterSchool;
+  /** Keeps the Librus names between runs (7 days). Without it each run fetches the names again. */
   nameStore?: NameStore;
+  /** Counts the fetches of the run. With it the run logs `fetches total=N <host>=n` at the end. */
   counter?: FetchCounter;
+  /** The weekly fetch ledger. Below the reserve, the run skips the optional Watchers. */
   budget?: FetchBudget;
+  /** Fetches to keep free in the week. The default is 150. */
   fetchReserve?: number;
 }
 
+/**
+ * The Watchers that a run skips when the fetch budget is below the reserve. The others feed the Journal,
+ * the calendars and the Morning report, so they always run.
+ */
 export const OPTIONAL_WATCHERS: readonly WatcherName[] = ["grades", "messages", "announcements", "trips", "absences", "meetings"];
 
+/** The Watchers of this run. Below the reserve, it logs one line with the skipped Watchers. */
 export async function watchersFor(deps: RunDeps): Promise<readonly WatcherName[]> {
   if (!(await belowReserve(deps.budget, deps.fetchReserve))) return WATCHERS_IN_ORDER;
   deps.runtime.log("warn", formatReserveSkip(OPTIONAL_WATCHERS));
   return WATCHERS_IN_ORDER.filter((watcher) => !OPTIONAL_WATCHERS.includes(watcher));
 }
 
+/** Adds the fetches of the run to the ledger, and marks the day when a fetch failed on the plan limit. */
 async function recordFetches(deps: RunDeps, failures: readonly string[]): Promise<void> {
   if (!deps.budget || !deps.counter) return;
   try {
@@ -56,6 +67,7 @@ async function recordFetches(deps: RunDeps, failures: readonly string[]): Promis
   }
 }
 
+/** One Librus Account with its Child and the Recipients of that Child. */
 export interface LibrusTarget {
   account: Account;
   child: Child;
@@ -82,6 +94,7 @@ function failureText(failures: string[]): { login: boolean; reason: string } {
   return { login, reason };
 }
 
+/** Queues one failure Notification for each Recipient of the Child. The key has the day, so it is sent once a day. */
 async function notifyFailure(deps: RunDeps, target: LibrusTarget, failures: string[], day: string): Promise<void> {
   const { login, reason } = failureText(failures);
   const entries = target.recipients.map((recipient) => {
@@ -96,6 +109,7 @@ async function notifyFailure(deps: RunDeps, target: LibrusTarget, failures: stri
   await deps.storage.enqueueNotifications(entries);
 }
 
+/** Appends the Journal events. Returns the failure text, or no text. */
 async function journalStep(
   deps: RunDeps,
   config: Config,
@@ -157,6 +171,7 @@ async function runTarget(
   return failures.map((failure) => `${target.child.name}: ${failure}`);
 }
 
+/** Delivers the Outbox to the Recipients. Returns the failure text, or no text. */
 async function deliverAll(deps: RunDeps, config: Config): Promise<string[]> {
   try {
     await deliverPending({

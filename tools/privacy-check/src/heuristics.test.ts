@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ibanValid, scanLine } from "./heuristics.ts";
 
+// The positive samples are built at run time, so this file has no finding of its own.
 const join = (separator: string, ...parts: Array<string | number>) => parts.join(separator);
 const none = new Set<string>();
 const withCheckDigits = (body: string) => {

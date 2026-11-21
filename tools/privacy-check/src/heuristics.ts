@@ -1,3 +1,5 @@
+// Heuristics for personal data and tokens in one line of text. Documented example values are allowed.
+
 export type Category =
   | "email"
   | "phone"
@@ -13,14 +15,17 @@ export type Category =
 interface Rule {
   category: Category;
   pattern: RegExp;
+  /** True when the value (capture group 1, or the full match) is a documented example value. */
   allowed: (value: string) => boolean;
 }
 
 const EXAMPLE_EMAIL = /@(?:[\w-]+\.)*(?:example\.(?:com|org|net)|example|test|invalid|localhost|users\.noreply\.github\.com)$|^(?:noreply|no-reply)@|^git@github\.com$/i;
 const EXAMPLE_CHAT_ID = /^-?1000\d{3}$/;
 const PLACEHOLDER = /[<>${}%*]|example|placeholder|redacted|your|x{3}/i;
+/** For a rule that has no documented example value. */
 const never = () => false;
 
+/** ISO 13616 mod-97 check. A number of 26 digits without a country code is a Polish account number. */
 export function ibanValid(raw: string): boolean {
   const compact = raw.replace(/\s/g, "").toUpperCase();
   const iban = /^\d/.test(compact) ? `PL${compact}` : compact;
@@ -71,6 +76,7 @@ function ruleHits(rule: Rule, line: string, allowValues: Set<string>): boolean {
   return [...line.matchAll(rule.pattern)].some((match) => isFinding(rule, match, allowValues));
 }
 
+/** The categories with a finding in the line, each one time, in the order of the rules. */
 export function scanLine(line: string, allowValues: Set<string>): Category[] {
   const found = RULES.filter((rule) => ruleHits(rule, line, allowValues)).map((rule) => rule.category);
   return [...new Set(found)];

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Runs the SQL migration tests (tools/sql-tests) against a throwaway postgres:17 container.
+# It uses podman or docker (SQL_TEST_ENGINE chooses one), takes a free port, and removes the container
+# at the end, also when the tests fail or the run is stopped.
 set -u
 
 engine="${SQL_TEST_ENGINE:-}"

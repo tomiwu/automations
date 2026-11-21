@@ -1,3 +1,6 @@
+// Inflected forms of a normalized word (lower case, no diacritics) with the Polish case endings.
+// It is a heuristic: it gives too many forms, not too few. Add a form that it does not give to the plain list.
+
 const A_ENDINGS = ["a", "y", "i", "e", "o", "u", "ie", "om", "ami", "ach"];
 const CONSONANT_ENDINGS = ["", "a", "u", "owi", "em", "iem", "ie", "e", "y", "i", "owie", "ow", "om", "ami", "ach"];
 const VOWEL_ENDINGS = ["a", "u", "owi", "em", "iem", "ie", "ego", "emu", "ym", "im"];

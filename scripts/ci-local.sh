@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
+# Runs every job of .github/workflows on this machine, so a change can be proven green without GitHub runners.
+#
 # Usage:
 #   scripts/ci-local.sh [--out FILE.md] [--host-node]   run all local steps (from the repository root of a checkout)
 #   scripts/ci-local.sh --check-parity                  only check that every workflow step has a local step
+#
+# Jobs and their local steps:
+#   ci.yml build       npm ci, npm run typecheck, npm test, npm run crap (Node 22, like actions/setup-node)
+#   ci.yml sql         npm test -w @automations/sql-tests against a throwaway postgres:17 container (podman)
+#   ci.yml secrets     gitleaks git --redact --verbose --exit-code 1 . ; deny-list check (DENYLIST or DENYLIST_FILE)
+#   privacy            gitleaks on the full history (it contains the tree and the diff of the branch), then
+#                      tools/privacy-check: hashed private words and heuristics on the tracked files and on the
+#                      lines that the branch adds against origin/main. It prints places and categories only.
+#   migrate.yml        tools/migrate/apply.sh on a scratch database, two times (the second run applies nothing)
+#   deploy-kody.yml    tools/kody-stage/stage.mjs for each package of the matrix (the Kody API steps are SKIP)
+#   sandbox-image.yml  podman build of the sandbox Containerfile and the smoke test, only when the branch changes a
+#                      file of its `paths` filter (like the pull_request trigger), or with CI_LOCAL_SANDBOX_IMAGE=1
+#
 # Environment:
 #   CI_LOCAL_MIN_FREE_GB  stop when less disk is free (default 6)
 #   CI_LOCAL_WORKFLOWS    workflow directory (default .github/workflows; tests change it)
@@ -10,10 +25,13 @@
 #   DENYLIST / DENYLIST_FILE  personal strings, one for each line. Values are never printed.
 #   PRIVACY_PEPPER        the pepper of the private word hashes, when privacy/denylist.hashes.json uses one
 #   GITLEAKS              gitleaks binary (default: gitleaks in PATH, else a cached v8.28.0)
+# It never prints a secret value. It calls no Kody, Supabase or GitHub API.
 set -uo pipefail
 
 WORKFLOWS="${CI_LOCAL_WORKFLOWS:-.github/workflows}"
 
+# Every step name of the workflows, with what this script does for it. A workflow step that is not here fails the
+# parity check, so a new CI step cannot be forgotten.
 STEP_MAP='
 ci.yml|Install the dependencies|npm-ci
 ci.yml|Check the types|typecheck
@@ -36,6 +54,7 @@ sandbox-image.yml|Build the image (the last RUN is doctor.sh container)|sandbox-
 sandbox-image.yml|Smoke test as the agent user|sandbox-image
 '
 
+# Prints "file|step name" for each named step under `jobs:` of each workflow file.
 workflow_steps() {
   local file
   for file in "$WORKFLOWS"/*.yml; do
@@ -44,6 +63,7 @@ workflow_steps() {
   done
 }
 
+# The packages of the deploy matrix (`package: [a, b]`).
 matrix_packages() {
   [ -e "$WORKFLOWS/deploy-kody.yml" ] || return 0
   sed -n 's/^ *package: *\[\(.*\)\]/\1/p' "$WORKFLOWS/deploy-kody.yml" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sed '/^$/d'
@@ -80,6 +100,7 @@ free_gb() { df -Pk "$ROOT" | awk 'NR==2 {print int($4/1048576)}'; }
 MIN_FREE="${CI_LOCAL_MIN_FREE_GB:-6}"
 if [ "$(free_gb)" -lt "$MIN_FREE" ]; then echo "DISK FAIL: $(free_gb) GB free, need $MIN_FREE GB. Nothing was run."; exit 3; fi
 
+# Node of the CI version: a cached official tarball, checked with its SHASUMS256.
 use_node() {
   local want="${CI_LOCAL_NODE:-22}" cache="${XDG_CACHE_HOME:-$HOME/.cache}/ci-local" base sums file dir
   [ "$HOST_NODE" = 1 ] && return 0
@@ -98,7 +119,7 @@ use_node() {
 }
 
 ROWS=(); FAILED=0
-step() {
+step() { # step <name> <key> <command...>
   local name="$1" key="$2" t0 rc res; shift 2
   if [ "$(free_gb)" -lt "$MIN_FREE" ]; then ROWS+=("| $name | FAIL | disk: $(free_gb) GB free, need $MIN_FREE GB | 0s |"); FAILED=1; return 0; fi
   t0=$(date +%s); "$@" >"$LOG/$key.log" 2>&1; rc=$?
@@ -170,6 +191,7 @@ kody_stage() {
   echo "staged $n packages: $(matrix_packages | paste -sd ' ')"
 }
 
+# The `paths` of the pull_request trigger of sandbox-image.yml.
 sandbox_paths() {
   [ -e "$WORKFLOWS/sandbox-image.yml" ] || return 0
   awk '/^  pull_request:/{p=1; next} p && /^  [a-z_]+:/{p=0} p && /^ +- /{sub(/^ +- */,""); print}' "$WORKFLOWS/sandbox-image.yml"

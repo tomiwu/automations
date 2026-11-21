@@ -18,6 +18,7 @@ const PRIMARY_KEYS: Record<string, readonly string[]> = {
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
+/** Reads `("a","b")` or `(a,b)`: a quoted value may hold commas, quotes and backslashes. */
 function inPredicate(column: string, operand: string): Predicate {
   const members = operand.slice(1, -1).match(/"(?:[^"\\]|\\.)*"|[^,]+/g) ?? [];
   const values = members.map((member) => member.replace(/^"|"$/g, "").replace(/\\(.)/g, "$1"));
@@ -29,6 +30,7 @@ const compare = (column: string, operand: string, test: (a: string, b: string) =
 
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Like Postgres `date`: a `YYYY-MM-DD` operand that is not a real day (for example `2026-11-31`) is a 400. */
 function checkDate(operand: string): string {
   if (DATE_SHAPE.test(operand) && new Date(`${operand}T00:00:00Z`).toISOString().slice(0, 10) !== operand) {
     throw new FakeBadRequest(`date/time field value out of range: "${operand}"`);
@@ -36,6 +38,7 @@ function checkDate(operand: string): string {
   return operand;
 }
 
+/** A filter that Postgres would reject with 400. */
 class FakeBadRequest extends Error {}
 
 const OPERATORS: Record<string, (column: string, operand: string) => Predicate> = {
@@ -77,6 +80,7 @@ function sortRows(rows: Row[], order: string | null): Row[] {
   return [...rows].sort((a, b) => terms.reduce((result, term) => result || compareColumn(a, b, term), 0));
 }
 
+/** The last event of each stream, as the view `journal_heads` gives it. */
 function headsOf(events: Row[]): Row[] {
   const last = new Map<string, Row>();
   for (const event of events) {
@@ -89,8 +93,10 @@ function headsOf(events: Row[]): Row[] {
 
 class DuplicateKeyError extends Error {}
 
+/** A fake of the PostgREST API of Supabase. It keeps the tables in memory and uses no network. */
 export interface FakePostgrest {
   fetch: (input: string, init?: RequestInit) => Promise<Response>;
+  /** Every request that the fake received. */
   requests: { method: string; url: string; headers: Headers }[];
   seedConfig(config: Config): void;
   seedFee(fee: Fee): void;
@@ -135,6 +141,7 @@ export function createFakePostgrest(startTime: Date, expectedKey: string): FakeP
 
   const EMBEDS: Record<string, readonly string[]> = { families: ["children", "accounts", "activities", "recipients"] };
 
+  /** Supports the embedded selects of a Family: `children(*)` adds the rows whose `family_id` is the ID. */
   const embed = (rows: Row[], name: string, select: string | null): Row[] => {
     const wanted = (EMBEDS[name] ?? []).filter((child) => select?.includes(`${child}(*)`));
     return rows.map((row) => {

@@ -12,6 +12,7 @@ export interface ZonedParts {
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** Returns the calendar parts of an instant in an IANA time zone. */
 export function zonedParts(date: Date, timezone: string): ZonedParts {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,

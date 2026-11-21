@@ -16,6 +16,7 @@ export interface MemoryStorage extends StorageAdapter {
   setFee(fee: Fee): void;
 }
 
+/** In-memory StorageAdapter for tests. It uses no network. */
 export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryStorage {
   const now = options.now ?? (() => new Date());
   const items = new Map<string, StoredItem>();
@@ -26,6 +27,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
   const journalOf = (familyId: string, filter: JournalFilter): JournalEvent[] =>
     journal.filter((event) => event.familyId === familyId && matchesJournalFilter(event, filter));
   const outbox = new Map<string, OutboxEntry>();
+  /** Queues the entry unless its key exists. Returns true if the entry is new. */
   const enqueue = (entry: NewNotification): boolean => {
     if (outbox.has(entry.key)) return false;
     outbox.set(entry.key, { ...entry, queuedAt: now(), deliveredAt: null, messageId: null });

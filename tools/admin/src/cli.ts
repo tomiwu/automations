@@ -12,6 +12,7 @@ function restFromEnv() {
   return createRestClient({ url, key, fetch });
 }
 
+/** Reads one line from the terminal without showing it. */
 function readSecret(prompt: string): Promise<string> {
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });

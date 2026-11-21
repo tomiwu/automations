@@ -1,3 +1,11 @@
+/**
+ * Payments contract v0.2 section 3b (PC4): when a Payment is cancelled, the QR messages that were sent for it
+ * lose the Paid and Skip buttons and show that the Payment is cancelled. For an Organizer void or withdrawal,
+ * one short new message also goes out, because money can leave the bank without a Paid press.
+ *
+ * The message IDs are a delivery field of the Outbox (`sentMessages`), not Journal data. One Outbox key for each
+ * cancel (the stream and the `seq` of the `PaymentCancelled` event) and Recipient makes a repeated run do nothing.
+ */
 import { paymentStream, type Fee, type JournalEvent, type OutboxEntry, type Payment, type StorageAdapter } from "@automations/librus-data";
 import { t, type Config, type MessageKey, type Recipient } from "@automations/shared";
 import type { TelegramClient } from "./notifier.ts";
@@ -41,12 +49,14 @@ function cancelledOf(payment: Payment, fees: Fee[], heads: JournalEvent[]): Canc
 
 const paymentIdOf = (key: string): string => PAYMENT_KEY.exec(key)?.[1] ?? "";
 
+/** The cancelled Payment and the Recipient of one stored message, or undefined when it has no cancel or no Recipient. */
 function baseOf(entry: OutboxEntry, cancelled: Map<string, Cancelled>, config: Config): Target | undefined {
   const subject = cancelled.get(paymentIdOf(entry.key));
   const recipient = config.recipients.find((candidate) => candidate.telegram_chat_id === entry.chatId);
   return subject && recipient ? { ...subject, recipient, messageIds: [] } : undefined;
 }
 
+/** The stored QR messages of the cancelled Payments, grouped by Payment and chat. */
 function targetsOf(messages: OutboxEntry[], cancelled: Map<string, Cancelled>, config: Config): Target[] {
   const targets = new Map<string, Target>();
   for (const entry of messages) {
