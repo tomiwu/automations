@@ -42,6 +42,8 @@ export interface FakeSource extends LibrusSource {
   lessons: Lesson[];
   timetableError?: string;
   bodies: string[];
+  opened: string[];
+  attachmentBytes: Map<string, Uint8Array>;
 }
 
 /** A source with data that the test changes. */
@@ -50,13 +52,22 @@ export function fakeSource(): FakeSource {
     items: {},
     lessons: [],
     bodies: [],
+    opened: [],
+    attachmentBytes: new Map(),
     async currentItems(watcher, since) {
       const items = (source.items[watcher] ?? []) as { date?: string }[];
       return (since === undefined ? items : items.filter((i) => (i.date ?? since) >= since)) as never;
     },
     async messageBody(id) {
+      return (await source.openMessage(id)).body;
+    },
+    async openMessage(id) {
+      source.opened.push(id);
       source.bodies.push(id);
-      return `Body of ${id}`;
+      return { body: `Body of ${id}`, attachments: [], unrecognizedAttachments: 0 };
+    },
+    async fetchAttachment(path) {
+      return source.attachmentBytes.get(path) ?? new Uint8Array([1, 2, 3]);
     },
     async fullTimetable(): Promise<TimetableResult> {
       return source.timetableError ? { lessons: [], error: source.timetableError } : { lessons: source.lessons };

@@ -24,7 +24,8 @@ export const KODY_RUNTIME_EXPORTS = [
 ] as const;
 
 /**
- * The only Kody secret the packages use, as a literal placeholder (Kody requires literal secret names). Kody fills
+ * The Kody secret of the storage, as a literal placeholder (Kody requires literal secret names). The only other one is
+ * `TELEGRAM_BOT_TOKEN` in the document upload of librus-watch (telegram-document.ts). Kody fills
  * it in when a fetch sends it to the allowed host of the secret. The code never sees the value.
  */
 export const SUPABASE_KEY_PLACEHOLDER = "{{secret:SUPABASE_KEY}}";

@@ -205,3 +205,49 @@ describe("supabaseStorageFromRuntime", () => {
     expect(server.requests.length).toBe(1);
   });
 });
+
+describe("attachments in Supabase Storage", () => {
+  function storageWith(answer: (url: string, init: RequestInit) => Response) {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const fetchFn = async (url: string, init: RequestInit = {}) => {
+      calls.push({ url, init });
+      return answer(url, init);
+    };
+    return { calls, storage: createSupabaseStorage({ url: URL_BASE, key: KEY, fetch: fetchFn }) };
+  }
+  const path = `${FAMILY_ID}/m1/a1`;
+
+  it("uploads the bytes to the private bucket without upsert", async () => {
+    const { calls, storage } = storageWith(() => new Response("{}", { status: 200 }));
+    await storage.putAttachment(path, new Uint8Array([1, 2, 3]), "application/pdf");
+    expect(calls[0]?.url).toBe(`${URL_BASE}/storage/v1/object/librus-attachments/${path}`);
+    expect(calls[0]?.init.method).toBe("POST");
+    const headers = calls[0]?.init.headers as Record<string, string>;
+    expect(headers["x-upsert"]).toBeUndefined();
+    expect(headers["content-type"]).toBe("application/pdf");
+    expect([...(calls[0]?.init.body as Uint8Array)]).toEqual([1, 2, 3]);
+  });
+
+  it("keeps a file that an earlier run stored (409 or 400 with statusCode 409)", async () => {
+    await storageWith(() => new Response("{}", { status: 409 })).storage.putAttachment(path, new Uint8Array([1]), "application/pdf");
+    await storageWith(() => new Response(JSON.stringify({ statusCode: "409", error: "Duplicate" }), { status: 400 })).storage.putAttachment(
+      path,
+      new Uint8Array([1]),
+      "application/pdf",
+    );
+  });
+
+  it("rejects any other upload error with the status only", async () => {
+    await expect(storageWith(() => new Response("{}", { status: 403 })).storage.putAttachment(path, new Uint8Array([1]), "application/pdf")).rejects.toThrow(
+      "Supabase attachment upload failed: 403",
+    );
+    await expect(
+      storageWith(() => new Response(JSON.stringify({ statusCode: "403" }), { status: 400 })).storage.putAttachment(path, new Uint8Array([1]), "application/pdf"),
+    ).rejects.toThrow("400");
+  });
+
+  it("reads the bytes back", async () => {
+    const { storage } = storageWith(() => new Response(new Uint8Array([7, 8])));
+    expect([...(await storage.getAttachment(path))]).toEqual([7, 8]);
+  });
+});

@@ -2,7 +2,7 @@ import { createMemoryStorage } from "@automations/librus-data";
 import { countFetches, createFetchBudget, fakeRuntime, LEDGER_KEY, type LedgerStore } from "@automations/shared";
 import { describe, expect, it } from "vitest";
 import type { Messenger } from "./deliver.ts";
-import { librusTargets, OPTIONAL_WATCHERS, runLibrusWatch, type RunDeps } from "./run.ts";
+import { createChargeFetch, librusTargets, OPTIONAL_WATCHERS, runLibrusWatch, type RunDeps } from "./run.ts";
 import { ACCOUNT1, CHILD1, CHILD2, FAMILY_ID, fakeSource, lesson, testConfig } from "./test-fixtures.ts";
 
 function setup(mutate: (config: ReturnType<typeof testConfig>) => void = () => {}) {
@@ -20,6 +20,17 @@ function setup(mutate: (config: ReturnType<typeof testConfig>) => void = () => {
   const deps: RunDeps = { runtime, storage, messenger, familyId: FAMILY_ID, createSource: () => source };
   return { config, storage, runtime, source, sent, deps };
 }
+
+describe("createChargeFetch", () => {
+  it("returns false when the ledger has no room", () => {
+    expect(createChargeFetch(0, () => 3, 3)()).toBe(false);
+  });
+
+  it("returns true while the run stays below the ledger", () => {
+    expect(createChargeFetch(10, () => 14, 10)()).toBe(true);
+    expect(createChargeFetch(10, () => 20, 10)()).toBe(false);
+  });
+});
 
 describe("librusTargets", () => {
   it("takes only enabled Librus Accounts of Children with has_librus, with their Recipients", () => {

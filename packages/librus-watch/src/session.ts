@@ -178,6 +178,15 @@ export class LibrusSession {
     return html;
   }
 
+  /** Returns the bytes of a file download on the same session. */
+  async binary(path: string): Promise<ArrayBuffer> {
+    const { response } = await this.request(new URL(path, this.account.origin).toString());
+    if (!response.ok) throw new Error(`Librus: attachment download failed (HTTP ${response.status})`);
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength === 0) throw new Error("Librus: attachment download failed (empty file)");
+    return bytes;
+  }
+
   /** Returns the text of a Librus JSON API answer on the same login session. */
   async json(path: string): Promise<string> {
     const url = new URL(`/gateway/api/2.0/${path}`, this.account.origin).toString();

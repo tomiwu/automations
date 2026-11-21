@@ -1,6 +1,6 @@
 import type { Config, FetchFn, Runtime } from "@automations/shared";
 import { appendItemEvents, DETAIL_BATCH_SIZE, detailsFromJournal, uniqueDetails } from "./details.ts";
-import type { Fee, JournalEvent, JournalFilter, NewJournalEvent, NewItemDetail, NewNotification, NewPayment, OutboxEntry, Payment, StorageAdapter, StoredItem } from "./storage.ts";
+import type { Fee, JournalEvent, JournalFilter, NewJournalEvent, NewItemDetail, NewNotification, NewPayment, OutboxEntry, OutboxKind, Payment, StorageAdapter, StoredItem } from "./storage.ts";
 
 const DAY_MS = 86_400_000;
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -36,15 +36,31 @@ function toItem(row: Row): StoredItem {
   };
 }
 
+/** Supabase Storage answers 409, or 400 with `statusCode: "409"`, when the object exists already. */
+async function isDuplicateUpload(response: Response): Promise<boolean> {
+  if (response.status === 409) return true;
+  if (response.status !== 400) return false;
+  const body = (await response.json().catch(() => undefined)) as { statusCode?: unknown } | undefined;
+  return String(body?.statusCode) === "409";
+}
+
+const outboxKind = (value: unknown): OutboxKind => (value === "document" ? "document" : "text");
+const optionalString = (value: unknown): string | undefined => (value === null || value === undefined ? undefined : String(value));
+const nullableDate = (value: unknown): Date | null => (value === null ? null : new Date(String(value)));
+const nullableNumber = (value: unknown): number | null => (value === null || value === undefined ? null : Number(value));
+
 function toEntry(row: Row): OutboxEntry {
   return {
     key: String(row.key),
     familyId: String(row.family_id),
     chatId: String(row.chat_id),
+    kind: outboxKind(row.kind),
     text: String(row.text),
+    storagePath: optionalString(row.storage_path),
+    fileName: optionalString(row.file_name),
     queuedAt: new Date(String(row.queued_at)),
-    deliveredAt: row.delivered_at === null ? null : new Date(String(row.delivered_at)),
-    messageId: row.message_id === null || row.message_id === undefined ? null : Number(row.message_id),
+    deliveredAt: nullableDate(row.delivered_at),
+    messageId: nullableNumber(row.message_id),
   };
 }
 
@@ -250,8 +266,13 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
     key: entry.key,
     family_id: entry.familyId,
     chat_id: entry.chatId,
+    kind: entry.kind ?? "text",
     text: entry.text,
+    storage_path: entry.storagePath ?? null,
+    file_name: entry.fileName ?? null,
   });
+
+  const BUCKET = "librus-attachments";
 
   async function upsertPayment(payment: NewPayment): Promise<Payment> {
     const [added] = await insertNew("payments", "fee_id,month", [toPaymentRow(payment)]);
@@ -319,6 +340,24 @@ export function createSupabaseStorage(options: SupabaseStorageOptions): Supabase
       const list = keys.map((key) => `"${key.replace(/(["\\])/g, "\\$1")}"`).join(",");
       const init = { headers: headers(JSON_HEADERS), body: JSON.stringify({ delivered_at: now().toISOString() }) };
       await request("PATCH", "outbox", `key=in.(${encodeURIComponent(list)})&delivered_at=is.null`, init);
+    },
+    putAttachment: async (path, bytes, contentType) => {
+      const target = `${options.url}/storage/v1/object/${BUCKET}/${path}`;
+      const response = await options.fetch(target, {
+        method: "POST",
+        headers: { apikey: options.key, authorization: `Bearer ${options.key}`, "content-type": contentType },
+        body: new Uint8Array(bytes),
+      });
+      // No upsert (the watcher may not overwrite or delete). A file stored by an earlier, unfinished run is kept.
+      if (!response.ok && !(await isDuplicateUpload(response))) throw new Error(`Supabase attachment upload failed: ${response.status}`);
+    },
+    getAttachment: async (path) => {
+      const target = `${options.url}/storage/v1/object/${BUCKET}/${path}`;
+      const response = await options.fetch(target, {
+        headers: { apikey: options.key, authorization: `Bearer ${options.key}` },
+      });
+      if (!response.ok) throw new Error(`Supabase attachment read failed: ${response.status}`);
+      return new Uint8Array(await response.arrayBuffer());
     },
     loadConfig,
     listFees: async (familyId) => (await select("fees", filter("family_id", "eq", familyId))).map(toFee),

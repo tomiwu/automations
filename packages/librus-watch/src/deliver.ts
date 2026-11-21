@@ -1,8 +1,9 @@
 import type { OutboxEntry, StorageAdapter } from "@automations/librus-data";
 
-/** Sends one message to one Telegram chat. It rejects when the delivery failed. */
+/** Sends text or a document to one Telegram chat. It rejects when the delivery failed. */
 export interface Messenger {
   send(chatId: string, text: string): Promise<void>;
+  sendDocument?(chatId: string, fileName: string, bytes: Uint8Array, caption: string): Promise<void>;
 }
 
 /** Default time limit of one send, in milliseconds. */
@@ -61,7 +62,21 @@ export interface DeliveryOptions {
 }
 
 async function sendEntry(options: DeliveryOptions, entry: OutboxEntry): Promise<void> {
-  const { messenger, sendTimeoutMs = SEND_TIMEOUT_MS } = options;
+  const { storage, messenger, sendTimeoutMs = SEND_TIMEOUT_MS } = options;
+  if (entry.kind === "document") {
+    const path = entry.storagePath;
+    const fileName = entry.fileName;
+    if (!path || !fileName) throw new Error("document outbox entry is incomplete");
+    const bytes = await storage.getAttachment(path);
+    const sendDocument = messenger.sendDocument;
+    if (!sendDocument) throw new Error("telegram sendDocument is not available");
+    await withTimeout(
+      sendDocument(entry.chatId, fileName, bytes, redactSecretPlaceholders(entry.text)),
+      sendTimeoutMs,
+      "telegram document",
+    );
+    return;
+  }
   await withTimeout(messenger.send(entry.chatId, redactSecretPlaceholders(entry.text)), sendTimeoutMs, "telegram send");
 }
 
@@ -71,6 +86,15 @@ interface DeliveryRun {
   failures: unknown[];
   /** Chats that had a failed send. Their later entries stay queued, so the order is kept. */
   blocked: Set<string>;
+}
+
+/**
+ * Entries of one insert share one queued_at, and Postgres gives no order between equal values. A message text then
+ * goes before its documents.
+ */
+function inSendOrder(entries: OutboxEntry[]): OutboxEntry[] {
+  const rank = (entry: OutboxEntry) => (entry.kind === "document" ? 1 : 0);
+  return [...entries].sort((a, b) => a.queuedAt.getTime() - b.queuedAt.getTime() || rank(a) - rank(b));
 }
 
 async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: DeliveryRun): Promise<void> {
@@ -91,7 +115,7 @@ async function tryEntry(options: DeliveryOptions, entry: OutboxEntry, run: Deliv
 export async function deliverPending(options: DeliveryOptions): Promise<void> {
   const { storage, familyId, chatIds, log = () => {}, clock = Date.now, budgetMs = DELIVERY_BUDGET_MS } = options;
   const start = clock();
-  const queue = (await storage.pendingNotifications(familyId)).filter((entry) => chatIds.includes(entry.chatId));
+  const queue = inSendOrder((await storage.pendingNotifications(familyId)).filter((entry) => chatIds.includes(entry.chatId)));
   const run: DeliveryRun = { sentKeys: [], failures: [], blocked: new Set() };
   try {
     for (const entry of queue) {

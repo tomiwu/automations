@@ -12,11 +12,13 @@ export type {
   NewNotification,
   NewPayment,
   OutboxEntry,
+  OutboxKind,
   Payment,
   PaymentStatus,
   StorageAdapter,
   StoredItem,
 } from "./storage.ts";
+export { attachmentObjectPath, sha256Hex } from "./attachment-path.ts";
 export { detailHash } from "./details.ts";
 export { createMemoryStorage } from "./memory.ts";
 export type { MemoryStorage, MemoryStorageOptions } from "./memory.ts";

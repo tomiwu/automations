@@ -46,7 +46,9 @@ export interface DetailFilter {
   since?: Date;
 }
 
-export type JournalKind = "lesson" | "homework" | "session" | "check" | "payment" | ItemKind;
+export type JournalKind = "lesson" | "homework" | "session" | "check" | "payment" | "attachment" | ItemKind;
+
+export type OutboxKind = "text" | "document";
 
 /** One Journal event to append. The payload is the full new state of the entity. */
 export interface NewJournalEvent {
@@ -89,10 +91,15 @@ export interface NewNotification {
   key: string;
   familyId: string;
   chatId: string;
+  kind?: OutboxKind;
   text: string;
+  /** Set when `kind` is `document`. */
+  storagePath?: string;
+  fileName?: string;
 }
 
 export interface OutboxEntry extends NewNotification {
+  kind: OutboxKind;
   queuedAt: Date;
   deliveredAt: Date | null;
   /** The Telegram message ID of the message that was sent for this entry, or null (not sent, or sent before it was stored). */
@@ -180,6 +187,10 @@ export interface StorageAdapter {
   sentMessages(familyId: string): Promise<OutboxEntry[]>;
   /** Like `markDelivered` for many keys in one request. */
   markDeliveredMany(keys: readonly string[]): Promise<void>;
+  /** Stores one file in the private `librus-attachments` bucket. The path is `<family_id>/<message_id>/<attachment_id>`. */
+  putAttachment(path: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  /** Reads one stored attachment. It rejects when the file is missing. */
+  getAttachment(path: string): Promise<Uint8Array>;
   loadConfig(familyId: string): Promise<Config>;
   listFees(familyId: string): Promise<Fee[]>;
   /** Makes a `pending` Payment. A Payment for the same Fee and month is not changed and is returned as it is. */

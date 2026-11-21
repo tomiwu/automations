@@ -30,6 +30,20 @@ export interface MessageItem {
   sentAt: string;
 }
 
+export interface MessageAttachmentLink {
+  id: string;
+  name: string;
+  size: number;
+  downloadPath: string;
+}
+
+export interface OpenedMessage {
+  body: string;
+  attachments: MessageAttachmentLink[];
+  /** 1 when the page mentions an attachment that the parser could not read, else 0. */
+  unrecognizedAttachments: number;
+}
+
 export interface AnnouncementItem {
   id: string;
   title: string;
@@ -156,6 +170,10 @@ export interface LibrusSource {
   currentItems<W extends WatcherName>(watcher: W, since?: string): Promise<ItemsByWatcher[W]>;
   /** Whole body of a message. Opening a message marks it read in Librus. */
   messageBody(id: string): Promise<string>;
+  /** Body and attachment list from one message page. */
+  openMessage(id: string): Promise<OpenedMessage>;
+  /** File bytes of one attachment download link from the same Librus session. */
+  fetchAttachment(downloadPath: string): Promise<Uint8Array>;
   /** Lessons of the next 14 days. It never rejects: on a failure the list is empty and `error` says why. */
   fullTimetable(): Promise<TimetableResult>;
   /** Lessons from `from` to `to`, both "YYYY-MM-DD". It never rejects: on a failure the list is empty and `error` says why. */

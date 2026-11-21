@@ -27,10 +27,18 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
   const journalOf = (familyId: string, filter: JournalFilter): JournalEvent[] =>
     journal.filter((event) => event.familyId === familyId && matchesJournalFilter(event, filter));
   const outbox = new Map<string, OutboxEntry>();
+  const attachments = new Map<string, Uint8Array>();
   /** Queues the entry unless its key exists. Returns true if the entry is new. */
   const enqueue = (entry: NewNotification): boolean => {
     if (outbox.has(entry.key)) return false;
-    outbox.set(entry.key, { ...entry, queuedAt: now(), deliveredAt: null, messageId: null });
+    const kind = entry.kind ?? "text";
+    outbox.set(entry.key, {
+      ...entry,
+      kind,
+      queuedAt: now(),
+      deliveredAt: null,
+      messageId: null,
+    });
     return true;
   };
   const deliver = (key: string): void => {
@@ -112,6 +120,14 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
     sentMessages: async (familyId) =>
       [...outbox.values()].filter((entry) => entry.familyId === familyId && entry.messageId !== null).map((entry) => ({ ...entry })),
     markDeliveredMany: async (keys) => keys.forEach(deliver),
+    putAttachment: async (path, bytes, _contentType) => {
+      attachments.set(path, bytes);
+    },
+    getAttachment: async (path) => {
+      const bytes = attachments.get(path);
+      if (!bytes) throw new Error(`Attachment ${path} is missing`);
+      return bytes;
+    },
     loadConfig: async (familyId) => {
       const config = configs.get(familyId);
       if (!config) throw new Error(`Family ${familyId} has no config`);

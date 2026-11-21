@@ -6,6 +6,8 @@ import {
   parseClassFreeDays,
   parseGrades,
   parseHomeworks,
+  parseMessageAttachments,
+  unrecognizedAttachments,
   parseMessageBody,
   parseMessages,
   parseParentTeacherConferences,
@@ -254,8 +256,19 @@ export function createLibrusSource(
       return fetched(watcher as FetchedWatcher, since) as Promise<ItemsByWatcher[W]>;
     },
     async messageBody(id) {
+      return (await this.openMessage(id)).body;
+    },
+    async openMessage(id) {
       await ensureLogin();
-      return parseMessageBody(await session.page(`/wiadomosci/1/5/${encodeURIComponent(id)}/f0`));
+      const html = await session.page(`/wiadomosci/1/5/${encodeURIComponent(id)}/f0`);
+      const attachments = parseMessageAttachments(html);
+      return { body: parseMessageBody(html), attachments, unrecognizedAttachments: unrecognizedAttachments(html, attachments) };
+    },
+    async fetchAttachment(downloadPath) {
+      await ensureLogin();
+      const path = downloadPath.startsWith("/") ? downloadPath : `/${downloadPath}`;
+      const bytes = await session.binary(path);
+      return new Uint8Array(bytes);
     },
     fullTimetable,
     timetable,
