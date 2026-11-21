@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { bodySkeleton, LABEL_ALLOWLIST, redactUrl } from "./activenow-billing-redact.ts";
+import { bodySkeleton, LABEL_ALLOWLIST, maskIds, redactPaths, redactUrl } from "./activenow-billing-redact.ts";
 
 const fixture = readFileSync(new URL("./fixtures/activenow-billing-synthetic.html", import.meta.url), "utf8");
 
@@ -81,5 +81,33 @@ describe("bodySkeleton", () => {
   it("prints the skeleton of the synthetic fixture", () => {
     console.log(bodySkeleton(fixture));
     expect(true).toBe(true);
+  });
+});
+describe("record ids in attribute values and messages", () => {
+  it("masks digits and long tokens in id, class, name and for values", () => {
+    const html =
+      '<body><div id="payment_998877" class="row row-42 client-panel-billing-table"><div><input name="items[31415]" type="checkbox"><label for="pay-7f3e9a2b1c4d5e6f7a8b9c0d1e2f">x</label></div></div></body>';
+    const skeleton = bodySkeleton(html);
+    for (const value of ["998877", "42", "31415", "7f3e9a2b1c4d5e6f7a8b9c0d1e2f"]) expect(skeleton).not.toContain(value);
+    expect(skeleton).toContain('id="payment_<n>"');
+    expect(skeleton).toContain('class="row row-<n> client-panel-billing-table"');
+    expect(skeleton).toContain('name="items[<n>]"');
+    expect(skeleton).toContain('for="<id>"');
+    expect(skeleton).toContain('type="checkbox"');
+  });
+
+  it("keeps a long word without a digit", () => {
+    expect(maskIds("client-panel-billing-table-wrapper")).toBe("client-panel-billing-table-wrapper");
+    expect(maskIds("user_123e4567-e89b-12d3-a456-426614174000")).not.toContain("123e4567");
+  });
+
+  it("masks the numbers of paths and addresses in a message", () => {
+    expect(redactPaths("ActiveNow: HTTP 404 from /client_panel/billing/accounts/55")).toBe(
+      "ActiveNow: HTTP 404 from /client_panel/billing/accounts/<n>",
+    );
+    expect(redactPaths("Too many redirects: https://app.example.org/payments/77?id=5")).toBe(
+      "Too many redirects: /payments/<n>?id",
+    );
+    expect(redactPaths("ActiveNow: login rejected (check credentials)")).toBe("ActiveNow: login rejected (check credentials)");
   });
 });

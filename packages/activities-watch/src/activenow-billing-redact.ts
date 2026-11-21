@@ -37,15 +37,22 @@ const AMOUNT_MARK = /^-?\d[\d\s]*(?:[,.]\d+)?\s*(?:zł|PLN)$/i;
 const NUMBER_MARK = /^-?\d+(?:[,.]\d+)?$/;
 const URL_ATTRS = new Set(["href", "action", "src", "data-url"]);
 const JSON_SCRIPT = new Set(["application/json", "application/ld+json"]);
-const KEEP_ATTR_VALUE = new Set(["class", "id", "role", "type", "name"]);
+const KEEP_ATTR_VALUE = new Set(["role", "type"]);
+/** These values are kept, but a record id in them (digits, a UUID, a long token) is masked. */
+const MASKED_ATTR_VALUE = new Set(["class", "id", "name", "for"]);
+const PATH_IN_TEXT = /https?:\/\/\S+|\/[^\s)]+/g;
 const VOID_TAG = new Set(["meta", "img", "input", "br", "hr", "link"]);
 const SKIP_NODE = new Set(["comment", "cdata"]);
 const ELEMENT_NODE = new Set(["script", "tag"]);
 
-function redactPathSegment(segment: string): string {
+/** A long word is a token only when it has a digit, so long class names like `client-panel-billing-table` stay. */
+const tokenMark = (word: string): string => (/\d/.test(word) ? "<id>" : word);
+
+/** Masks record ids in a value: a UUID or a long token with a digit becomes `<id>`, a digit run becomes `<n>`. */
+export function maskIds(segment: string): string {
   return segment
     .replace(UUID, "<id>")
-    .replace(LONG_TOKEN, "<id>")
+    .replace(LONG_TOKEN, tokenMark)
     .replace(/\d+/g, "<n>");
 }
 
@@ -55,7 +62,7 @@ export function redactUrl(raw: string): string {
     const url = new URL(raw, "https://example.invalid");
     const path = url.pathname
       .split("/")
-      .map((part) => (part === "" ? "" : redactPathSegment(part)))
+      .map((part) => (part === "" ? "" : maskIds(part)))
       .join("/");
     const keys = [...url.searchParams.keys()];
     const query = keys.length === 0 ? "" : `?${keys.join("&")}`;
@@ -115,6 +122,7 @@ function isUrlLike(name: string, value: string): boolean {
 
 function attrValue(name: string, value: string): string {
   if (KEEP_ATTR_VALUE.has(name)) return value;
+  if (MASKED_ATTR_VALUE.has(name)) return maskIds(value);
   if (isUrlLike(name, value)) return redactUrl(value);
   const json = tryJsonShape(value);
   if (json !== null) return json;
@@ -181,6 +189,11 @@ function buildSkeleton(children: readonly AnyNode[]): string {
   }
   const skeleton = parts.join("");
   return skeleton.length > BODY_LIMIT ? `${skeleton.slice(0, BODY_LIMIT)}<cut>` : skeleton;
+}
+
+/** Redacts every URL and path in a text, for example in an error message. */
+export function redactPaths(text: string): string {
+  return text.replace(PATH_IN_TEXT, (path) => redactUrl(path));
 }
 
 /** Builds a redacted skeleton of the document body. It has no family data and no secrets. */

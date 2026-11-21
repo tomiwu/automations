@@ -173,4 +173,26 @@ describe("activenowBillingShapeExport", () => {
     expect(result.accounts[0]?.status).toMatch(/login rejected/);
     expect(result.accounts[1]?.billingLink).toBe("/client_panel/billing?account_id");
   });
+
+  it("gives the redacted final path of the billing page after a redirect", async () => {
+    const { deps, runtime } = setup({
+      ...happy,
+      "GET /client_panel/billing": { status: 302, location: "/client_panel/billing/accounts/998877/payments" },
+      "GET /client_panel/billing/accounts/998877/payments": { body: BILLING_PAGE },
+    });
+    const result = await activenowBillingShapeExport(deps, {});
+    expect(result.accounts[0]?.finalPath).toBe("/client_panel/billing/accounts/<n>/payments");
+    expect(JSON.stringify(result)).not.toContain("998877");
+    expect(runtime.requests).toHaveLength(5);
+  });
+
+  it("masks the numbers of a path in an error message", async () => {
+    const { deps } = setup({
+      ...happy,
+      "POST /role_selector/change_role": { body: '<nav><a href="/client_panel/billing/accounts/55">Rozliczenia</a></nav>' },
+    });
+    const result = await activenowBillingShapeExport(deps, {});
+    expect(result.accounts[0]?.status).toBe("ActiveNow: HTTP 404 from /client_panel/billing/accounts/<n>");
+    expect(JSON.stringify(result)).not.toContain("55");
+  });
 });
