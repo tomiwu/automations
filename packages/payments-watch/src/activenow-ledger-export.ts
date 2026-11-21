@@ -1,4 +1,5 @@
 import type { Account, Config } from "@automations/shared";
+import { utcDay, type FetchCount } from "@automations/shared";
 import type { Fee } from "@automations/librus-data";
 import { ACTIVE_NOW_BLOCK, createHttp } from "@tomiwu/activities-watch";
 import { checkKeys, inputObject, withFetches, type ExportDeps } from "@tomiwu/librus-watch";
@@ -52,10 +53,6 @@ export interface ActivenowLedgerExport {
   fees: LedgerExportFee[];
 }
 
-function utcToday(now: Date): string {
-  return now.toISOString().slice(0, 10);
-}
-
 function fromDay(today: string, monthsBack: number): string {
   const [year, month] = today.split("-").map(Number);
   let y = year!;
@@ -67,13 +64,11 @@ function fromDay(today: string, monthsBack: number): string {
   return `${y}-${String(m).padStart(2, "0")}-01`;
 }
 
-function isValidMonthsBack(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 6;
-}
-
 function resolveMonthsBack(value: unknown): number {
   if (value === undefined) return 3;
-  if (!isValidMonthsBack(value)) throw new Error("monthsBack must be an integer 1..6.");
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 6) {
+    throw new Error("monthsBack must be an integer 1..6.");
+  }
   return value;
 }
 
@@ -149,30 +144,6 @@ function accountShell(config: Config, account: Account): LedgerExportAccount {
   };
 }
 
-async function fetchLedgerForAccount(
-  deps: ExportDeps,
-  account: Account,
-  profile: string,
-  today: string,
-  from: string,
-  base: LedgerExportAccount,
-): Promise<LedgerExportAccount> {
-  const http = createHttp(deps.runtime);
-  const secrets = {
-    login: await deps.runtime.secret(account.login_secret),
-    password: await deps.runtime.secret(account.password_secret),
-  };
-  const read = await readActiveNowLedger(http, account.origin, account.id, secrets, profile, today);
-  const split = splitRows(read.rows, from, today);
-  return {
-    ...base,
-    banner: read.banner,
-    rows: split.rows,
-    olderRows: split.olderRows,
-    matched: { checked: read.matched.checked, openThroughToday: read.matched.openThroughToday },
-  };
-}
-
 async function readOne(
   deps: ExportDeps,
   config: Config,
@@ -183,29 +154,45 @@ async function readOne(
 ): Promise<LedgerExportAccount> {
   const base = accountShell(config, account);
   if (blocked.value) return { ...base, error: ACTIVE_NOW_BLOCK };
-  const profile = account.group ?? base.child;
   try {
-    return await fetchLedgerForAccount(deps, account, profile, today, from, base);
+    const http = createHttp(deps.runtime);
+    const secrets = {
+      login: await deps.runtime.secret(account.login_secret),
+      password: await deps.runtime.secret(account.password_secret),
+    };
+    const read = await readActiveNowLedger(
+      http,
+      account.origin,
+      account.id,
+      secrets,
+      account.group ?? base.child,
+      today,
+    );
+    const split = splitRows(read.rows, from, today);
+    return {
+      ...base,
+      banner: read.banner,
+      rows: split.rows,
+      olderRows: split.olderRows,
+      matched: { checked: read.matched.checked, openThroughToday: read.matched.openThroughToday },
+    };
   } catch (error) {
     if (isActiveNowBlock(error)) blocked.value = true;
     return { ...base, error: errorMessage(error) };
   }
 }
 
-/**
- * Read-only export: ActiveNow settlements rows for each enabled Account and every Fee row from Supabase.
- * It does not write cache, Payments, events or notifications.
- */
+/** Read-only export: ActiveNow settlements rows for each enabled Account and every Fee row from Supabase. */
 export async function activenowLedgerExport(
   deps: ExportDeps,
   input: unknown = {},
-): Promise<ActivenowLedgerExport & { fetches?: import("@automations/shared").FetchCount }> {
+): Promise<ActivenowLedgerExport & { fetches?: FetchCount }> {
   const object = inputObject(input);
   checkKeys(object, ["monthsBack"]);
   const monthsBack = resolveMonthsBack(object.monthsBack);
   const config = await deps.storage.loadConfig(deps.familyId);
   const fees = (await deps.storage.listFees(deps.familyId)).map(feeRow);
-  const today = utcToday(deps.runtime.now());
+  const today = utcDay(deps.runtime.now());
   const from = fromDay(today, monthsBack);
   const accountsConfig = config.accounts.filter((item) => item.service === "activenow" && item.enabled);
   const blocked = { value: false };

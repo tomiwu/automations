@@ -152,7 +152,7 @@ describe("activenowLedgerExport", () => {
   });
 
   it("rejects bad monthsBack and unknown keys without fetches", async () => {
-  for (const input of [{ monthsBack: 0 }, { monthsBack: 7 }, { monthsBack: "3" }, { extra: 1 }]) {
+    for (const input of [{ monthsBack: 0 }, { monthsBack: 7 }, { monthsBack: "3" }, { extra: 1 }]) {
       const { deps, counter } = setup();
       await expect(activenowLedgerExport(deps, input)).rejects.toThrow();
       expect(counter.count()).toEqual({ total: 0, hosts: {} });
