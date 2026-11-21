@@ -1,5 +1,17 @@
 import * as cheerio from "cheerio";
-import type { AnyNode, Element } from "domhandler";
+
+/**
+ * The few fields of a parsed node that the skeleton reads. Local types, so the code does not depend on the
+ * `domhandler` types (not a declared dependency; the Kody publish check resolves them differently).
+ */
+interface AnyNode {
+  type: string;
+  data?: string;
+  name?: string;
+  attribs?: Record<string, string>;
+  children?: AnyNode[];
+}
+type Element = AnyNode & { name: string };
 
 export const LABEL_ALLOWLIST = new Set([
   "Rozliczenia",
@@ -131,11 +143,11 @@ function attrValue(name: string, value: string): string {
 
 function formatAttrs(el: Element): string {
   if (!el.attribs) return "";
-  return Object.entries(el.attribs).map(([name, value]) => ` ${name}="${attrValue(name, value)}"`).join("");
+  return Object.entries(el.attribs).map(([name, value]) => ` ${name}="${attrValue(name, String(value))}"`).join("");
 }
 
 function textContent(el: Element): string {
-  return el.children?.map((child) => (child.type === "text" ? child.data : "")).join("") ?? "";
+  return el.children?.map((child) => (child.type === "text" ? (child.data ?? "") : "")).join("") ?? "";
 }
 
 function scriptSkeleton(el: Element): string {
@@ -151,7 +163,7 @@ function pushPart(parts: string[], size: number, value: string): number {
 }
 
 function walkText(node: AnyNode, parts: string[], size: number): number {
-  const text = (node as { data: string }).data;
+  const text = node.data ?? "";
   if (!text.trim()) return size;
   return pushPart(parts, size, stringMark(text));
 }
@@ -198,6 +210,6 @@ export function redactPaths(text: string): string {
 
 /** Builds a redacted skeleton of the document body. It has no family data and no secrets. */
 export function bodySkeleton(html: string): string {
-  const children = cheerio.load(html)("body").get(0)?.children;
+  const children = (cheerio.load(html)("body").get(0) as unknown as AnyNode | undefined)?.children;
   return children?.length ? buildSkeleton(children) : "";
 }
