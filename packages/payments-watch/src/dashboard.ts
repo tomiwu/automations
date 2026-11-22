@@ -134,12 +134,21 @@ function refundCell(language: Language, row: DashboardRow): string {
   return `<td>${row.refundCheck ? escapeHtml(t(language, "dashboard.refund_check")) : ""}</td>`;
 }
 
+const PAID_HEAD: MessageKey[] = [...ROW_HEAD, "dashboard.col.paid_at", "dashboard.col.marked_by", "dashboard.col.amount_source", "dashboard.col.refund"];
+
+const paidCells = (language: Language, row: DashboardRow): string[] => [
+  ...rowCells(row),
+  row.decidedAt ?? "",
+  t(language, `dashboard.marked.${row.markedBy.kind}`, row.markedBy),
+  t(language, `dashboard.source.${row.amountSource}`),
+];
+
 function viewHtml(context: Context, view: Dashboard): string {
   const lang = context.language;
   return [
     section(lang, "dashboard.unpaid", [...ROW_HEAD, "dashboard.col.actions"], view.unpaid.map(rowCells), view.unpaid.map((row) => actionCell(context, row))),
     section(lang, "dashboard.next_due", ROW_HEAD, view.nextDue.map(rowCells)),
-    section(lang, "dashboard.paid", [...ROW_HEAD, "dashboard.col.refund"], view.paid.map(rowCells), view.paid.map((row) => refundCell(lang, row))),
+    section(lang, "dashboard.paid", PAID_HEAD, view.paid.map((row) => paidCells(lang, row)), view.paid.map((row) => refundCell(lang, row))),
     section(lang, "dashboard.cancelled", ROW_HEAD, view.cancelled.map(rowCells)),
     section(lang, "dashboard.spend_month", ["dashboard.col.child", "dashboard.col.month", "dashboard.col.amount"],
       view.spendByMonth.map((s) => [s.child, s.month, formatAmount(s.total)])),
@@ -153,7 +162,7 @@ async function overview(context: Context): Promise<Response> {
   const { storage, familyId, now } = context.deps;
   const [config, fees, payments] = await Promise.all([storage.loadConfig(familyId), storage.listFees(familyId), storage.listPayments(familyId)]);
   const today = localDate(now(), config.family.timezone);
-  const view = buildDashboard({ children: config.children, fees, payments, today });
+  const view = buildDashboard({ children: config.children, fees, payments, today, timezone: config.family.timezone });
   return html(page(context, viewHtml(context, view)));
 }
 

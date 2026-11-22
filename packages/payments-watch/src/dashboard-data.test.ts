@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Fee, Payment } from "@automations/librus-data";
-import { buildDashboard, schoolYearOf } from "./dashboard-data.ts";
+import { buildDashboard, markedByOf, schoolYearOf } from "./dashboard-data.ts";
 
 const FAMILY = "00000000-0000-4000-8000-000000000001";
 const fee = (id: string, childId: string, dueDay = 20): Fee => ({
@@ -67,7 +67,7 @@ describe("buildDashboard", () => {
     payment("p7", "f1", "2026-07", 500, "paid"),
     payment("p8", "gone", "2026-01", 700, "paid"),
   ];
-  const view = buildDashboard({ children, fees, payments, today: "2026-02-10" });
+  const view = buildDashboard({ children, fees, payments, today: "2026-02-10", timezone: "Europe/Warsaw" });
 
   it("splits paid and unpaid rows", () => {
     expect(view.paid.map((row) => row.paymentId)).toEqual(["p1", "p2", "p4", "p7"]);
@@ -99,7 +99,7 @@ describe("buildDashboard", () => {
   });
 
   it("gives empty lists for no Payments", () => {
-    expect(buildDashboard({ children, fees, payments: [], today: "2026-02-10" })).toEqual({
+    expect(buildDashboard({ children, fees, payments: [], today: "2026-02-10", timezone: "Europe/Warsaw" })).toEqual({
       paid: [],
       unpaid: [],
       cancelled: [],
@@ -107,5 +107,61 @@ describe("buildDashboard", () => {
       spendByMonth: [],
       spendBySchoolYear: [],
     });
+  });
+});
+
+describe("markedByOf", () => {
+  it("maps a Telegram chat ID to telegram", () => {
+    expect(markedByOf("1000000")).toEqual({ kind: "telegram" });
+    expect(markedByOf("-1000001")).toEqual({ kind: "telegram" });
+  });
+  it("maps a user name to dashboard", () => {
+    expect(markedByOf("adult-one")).toEqual({ kind: "dashboard", user: "adult-one" });
+  });
+  it("maps organizer:<service> to organizer", () => {
+    expect(markedByOf("organizer:activenow")).toEqual({ kind: "organizer", service: "activenow" });
+  });
+  it("maps null, an empty text and an empty service to unknown", () => {
+    expect(markedByOf(null)).toEqual({ kind: "unknown" });
+    expect(markedByOf("")).toEqual({ kind: "unknown" });
+    expect(markedByOf("organizer:")).toEqual({ kind: "unknown" });
+  });
+});
+
+describe("buildDashboard paid details", () => {
+  const decided = (id: string, at: string | null, by: string | null, source: Payment["amountSource"] = "config"): Payment => ({
+    ...payment(id, "f1", "2026-01", 1000, "paid"),
+    decidedAt: at === null ? null : new Date(at),
+    decidedBy: by,
+    amountSource: source,
+  });
+  const view = buildDashboard({
+    children,
+    fees,
+    today: "2026-02-10",
+    timezone: "Europe/Warsaw",
+    payments: [
+      decided("old", "2026-01-10T10:00:00Z", "1000000"),
+      decided("none", null, null),
+      decided("new", "2026-03-29T00:30:00Z", "organizer:activenow", "page"),
+      decided("mid", "2026-03-29T01:30:00Z", "adult-one"),
+    ],
+  });
+
+  it("gives the local date and time of the Family time zone, also on a DST edge", () => {
+    const byId = (id: string) => view.paid.find((row) => row.paymentId === id);
+    expect(byId("old")?.decidedAt).toBe("2026-01-10 11:00");
+    expect(byId("new")?.decidedAt).toBe("2026-03-29 01:30");
+    expect(byId("mid")?.decidedAt).toBe("2026-03-29 03:30");
+    expect(byId("none")?.decidedAt).toBeNull();
+  });
+
+  it("gives markedBy and amountSource", () => {
+    expect(view.paid.find((row) => row.paymentId === "new")).toMatchObject({ markedBy: { kind: "organizer", service: "activenow" }, amountSource: "page" });
+    expect(view.paid.find((row) => row.paymentId === "old")).toMatchObject({ markedBy: { kind: "telegram" }, amountSource: "config" });
+  });
+
+  it("orders paid rows newest first, with no date last", () => {
+    expect(view.paid.map((row) => row.paymentId)).toEqual(["mid", "new", "old", "none"]);
   });
 });
